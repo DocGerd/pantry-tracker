@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect Gradle wrapper
+        id: gate
+        run: |
+          if [ -f gradlew ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No Gradle wrapper yet -- milestone 0 (project skeleton) has not started. CI will activate once the Android skeleton lands."
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        if: steps.gate.outputs.ready == 'true'
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.gate.outputs.ready == 'true'
+
+      - name: Build, unit-test, lint
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
