@@ -5,18 +5,16 @@ import androidx.lifecycle.viewModelScope
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     private val repository: ProductRepository,
 ) : ViewModel() {
@@ -26,7 +24,6 @@ class HomeViewModel(
     private val pendingDelete = MutableStateFlow<Product?>(null)
 
     private val productsFlow = query
-        .debounce(150)
         .distinctUntilChanged()
         .flatMapLatest { q ->
             if (q.isBlank()) repository.observeProducts() else repository.search(q.trim())
@@ -43,7 +40,7 @@ class HomeViewModel(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.Eagerly,
         initialValue = HomeUiState(),
     )
 
