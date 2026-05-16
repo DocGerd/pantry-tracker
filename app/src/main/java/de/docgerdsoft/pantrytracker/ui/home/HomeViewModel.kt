@@ -37,7 +37,7 @@ class HomeViewModel(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.Eagerly,
+        started = SharingStarted.WhileSubscribed(5_000),
         initialValue = HomeUiState(),
     )
 
@@ -58,8 +58,8 @@ class HomeViewModel(
         if (trimmed.isEmpty() || initialQuantity <= 0) return
         viewModelScope.launch {
             repository.addNew(name = trimmed, initialQuantity = initialQuantity)
+            showAddSheet.value = false
         }
-        showAddSheet.value = false
     }
 
     fun requestDelete(product: Product) {
@@ -74,7 +74,7 @@ class HomeViewModel(
         val target = pendingDelete.value ?: return
         viewModelScope.launch {
             repository.delete(target.id)
+            pendingDelete.value = null
         }
-        pendingDelete.value = null
     }
 }

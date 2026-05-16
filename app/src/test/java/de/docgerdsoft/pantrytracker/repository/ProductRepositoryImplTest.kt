@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -21,6 +22,7 @@ import org.robolectric.annotation.Config
 class ProductRepositoryImplTest {
 
     private lateinit var db: AppDatabase
+    private lateinit var clock: FakeClock
     private lateinit var repo: ProductRepository
 
     @Before
@@ -31,7 +33,8 @@ class ProductRepositoryImplTest {
         )
             .allowMainThreadQueries()
             .build()
-        repo = ProductRepositoryImpl(db.productDao(), clock = Clock.System)
+        clock = FakeClock(Instant.fromEpochMilliseconds(1_000_000L))
+        repo = ProductRepositoryImpl(db.productDao(), clock = clock)
     }
 
     @After
@@ -85,17 +88,52 @@ class ProductRepositoryImplTest {
     }
 
     @Test
+    fun applyDelta_noOpWhenQuantityUnchanged_doesNotTouchUpdatedAt() = runTest {
+        val id = repo.addNew(name = "Pasta", initialQuantity = 0)
+        val before = repo.findById(id)!!.updatedAt
+        clock.advanceBy(1_000) // would change updatedAt if a write happened
+
+        // -5 on a zero-quantity row clamps back to 0 — same as current. Repo must short-circuit.
+        repo.applyDelta(id, -5)
+
+        val after = repo.findById(id)!!
+        assertEquals(0, after.quantity)
+        assertEquals(before, after.updatedAt) // updatedAt unchanged: no write happened
+    }
+
+    @Test
     fun rename_changesName_andTouchesUpdatedAt() = runTest {
         val id = repo.addNew(name = "Cokq", initialQuantity = 1)
         val before = repo.findById(id)!!.updatedAt
+        clock.advanceBy(1_000)
 
-        // Sleep one millisecond so the new instant is strictly later.
-        Thread.sleep(2)
         repo.rename(id, "Coke")
 
         val after = repo.findById(id)!!
         assertEquals("Coke", after.name)
-        assert(after.updatedAt > before)
+        assertEquals(before.toEpochMilliseconds() + 1_000, after.updatedAt.toEpochMilliseconds())
+    }
+
+    @Test
+    fun rename_unknownId_isNoOp() = runTest {
+        // No exception, no inserted row.
+        repo.rename(productId = 9999L, newName = "Anything")
+        repo.observeProducts().test {
+            assertEquals(emptyList<Any>(), awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun rename_sameName_isNoOp_doesNotTouchUpdatedAt() = runTest {
+        val id = repo.addNew(name = "Coke", initialQuantity = 1)
+        val before = repo.findById(id)!!.updatedAt
+        clock.advanceBy(1_000)
+
+        repo.rename(id, "Coke")
+
+        val after = repo.findById(id)!!
+        assertEquals(before, after.updatedAt) // unchanged: no write happened
     }
 
     @Test
@@ -110,5 +148,13 @@ class ProductRepositoryImplTest {
         repo.addNew(name = "Coke", barcode = "5449000000996", initialQuantity = 1)
         assertEquals("Coke", repo.findLocalByBarcode("5449000000996")?.name)
         assertNull(repo.findLocalByBarcode("0000000000000"))
+    }
+
+    private class FakeClock(initial: Instant) : Clock {
+        private var current: Instant = initial
+        override fun now(): Instant = current
+        fun advanceBy(millis: Long) {
+            current = Instant.fromEpochMilliseconds(current.toEpochMilliseconds() + millis)
+        }
     }
 }

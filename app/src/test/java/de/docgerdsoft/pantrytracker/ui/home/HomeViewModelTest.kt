@@ -66,46 +66,88 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun setQuery_emptyQuery_streamsAll() = runTest {
-        vm.setQuery("")
-        assertEquals("", vm.uiState.value.query)
+    fun setQuery_nonEmpty_switchesToSearchFlow() = runTest {
+        vm.uiState.test {
+            awaitItem() // initial empty state
+            vm.setQuery("co")
+            val state = awaitItem()
+            assertEquals("co", state.query)
+            assertEquals("co", fake.lastSearchQuery)
+        }
     }
 
     @Test
-    fun setQuery_nonEmpty_switchesToSearchFlow() = runTest {
-        vm.setQuery("co")
-        assertEquals("co", vm.uiState.value.query)
-        assertEquals("co", fake.lastSearchQuery)
+    fun setQuery_blankWhitespace_routesToObserveProducts_notSearch() = runTest {
+        vm.uiState.test {
+            awaitItem() // initial empty state
+            vm.setQuery("   ")
+            val state = awaitItem()
+            assertEquals("   ", state.query)
+            // Blank query goes through observeProducts, not search.
+            assertNull(fake.lastSearchQuery)
+        }
+    }
+
+    @Test
+    fun setQuery_trimsBeforePassingToSearch() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.setQuery("  co  ")
+            awaitItem()
+            assertEquals("co", fake.lastSearchQuery)
+        }
     }
 
     @Test
     fun openAddSheet_andDismiss_togglesFlag() = runTest {
-        vm.openAddSheet()
-        assertEquals(true, vm.uiState.value.showAddSheet)
-        vm.dismissAddSheet()
-        assertEquals(false, vm.uiState.value.showAddSheet)
+        vm.uiState.test {
+            assertEquals(false, awaitItem().showAddSheet)
+            vm.openAddSheet()
+            assertEquals(true, awaitItem().showAddSheet)
+            vm.dismissAddSheet()
+            assertEquals(false, awaitItem().showAddSheet)
+        }
     }
 
     @Test
-    fun submitAdd_callsRepository_andDismissesSheet() = runTest {
-        vm.openAddSheet()
-        vm.submitAdd(name = " Coke ", initialQuantity = 3)
-        assertEquals(false, vm.uiState.value.showAddSheet)
+    fun submitAdd_callsRepository_andDismissesSheetAfterInsert() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.openAddSheet()
+            assertEquals(true, awaitItem().showAddSheet)
+            vm.submitAdd(name = " Coke ", initialQuantity = 3)
+            assertEquals(false, awaitItem().showAddSheet)
+        }
         assertEquals("Coke", fake.lastAdded?.name)
         assertEquals(3, fake.lastAdded?.initialQuantity)
     }
 
     @Test
-    fun submitAdd_blankName_isIgnored() = runTest {
-        vm.submitAdd(name = "   ", initialQuantity = 1)
+    fun submitAdd_blankName_isIgnored_andSheetStaysOpen() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.openAddSheet()
+            assertEquals(true, awaitItem().showAddSheet)
+            vm.submitAdd(name = "   ", initialQuantity = 1)
+            expectNoEvents()
+            // Sheet must stay open: invalid submit must not lie about success.
+            assertEquals(true, vm.uiState.value.showAddSheet)
+        }
         assertNull(fake.lastAdded)
     }
 
     @Test
-    fun submitAdd_nonPositiveQuantity_isIgnored() = runTest {
-        vm.submitAdd(name = "Coke", initialQuantity = 0)
-        assertNull(fake.lastAdded)
-        vm.submitAdd(name = "Coke", initialQuantity = -2)
+    fun submitAdd_nonPositiveQuantity_isIgnored_andSheetStaysOpen() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.openAddSheet()
+            assertEquals(true, awaitItem().showAddSheet)
+            vm.submitAdd(name = "Coke", initialQuantity = 0)
+            expectNoEvents()
+            vm.submitAdd(name = "Coke", initialQuantity = -2)
+            expectNoEvents()
+            assertEquals(true, vm.uiState.value.showAddSheet)
+        }
         assertNull(fake.lastAdded)
     }
 
@@ -113,11 +155,28 @@ class HomeViewModelTest {
     fun confirmDelete_callsRepository_andClearsPending() = runTest {
         val now = Clock.System.now()
         val p = Product(id = 7, barcode = null, name = "Coke", quantity = 1, createdAt = now, updatedAt = now)
-        vm.requestDelete(p)
-        assertEquals(p, vm.uiState.value.pendingDelete)
-        vm.confirmDelete()
+        vm.uiState.test {
+            awaitItem()
+            vm.requestDelete(p)
+            assertEquals(p, awaitItem().pendingDelete)
+            vm.confirmDelete()
+            assertNull(awaitItem().pendingDelete)
+        }
         assertEquals(7L, fake.lastDeletedId)
-        assertNull(vm.uiState.value.pendingDelete)
+    }
+
+    @Test
+    fun cancelDelete_clearsPending_andDoesNotCallRepository() = runTest {
+        val now = Clock.System.now()
+        val p = Product(id = 7, barcode = null, name = "Coke", quantity = 1, createdAt = now, updatedAt = now)
+        vm.uiState.test {
+            awaitItem()
+            vm.requestDelete(p)
+            assertEquals(p, awaitItem().pendingDelete)
+            vm.cancelDelete()
+            assertNull(awaitItem().pendingDelete)
+        }
+        assertNull(fake.lastDeletedId)
     }
 
     private class FakeProductRepository : ProductRepository {

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,7 +71,7 @@ fun AddProductSheet(
                 horizontalArrangement = Arrangement.End,
             ) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.width(8.dp))
                 Button(
                     enabled = canSubmit,
                     onClick = { onConfirm(name, quantity) },

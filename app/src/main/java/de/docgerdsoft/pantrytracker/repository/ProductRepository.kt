@@ -10,7 +10,10 @@ interface ProductRepository {
     suspend fun findLocalByBarcode(code: String): Product?
 
     /**
-     * Creates a new product with the given initial quantity. Returns the new row id.
+     * Inserts a new product row and returns its id. `initialQuantity` is clamped at 0;
+     * negative values become 0. `createdAt` and `updatedAt` are stamped from the
+     * repository's `Clock`. Note: backed by an Upsert, so passing a `barcode` that
+     * collides with an existing unique-indexed row overwrites it rather than failing.
      */
     suspend fun addNew(
         name: String,
@@ -21,11 +24,24 @@ interface ProductRepository {
     ): Long
 
     /**
-     * Applies a quantity change (positive or negative). Clamps the resulting
-     * quantity at 0; never returns a negative value.
+     * Adjusts the persisted quantity of `productId` by `delta` (may be negative). The
+     * resulting quantity is clamped at 0 — negative deltas larger than the current
+     * quantity bottom out at zero rather than going negative.
+     *
+     * Silently no-ops when `productId` does not exist, or when the clamped result
+     * equals the current quantity (no write happens, `updatedAt` is not bumped).
+     * Per spec §7, callers are responsible for surfacing unknown-id as inline UI
+     * state in their layer; this method must not crash on a stale id.
      */
     suspend fun applyDelta(productId: Long, delta: Int)
 
+    /**
+     * Renames the product, stamping `updatedAt` from the repository's `Clock`.
+     * Silently no-ops when `productId` does not exist or when `newName` equals the
+     * existing name (no write, `updatedAt` is not bumped). Per spec §7, callers
+     * are responsible for surfacing unknown-id as inline UI state.
+     */
     suspend fun rename(productId: Long, newName: String)
+
     suspend fun delete(productId: Long)
 }

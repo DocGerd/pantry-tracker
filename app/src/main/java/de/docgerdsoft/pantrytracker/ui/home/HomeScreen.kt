@@ -1,8 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -36,6 +36,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,8 +65,8 @@ fun HomeScreen(viewModel: HomeViewModel) {
                 .padding(horizontal = 16.dp),
         ) {
             ScanButtonsRow(
-                onAddClick = { /* wired up in Milestone 2 */ },
-                onRemoveClick = { /* wired up in Milestone 4 */ },
+                onAddClick = { /* TODO: wire to barcode-scan add flow */ },
+                onRemoveClick = { /* TODO: wire to barcode-scan remove flow */ },
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
@@ -124,8 +126,8 @@ private fun ScanButtonsRow(
             colors = ButtonDefaults.buttonColors(containerColor = AddGreen),
         ) {
             Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
-            Spacer(Modifier.height(0.dp))
-            Text("  Scan to Add")
+            Spacer(Modifier.width(8.dp))
+            Text("Scan to Add")
         }
         Button(
             onClick = onRemoveClick,
@@ -133,20 +135,22 @@ private fun ScanButtonsRow(
             colors = ButtonDefaults.buttonColors(containerColor = RemoveRed),
         ) {
             Icon(Icons.Filled.Remove, contentDescription = null)
-            Spacer(Modifier.height(0.dp))
-            Text("  Scan to Remove")
+            Spacer(Modifier.width(8.dp))
+            Text("Scan to Remove")
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ProductRow(product: Product, onLongPress: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .combinedClickable(onClick = {}, onLongClick = onLongPress)
+            .semantics(mergeDescendants = true) {}
+            .pointerInput(product.id) {
+                detectTapGestures(onLongPress = { onLongPress() })
+            }
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
