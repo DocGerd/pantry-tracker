@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,11 +22,9 @@ class HomeViewModel(
     private val showAddSheet = MutableStateFlow(false)
     private val pendingDelete = MutableStateFlow<Product?>(null)
 
-    private val productsFlow = query
-        .distinctUntilChanged()
-        .flatMapLatest { q ->
-            if (q.isBlank()) repository.observeProducts() else repository.search(q.trim())
-        }
+    private val productsFlow = query.flatMapLatest { q ->
+        if (q.isBlank()) repository.observeProducts() else repository.search(q.trim())
+    }
 
     val uiState: StateFlow<HomeUiState> = combine(
         query, productsFlow, showAddSheet, pendingDelete,
