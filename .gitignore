@@ -1,0 +1,20 @@
+# Brainstorm / Claude scratch
+.superpowers/
+.claude/
+
+# Android / Gradle build outputs
+*.iml
+.gradle/
+.idea/
+build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin / IntelliJ
+out/
+
+# OS junk
+.DS_Store
+Thumbs.db
