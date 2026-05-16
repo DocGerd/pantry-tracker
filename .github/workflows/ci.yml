@@ -30,7 +30,7 @@ jobs:
         if: steps.gate.outputs.ready == 'true'
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - uses: android-actions/setup-android@v3
         if: steps.gate.outputs.ready == 'true'
