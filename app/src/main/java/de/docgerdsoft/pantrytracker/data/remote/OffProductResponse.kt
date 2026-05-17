@@ -17,7 +17,7 @@ internal data class OffApiEnvelope(
 )
 
 @Serializable
-internal data class OffProduct(
+data class OffProduct(
     val code: String? = null,
     @kotlinx.serialization.SerialName("product_name") val productName: String? = null,
     val brands: String? = null,

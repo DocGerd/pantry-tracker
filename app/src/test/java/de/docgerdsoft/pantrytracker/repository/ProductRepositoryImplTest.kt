@@ -4,6 +4,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
+import de.docgerdsoft.pantrytracker.data.remote.OffLookup
+import de.docgerdsoft.pantrytracker.data.remote.OffProduct
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -150,11 +152,85 @@ class ProductRepositoryImplTest {
         assertNull(repo.findLocalByBarcode("0000000000000"))
     }
 
+    // --- lookupForPreview tests ---
+
+    @Test
+    fun lookupForPreview_localHit_returnsRoomRow_doesNotHitNetwork() = runTest {
+        val fakeOff = FakeOffLookup()
+        // Seed via repo so Room assigns the real id
+        val id = repo.addNew(name = "Local Coke", barcode = "111", initialQuantity = 5)
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("111")
+
+        assertEquals(id, result?.id)
+        assertEquals("Local Coke", result?.name)
+        assertEquals(0, fakeOff.lookupCallCount) // critical: no network on local hit
+    }
+
+    @Test
+    fun lookupForPreview_localMiss_offHit_returnsPreviewProduct() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("222", OffProduct(productName = "Sprite", brands = "Coca-Cola", imageUrl = "https://x"))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("222")
+
+        assertEquals(0L, result?.id)
+        assertEquals(0, result?.quantity)
+        assertEquals("Sprite", result?.name)
+        assertEquals("Coca-Cola", result?.brand)
+        assertEquals("https://x", result?.imageUrl)
+        assertEquals("222", result?.barcode)
+    }
+
+    @Test
+    fun lookupForPreview_localMiss_offMiss_returnsNull() = runTest {
+        val fakeOff = FakeOffLookup()
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("333")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun lookupForPreview_localMiss_offHitButNameMissing_returnsNull() = runTest {
+        // OFF returned an envelope with status=1 but `product_name` was absent.
+        // We can't preview without a name, so treat as miss → manual entry.
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("444", OffProduct(productName = null, brands = "Brand only"))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("444")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun lookupForPreview_blankBarcode_returnsNull_withoutHittingNetwork() = runTest {
+        val fakeOff = FakeOffLookup()
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        assertNull(sut.lookupForPreview(""))
+        assertNull(sut.lookupForPreview("   "))
+        assertEquals(0, fakeOff.lookupCallCount)
+    }
+
     private class FakeClock(initial: Instant) : Clock {
         private var current: Instant = initial
         override fun now(): Instant = current
         fun advanceBy(millis: Long) {
             current = Instant.fromEpochMilliseconds(current.toEpochMilliseconds() + millis)
+        }
+    }
+
+    private class FakeOffLookup : OffLookup {
+        val responses = mutableMapOf<String, OffProduct>()
+        var lookupCallCount = 0
+        fun stub(code: String, value: OffProduct) { responses[code] = value }
+        override suspend fun lookup(barcode: String): OffProduct? {
+            lookupCallCount++
+            return responses[barcode]
         }
     }
 }

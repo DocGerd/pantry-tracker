@@ -25,11 +25,11 @@ import kotlinx.serialization.json.Json
  * Default constructor builds a production HttpClient. Tests pass a MockEngine-
  * backed client via the second constructor.
  */
-class OffApiClient internal constructor(private val httpClient: HttpClient) {
+class OffApiClient internal constructor(private val httpClient: HttpClient) : OffLookup {
 
     constructor() : this(defaultClient())
 
-    suspend fun lookup(barcode: String): OffProduct? {
+    override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
         return try {
             val response: HttpResponse = httpClient.get(
