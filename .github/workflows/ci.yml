@@ -40,9 +40,12 @@ jobs:
 
       - name: Build, unit-test, lint
         if: steps.gate.outputs.ready == 'true'
+        # `assembleDebugAndroidTest` compiles the Compose test sources without
+        # running them (no emulator). Surfaces interface-evolution drift at PR
+        # time — e.g. a FakeRepository forgetting a new ProductRepository method.
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+          ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug assembleDebugAndroidTest
 
       - name: Detekt (Kotlin static analysis)
         # `!cancelled()` keeps Detekt running even when the build/test/lint step
