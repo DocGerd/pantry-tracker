@@ -47,6 +47,13 @@ style:
         value: 'FIXME:'
       - reason: 'STOPSHIP marker must be resolved before release'
         value: 'STOPSHIP:'
+  ReturnCount:
+    # Default 2 is hostile to guard-clause-heavy code (`if (badInput) return null`
+    # repeated for several edge cases). Idiomatic Kotlin favours early returns
+    # over nested if/else. 5 is the threshold at which we'd suspect a real
+    # complexity problem worth refactoring. (Rule lives in `style:`, not
+    # `complexity:` — Detekt's taxonomy is non-obvious here.)
+    max: 5
 
 naming:
   FunctionNaming:

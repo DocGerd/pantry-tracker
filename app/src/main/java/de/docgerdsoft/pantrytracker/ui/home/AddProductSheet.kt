@@ -25,8 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-
-private const val MAX_QUANTITY_DIGITS = 4
+import de.docgerdsoft.pantrytracker.ui.common.sanitizeQuantityInput
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +61,7 @@ fun AddProductSheet(
             OutlinedTextField(
                 value = quantityText,
                 onValueChange = { input ->
-                    quantityText = input.filter { it.isDigit() }.take(MAX_QUANTITY_DIGITS)
+                    quantityText = sanitizeQuantityInput(input)
                 },
                 label = { Text("Initial quantity") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

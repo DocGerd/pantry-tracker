@@ -1,6 +1,8 @@
 package de.docgerdsoft.pantrytracker
 
 import android.app.Application
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
 import de.docgerdsoft.pantrytracker.di.AppContainer
 
 class PantryTrackerApp : Application() {
@@ -10,5 +12,10 @@ class PantryTrackerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // OkHttpNetworkFetcherFactory is auto-registered by the coil-network-okhttp
+        // artifact — explicit .components { add(...) } is redundant and can be dropped.
+        SingletonImageLoader.setSafe { ctx ->
+            ImageLoader.Builder(ctx).build()
+        }
     }
 }
