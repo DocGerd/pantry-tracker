@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.sanitizeQuantityInput
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,7 +147,7 @@ fun ManualEntrySheet(
             OutlinedTextField(
                 value = quantityText,
                 onValueChange = { input ->
-                    val sanitized = input.filter { it.isDigit() }.take(MAX_QUANTITY_DIGITS)
+                    val sanitized = sanitizeQuantityInput(input)
                     quantityText = sanitized
                     sanitized.toIntOrNull()?.let(onQuantityChange)
                 },
@@ -171,8 +172,6 @@ fun ManualEntrySheet(
         }
     }
 }
-
-private const val MAX_QUANTITY_DIGITS = 4
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

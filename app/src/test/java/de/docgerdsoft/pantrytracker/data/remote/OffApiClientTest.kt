@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.data.remote
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -14,6 +15,12 @@ import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import java.io.IOException
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 
 class OffApiClientTest {
 
@@ -64,16 +71,48 @@ class OffApiClientTest {
         assertNull(result)
     }
 
+    // -- I5: parameterized IOException subclasses --
+
     @Test
-    fun lookup_networkException_returnsNull() = runTest {
-        val client = HttpClient(MockEngine { throw java.io.IOException("offline") }) {
-            install(ContentNegotiation) { json() }
-        }
-        val sut = OffApiClient(client)
+    fun lookup_unknownHostException_returnsNull() = runTest {
+        val sut = OffApiClient(clientThrowing(UnknownHostException("no host")))
+        assertNull(sut.lookup("5449000000996"))
+    }
 
-        val result = sut.lookup("5449000000996")
+    @Test
+    fun lookup_socketTimeoutException_returnsNull() = runTest {
+        val sut = OffApiClient(clientThrowing(SocketTimeoutException("timeout")))
+        assertNull(sut.lookup("5449000000996"))
+    }
 
-        assertNull(result)
+    @Test
+    fun lookup_connectException_returnsNull() = runTest {
+        val sut = OffApiClient(clientThrowing(ConnectException("refused")))
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    @Test
+    fun lookup_ioException_returnsNull() = runTest {
+        val sut = OffApiClient(clientThrowing(IOException("offline")))
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    // -- I5: JSON parse failures --
+
+    @Test
+    fun lookup_malformedJson_returnsNull() = runTest {
+        // ContentNegotiation/Ktor throws JsonConvertException on parse failure
+        val sut = OffApiClient(clientReturning("{ not valid json {{{{", HttpStatusCode.OK))
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    @Test
+    fun lookup_wrongJsonSchema_returnsNull() = runTest {
+        // Valid JSON but wrong schema — SerializationException / JsonConvertException
+        val sut = OffApiClient(clientReturning("""{"totally":"wrong"}""", HttpStatusCode.OK))
+        // OffApiEnvelope.status has no default → missing key should cause SerializationException
+        // (ignoreUnknownKeys=true, but missing required fields still fail)
+        assertNull(sut.lookup("5449000000996"))
     }
 
     @Test
@@ -99,5 +138,10 @@ class OffApiClientTest {
             headers = headersOf(HttpHeaders.ContentType, "application/json"),
         ) }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+
+    private fun clientThrowing(t: Throwable): HttpClient =
+        HttpClient(MockEngine { throw t }) {
+            install(ContentNegotiation) { json() }
         }
 }

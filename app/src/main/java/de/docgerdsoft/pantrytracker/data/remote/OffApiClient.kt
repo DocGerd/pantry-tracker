@@ -1,9 +1,9 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
+import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
@@ -18,27 +18,29 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.io.IOException
 
+private const val TAG = "OffApiClient"
+
 /**
- * Open Food Facts v2 product lookup. Returns `null` on miss, 4xx/5xx, or any
- * IOException (network down, DNS, timeout) — never throws to the caller per
- * spec §7 (OFF miss == network failure == drop to manual entry).
+ * Open Food Facts v2 product lookup. Returns null on miss, 4xx/5xx, blank barcode,
+ * request timeout, JSON parse failure, or network IOException — the only exception
+ * that escapes to the caller is CancellationException (rethrown for structured
+ * concurrency, so a caller cancelling our job actually cancels us).
  *
- * `CancellationException` is re-thrown explicitly so structured concurrency
- * still works when the caller (typically [ScanViewModel]) cancels the lookup
- * after a new scan or sheet dismissal.
+ * Production uses the no-arg secondary constructor, which builds a real
+ * OkHttp-backed HttpClient. Tests inject a MockEngine-backed HttpClient via the
+ * primary (HttpClient-accepting) constructor.
  *
- * Default constructor builds a production HttpClient. Tests pass a MockEngine-
- * backed client via the second constructor.
+ * Per spec §7: OFF miss == network failure == drop to manual entry. No retry,
+ * no log-and-hang, no surfaced exceptions other than cancellation.
  */
 class OffApiClient internal constructor(private val httpClient: HttpClient) : OffLookup {
 
     constructor() : this(defaultClient())
 
-    // Spec §7 explicitly maps OFF network/payload failures to "miss" (null) so the
-    // caller drops into manual entry. The catches below intentionally discard the
-    // exception — we don't even log because per-frame ML Kit decode failures already
-    // flood logcat in the camera path and this would add noise without value.
-    @Suppress("SwallowedException")
+    // Spec §7 maps OFF network/payload failures to "miss" (null) so the caller drops
+    // into manual entry. Exceptions are logged at WARN (one per scan max — not
+    // logcat-spammy) so flaky-network reports have a stack trace, but the user-
+    // visible signal is the manual-entry sheet, not a toast or error dialog.
     override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
         return try {
@@ -53,12 +55,18 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
-            null
-        } catch (e: HttpRequestTimeoutException) {
+            // Covers network down, DNS failures, connect/socket timeouts (OkHttp
+            // surfaces timeout as SocketTimeoutException which is an IOException).
+            @Suppress("SwallowedException")
+            Log.w(TAG, "OFF lookup network error for $barcode", e)
             null
         } catch (e: JsonConvertException) {
+            @Suppress("SwallowedException")
+            Log.w(TAG, "OFF lookup JSON conversion error for $barcode", e)
             null
         } catch (e: SerializationException) {
+            @Suppress("SwallowedException")
+            Log.w(TAG, "OFF lookup serialization error for $barcode", e)
             null
         }
     }
