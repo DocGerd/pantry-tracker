@@ -22,11 +22,16 @@ issue for security-sensitive findings.
 
 ### What to expect
 
-- Acknowledgement within **7 days**.
-- A first assessment within **14 days**.
-- A coordinated fix and disclosure within **90 days** of acknowledgement, unless
-  the issue is particularly complex (in which case we will agree on a longer
-  timeline together).
+This is a personal hobby project — there are no formal SLAs and no on-call
+rotation. The following are best-effort targets, not commitments:
+
+- Acknowledgement: typically within **14 days**.
+- First assessment: typically within **30 days**.
+- Coordinated fix and disclosure: typically within **180 days**, longer for
+  complex issues (we will agree on a timeline together).
+
+For time-sensitive issues, the GitHub Security Advisory channel is preferred —
+it routes to a notification channel I check more reliably than email.
 
 ### Scope
 

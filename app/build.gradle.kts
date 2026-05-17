@@ -51,6 +51,14 @@ android {
     }
 }
 
+// Lock resolved dependency versions so OSV-Scanner has a manifest to scan.
+// OSV-Scanner for Gradle only understands gradle.lockfile / gradle-verification-metadata.xml /
+// pom.xml — NOT version catalogs. Without locking, the Security workflow scans zero packages.
+// Regenerate via `./gradlew :app:dependencies --write-locks` (also run by Security CI).
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 detekt {
     buildUponDefaultConfig = true
     allRules = false
