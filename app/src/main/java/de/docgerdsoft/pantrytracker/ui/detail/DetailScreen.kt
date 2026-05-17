@@ -190,8 +190,10 @@ fun DetailScreen(
         if (state.showDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = viewModel::cancelDelete,
-                title = { Text("Delete product?") },
-                text = { Text("This removes it from your inventory. Cannot be undone in v1.") },
+                title = { Text("Delete this product?") },
+                text = {
+                    Text("\"${product.name}\" will be removed from your inventory. This can't be undone.")
+                },
                 confirmButton = {
                     TextButton(
                         onClick = viewModel::confirmDelete,
