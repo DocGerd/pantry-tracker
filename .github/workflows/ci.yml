@@ -46,4 +46,7 @@ jobs:
 
       - name: Detekt (Kotlin static analysis)
         if: steps.gate.outputs.ready == 'true'
-        run: ./gradlew --no-daemon detektDebug
+        # The bare `detekt` task covers all sources. The Detekt 1.23.7 Android
+        # plugin does NOT auto-generate per-variant tasks like `detektDebug`
+        # under AGP 9.2 / Kotlin 2.3 / Gradle 9.4 (verified empirically).
+        run: ./gradlew --no-daemon detekt
