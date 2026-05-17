@@ -1,6 +1,11 @@
 # Brainstorm / Claude scratch
 .superpowers/
-.claude/
+
+# Claude Code project-scoped automation IS committed (hooks, settings.json,
+# skills/, agents/) so every contributor gets the same guardrails by default
+# — see docs/superpowers/specs/2026-05-17-claude-automation-toolkit-design.md.
+# Only the personal per-session prefs file is gitignored.
+.claude/settings.local.json
 
 # Android / Gradle build outputs
 *.iml
