@@ -5,7 +5,7 @@
 | # | Constraint | Source / rationale |
 |---|------------|--------------------|
 | TC-1 | **Android 8.0 (API 26) minimum** | Adaptive launcher icons require it; older devices are vanishingly rare in 2026. |
-| TC-2 | **Android 15 (API 36) target** | Latest stable at the time of v1.0. Forces edge-to-edge + the modern permission flow. |
+| TC-2 | **Android 16 (API 36) target** | Latest stable at the time of v1.0. Forces edge-to-edge + the modern permission flow. (Android 15 is API 35; API 36 is Android 16 Baklava.) |
 | TC-3 | **Kotlin 2.x with K2 compiler** | Project-wide; non-negotiable from M0. |
 | TC-4 | **Jetpack Compose for all UI** | No XML layouts. Material 3 theme tokens. |
 | TC-5 | **Room as the only persistence layer** | No SharedPreferences for inventory data; no remote cache database. |

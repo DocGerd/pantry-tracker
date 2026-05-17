@@ -40,12 +40,29 @@ Key invariants:
 - `lookupJob`, `confirmJob`, `manualEntryJob` are tracked separately and
   cancelled when a new barcode arrives or the user dismisses the sheet —
   prevents stale results clobbering a fresh phase.
-- Each post-async state write checks "do I still own this phase?" via
-  referential equality (`s.phase === phase`) before applying — protects
-  against the race where a confirm-in-flight gets a new scan in parallel.
+- Each post-async state write checks "do I still own this phase?" before
+  applying. Two flavors of the guard exist:
+  - **`confirm()` and `submitManualEntry()`** use *referential equality*:
+    `if (s.phase === phase) s.copy(phase = newPhase) else s`. They have a
+    specific old phase instance (the one being acted on) and verify it's
+    still current.
+  - **`resolveBarcode()`** uses *barcode equality on the Loading phase*:
+    `(state.phase as? Phase.Loading)?.barcode == barcode`. It doesn't
+    have a captured phase reference because the launch happens before
+    the post-write, so it matches on the barcode value instead.
+  Both prevent races where an in-flight result overwrites a fresh phase;
+  pick the right one when adding a new async op.
 - `CancellationException` is rethrown in every `catch` before the generic
   `catch (Exception)` branch — otherwise structured concurrency breaks and
   the cancel-then-write cleanup races.
+
+The diagram above shows the `FromOff → addNew(...)` branch (a barcode the
+local DB has never seen). For a re-scan of a barcode that IS in the local
+DB, `confirm()` takes the **Persisted → applyDelta** path instead
+(`ScanViewModel.kt:144`): same loading/preview/confirm sequence, but the
+final repository call is `applyDelta(productId, pendingQuantity)` rather
+than `addNew(...)`. In both cases the post-call transition is the same
+`Phase.Idle`.
 
 ## 6.2 Scenario — Scan to remove, item not in inventory
 
@@ -107,6 +124,10 @@ User           DetailScreen        DetailViewModel       ProductRepository
  │                  │                  │                     │
  │ tap row in Home  │                  │                     │
  │ ──────────────▶ navigate "detail/<id>"                    │
+ │                  │                  │ findById(id) ──────▶│  (spec D2 precheck)
+ │                  │                  │ ◀── Product? null?  │
+ │                  │                  │   if null → shouldNavigateBack=true,
+ │                  │                  │   screen auto-pops; otherwise:
  │                  │                  │ observeById ───────▶│
  │                  │                  │ ◀── Flow<Product?>  │
  │                  │ DetailUiState collected, shows row     │
