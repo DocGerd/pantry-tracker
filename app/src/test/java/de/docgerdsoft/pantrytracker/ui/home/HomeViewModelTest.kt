@@ -205,6 +205,7 @@ class HomeViewModelTest {
 
         override suspend fun findById(id: Long): Product? = all.value.firstOrNull { it.id == id }
         override suspend fun findLocalByBarcode(code: String): Product? = null
+        override suspend fun lookupForPreview(code: String): Product? = null
 
         override suspend fun addNew(
             name: String,

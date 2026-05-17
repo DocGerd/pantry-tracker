@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.data.remote
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
@@ -10,8 +11,12 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
+import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import java.io.IOException
 
 /**
  * Open Food Facts v2 product lookup. Returns `null` on miss, 4xx/5xx, or any
@@ -29,22 +34,31 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
 
     constructor() : this(defaultClient())
 
+    // Spec §7 explicitly maps OFF network/payload failures to "miss" (null) so the
+    // caller drops into manual entry. The catches below intentionally discard the
+    // exception — we don't even log because per-frame ML Kit decode failures already
+    // flood logcat in the camera path and this would add noise without value.
+    @Suppress("SwallowedException")
     override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
         return try {
             val response: HttpResponse = httpClient.get(
-                "https://world.openfoodfacts.org/api/v2/product/$barcode.json"
+                "https://world.openfoodfacts.org/api/v2/product/$barcode.json",
             ) {
                 url.parameters.append("fields", "code,product_name,brands,image_url,status")
             }
             if (!response.status.isSuccess()) return null
             val envelope = response.body<OffApiEnvelope>()
             if (envelope.status != 1) null else envelope.product
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e  // structured concurrency — never swallow cancellation
-        } catch (e: Exception) {
-            // Per spec §7: recoverable network failures map to "miss" (null);
-            // caller drops into manual entry. No retry, no log-and-hang.
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            null
+        } catch (e: HttpRequestTimeoutException) {
+            null
+        } catch (e: JsonConvertException) {
+            null
+        } catch (e: SerializationException) {
             null
         }
     }

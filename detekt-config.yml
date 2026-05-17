@@ -76,3 +76,9 @@ complexity:
     constructorThreshold: 8
     ignoreAnnotated:
       - 'Composable'
+  ReturnCount:
+    # Default 2 is hostile to guard-clause-heavy code (`if (badInput) return null`
+    # repeated for several edge cases). Idiomatic Kotlin favours early returns
+    # over nested if/else. 5 is the threshold at which we'd suspect a real
+    # complexity problem worth refactoring.
+    max: 5

@@ -247,7 +247,7 @@ class ScanViewModelTest {
         fake.lookupResponses["222"] = Product(id = 0, barcode = "222", name = "OFF Result",
             quantity = 0, createdAt = now, updatedAt = now)
         vm.uiState.test {
-            awaitItem()  // initial Idle
+            awaitItem() // initial Idle
             vm.onBarcodeDecoded("222")
             val loading = awaitItem().phase
             assertTrue("expected Loading, was $loading", loading is ScanUiState.Phase.Loading)
@@ -268,7 +268,7 @@ class ScanViewModelTest {
             vm.onBarcodeDecoded("111")
             // Loading sheet flashes even for local hits — caller decision, keeps the path
             // identical regardless of where the data comes from.
-            awaitItem()  // Loading
+            awaitItem() // Loading
             val preview = awaitItem().phase
             assertTrue(preview is ScanUiState.Phase.Preview)
             assertEquals("Local Coke", (preview as ScanUiState.Phase.Preview).product.name)
@@ -314,7 +314,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("444")
-            awaitItem()  // Loading
+            awaitItem() // Loading
             assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
             vm.submitManualEntry(name = "   ", initialQuantity = 1)
             expectNoEvents()
@@ -343,7 +343,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("555")
-            awaitItem()  // Loading
+            awaitItem() // Loading
             assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
             vm.submitManualEntry(name = " Cinnamon ", initialQuantity = 2)
             assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
@@ -362,7 +362,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("666")
-            awaitItem()  // Loading
+            awaitItem() // Loading
             val manual = awaitItem().phase as ScanUiState.Phase.ManualEntry
             assertEquals(1, manual.pendingQuantity)
             vm.setQuantity(4)
@@ -393,9 +393,9 @@ class ScanViewModelTest {
         override suspend fun lookupForPreview(code: String): Product? {
             lookupCallCount++
             if (suspendOnLookup) {
-                kotlinx.coroutines.awaitCancellation()  // never returns until job is cancelled
+                kotlinx.coroutines.awaitCancellation() // never returns until job is cancelled
             }
-            val result = lookupResponses[code] ?: byBarcode[code]  // fall back to seeded local row
+            val result = lookupResponses[code] ?: byBarcode[code] // fall back to seeded local row
             completedLookups += code
             return result
         }

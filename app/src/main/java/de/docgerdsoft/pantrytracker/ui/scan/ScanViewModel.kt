@@ -31,57 +31,66 @@ class ScanViewModel(
      */
     fun onBarcodeDecoded(barcode: String) {
         if (barcode.isBlank()) return
-        when (val current = _uiState.value.phase) {
-            is ScanUiState.Phase.Loading -> if (current.barcode == barcode) return
-            is ScanUiState.Phase.Preview -> if (current.product.barcode == barcode) return
-            is ScanUiState.Phase.ManualEntry -> if (current.barcode == barcode) return
-            ScanUiState.Phase.Idle, is ScanUiState.Phase.Error -> Unit
-        }
+        if (isAlreadyShowing(barcode)) return
         lookupJob?.cancel()
         _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(barcode)) }
-        lookupJob = viewModelScope.launch {
-            // try/catch instead of runCatching — runCatching swallows
-            // CancellationException, which would race with dismissPreview()'s
-            // Idle write and stamp Phase.Error on top of a dismissed sheet.
-            val resolved = try {
-                repository.lookupForPreview(barcode)
-            } catch (e: CancellationException) {
-                throw e  // structured concurrency: let cancellation propagate
-            } catch (e: Throwable) {
-                _uiState.update {
-                    it.copy(
-                        phase = ScanUiState.Phase.Error(
-                            "Couldn't read inventory: ${e.message ?: "unknown error"}",
-                        ),
-                    )
-                }
-                return@launch
-            }
-            val newPhase = if (resolved != null) {
-                ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
-            } else {
-                ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
-            }
-            _uiState.update { it.copy(phase = newPhase) }
+        lookupJob = viewModelScope.launch { resolveBarcode(barcode) }
+    }
+
+    private fun isAlreadyShowing(barcode: String): Boolean =
+        when (val current = _uiState.value.phase) {
+            is ScanUiState.Phase.Loading -> current.barcode == barcode
+            is ScanUiState.Phase.Preview -> current.product.barcode == barcode
+            is ScanUiState.Phase.ManualEntry -> current.barcode == barcode
+            ScanUiState.Phase.Idle, is ScanUiState.Phase.Error -> false
         }
+
+    // Catches Exception (not Throwable — Errors should crash per spec §7). The repository
+    // surface is wide (Room + OFF HTTP) and we don't want a random SQLException to crash
+    // the camera screen; surfacing as Phase.Error matches spec §7 "user-facing → inline".
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun resolveBarcode(barcode: String) {
+        val resolved = try {
+            repository.lookupForPreview(barcode)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(
+                    phase = ScanUiState.Phase.Error(
+                        "Couldn't read inventory: ${e.message ?: "unknown error"}",
+                    ),
+                )
+            }
+            return
+        }
+        val newPhase = if (resolved != null) {
+            ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
+        } else {
+            ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
+        }
+        _uiState.update { it.copy(phase = newPhase) }
     }
 
     /** Used by both the Preview stepper and the ManualEntry quantity input. */
     fun setQuantity(value: Int) {
         val clamped = value.coerceAtLeast(1)
+        // StateFlow.update + equals already short-circuits emission when the new
+        // state equals the old one, so we don't need a manual pendingQuantity-equals
+        // guard. The when only routes Preview/ManualEntry through their copy methods.
         _uiState.update { state ->
             when (val phase = state.phase) {
                 is ScanUiState.Phase.Preview ->
-                    if (phase.pendingQuantity == clamped) state
-                    else state.copy(phase = phase.copy(pendingQuantity = clamped))
+                    state.copy(phase = phase.copy(pendingQuantity = clamped))
                 is ScanUiState.Phase.ManualEntry ->
-                    if (phase.pendingQuantity == clamped) state
-                    else state.copy(phase = phase.copy(pendingQuantity = clamped))
+                    state.copy(phase = phase.copy(pendingQuantity = clamped))
                 else -> state
             }
         }
     }
 
+    // See resolveBarcode for the TooGenericExceptionCaught suppression rationale.
+    @Suppress("TooGenericExceptionCaught")
     fun confirmAdd() {
         val phase = _uiState.value.phase as? ScanUiState.Phase.Preview ?: return
         viewModelScope.launch {
@@ -90,7 +99,7 @@ class ScanViewModel(
                 ScanUiState.Phase.Idle
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { it.copy(phase = newPhase) }
@@ -102,6 +111,8 @@ class ScanViewModel(
      * non-blank name + positive quantity; silently no-ops on invalid input (the sheet
      * stays open). On DB failure transitions to Error per spec §7.
      */
+    // See resolveBarcode for the TooGenericExceptionCaught suppression rationale.
+    @Suppress("TooGenericExceptionCaught")
     fun submitManualEntry(name: String, initialQuantity: Int) {
         val phase = _uiState.value.phase as? ScanUiState.Phase.ManualEntry ?: return
         val trimmed = name.trim()
@@ -118,7 +129,7 @@ class ScanViewModel(
                 ScanUiState.Phase.Idle
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Throwable) {
+            } catch (e: Exception) {
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { it.copy(phase = newPhase) }
