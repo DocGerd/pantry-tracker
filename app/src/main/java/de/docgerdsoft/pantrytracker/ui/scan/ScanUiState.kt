@@ -1,6 +1,6 @@
 package de.docgerdsoft.pantrytracker.ui.scan
 
-import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 
 /** UI state for the Scan screen. The phase is a small sealed hierarchy modelling
  *  the scan → decode → confirm flow. */
@@ -15,10 +15,12 @@ data class ScanUiState(
          *  followed by Open Food Facts if local missed). Shows a brief indicator. */
         data class Loading(val barcode: String) : Phase
 
-        /** Resolved product (from local DB or OFF) is ready for the user to confirm
-         *  with a chosen quantity. */
+        /** Resolved candidate (from local DB or OFF) is ready for the user to confirm
+         *  with a chosen quantity. The candidate carries the display info (name, brand,
+         *  imageUrl) and encodes whether to call applyDelta (Persisted) or addNew
+         *  (FromOff) at confirm time. */
         data class Preview(
-            val product: Product,
+            val candidate: ScanCandidate,
             val pendingQuantity: Int,
         ) : Phase
 

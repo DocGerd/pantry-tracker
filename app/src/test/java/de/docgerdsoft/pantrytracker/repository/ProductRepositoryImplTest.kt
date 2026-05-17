@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
@@ -157,7 +158,7 @@ class ProductRepositoryImplTest {
     // --- lookupForPreview tests ---
 
     @Test
-    fun lookupForPreview_localHit_returnsRoomRow_doesNotHitNetwork() = runTest {
+    fun lookupForPreview_localHit_returnsPersisted_doesNotHitNetwork() = runTest {
         val fakeOff = FakeOffLookup()
         // Seed via repo so Room assigns the real id
         val id = repo.addNew(name = "Local Coke", barcode = "111", initialQuantity = 5)
@@ -165,25 +166,27 @@ class ProductRepositoryImplTest {
 
         val result = sut.lookupForPreview("111")
 
-        assertEquals(id, result?.id)
-        assertEquals("Local Coke", result?.name)
+        val persisted = result as? ScanCandidate.Persisted
+        assertNotNull("expected Persisted, was $result", persisted)
+        assertEquals(id, persisted!!.product.id)
+        assertEquals("Local Coke", persisted.name)
         assertEquals(0, fakeOff.lookupCallCount) // critical: no network on local hit
     }
 
     @Test
-    fun lookupForPreview_localMiss_offHit_returnsPreviewProduct() = runTest {
+    fun lookupForPreview_localMiss_offHit_returnsFromOff() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("222", OffProduct(productName = "Sprite", brands = "Coca-Cola", imageUrl = "https://x"))
         val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
 
         val result = sut.lookupForPreview("222")
 
-        assertEquals(0L, result?.id)
-        assertEquals(0, result?.quantity)
-        assertEquals("Sprite", result?.name)
-        assertEquals("Coca-Cola", result?.brand)
-        assertEquals("https://x", result?.imageUrl)
-        assertEquals("222", result?.barcode)
+        val fromOff = result as? ScanCandidate.FromOff
+        assertNotNull("expected FromOff, was $result", fromOff)
+        assertEquals("Sprite", fromOff!!.name)
+        assertEquals("Coca-Cola", fromOff.brand)
+        assertEquals("https://x", fromOff.imageUrl)
+        assertEquals("222", fromOff.barcode)
     }
 
     @Test

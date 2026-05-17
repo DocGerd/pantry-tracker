@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.scan
 import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -59,7 +60,7 @@ class ScanViewModelTest {
             awaitItem() // Loading
             val state = awaitItem()
             val preview = state.phase as ScanUiState.Phase.Preview
-            assertEquals("Coca-Cola 0.5L", preview.product.name)
+            assertEquals("Coca-Cola 0.5L", preview.candidate.name)
             assertEquals(1, preview.pendingQuantity)
         }
     }
@@ -243,9 +244,10 @@ class ScanViewModelTest {
 
     @Test
     fun onBarcodeDecoded_localMiss_offHit_transitionsThroughLoadingToPreview() = runTest {
-        val now = Clock.System.now()
-        fake.lookupResponses["222"] = Product(id = 0, barcode = "222", name = "OFF Result",
-            quantity = 0, createdAt = now, updatedAt = now)
+        // OFF hit is expressed as a ScanCandidate.FromOff (id=0 sentinel gone)
+        fake.lookupResponses["222"] = ScanCandidate.FromOff(
+            barcode = "222", name = "OFF Result", brand = null, imageUrl = null,
+        )
         vm.uiState.test {
             awaitItem() // initial Idle
             vm.onBarcodeDecoded("222")
@@ -254,7 +256,7 @@ class ScanViewModelTest {
             assertEquals("222", (loading as ScanUiState.Phase.Loading).barcode)
             val preview = awaitItem().phase
             assertTrue(preview is ScanUiState.Phase.Preview)
-            assertEquals("OFF Result", (preview as ScanUiState.Phase.Preview).product.name)
+            assertEquals("OFF Result", (preview as ScanUiState.Phase.Preview).candidate.name)
         }
     }
 
@@ -271,7 +273,7 @@ class ScanViewModelTest {
             awaitItem() // Loading
             val preview = awaitItem().phase
             assertTrue(preview is ScanUiState.Phase.Preview)
-            assertEquals("Local Coke", (preview as ScanUiState.Phase.Preview).product.name)
+            assertEquals("Local Coke", (preview as ScanUiState.Phase.Preview).candidate.name)
         }
     }
 
@@ -284,9 +286,8 @@ class ScanViewModelTest {
             assertEquals("111", (awaitItem().phase as ScanUiState.Phase.Loading).barcode)
             vm.onBarcodeDecoded("222")
             assertEquals("222", (awaitItem().phase as ScanUiState.Phase.Loading).barcode)
-            // First lookup was cancelled; only the second one is still running.
-            // (completedLookups would only have entries IF suspendOnLookup were turned off;
-            //  we don't drain — the test asserts the visible state transition only.)
+            // First lookup was cancelled; assert via cancelledLookups tracking.
+            assertEquals(listOf("111"), fake.cancelledLookups)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -302,6 +303,7 @@ class ScanViewModelTest {
             assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
             // No completion happened — lookup was cancelled.
             assertEquals(emptyList<String>(), fake.completedLookups)
+            assertEquals(listOf("111"), fake.cancelledLookups)
             // No Phase.Error stamped on top of the dismissed Idle — `runCatching`
             // would catch the CancellationException and race with this Idle write.
             // We use try/catch with explicit CancellationException rethrow instead.
@@ -370,14 +372,97 @@ class ScanViewModelTest {
         }
     }
 
+    // ---- I2: Exception-path tests ----
+
+    @Test
+    fun onBarcodeDecoded_repositoryThrows_transitionsToError() = runTest {
+        fake.lookupShouldThrow = RuntimeException("DB exploded")
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("111")
+            awaitItem() // Loading
+            val state = awaitItem()
+            val error = state.phase as ScanUiState.Phase.Error
+            assertTrue(error.message.contains("DB exploded"))
+        }
+    }
+
+    @Test
+    fun confirmAdd_applyDeltaThrows_transitionsToError() = runTest {
+        val now = Clock.System.now()
+        fake.seed(Product(id = 1, barcode = "x", name = "P", quantity = 0,
+            createdAt = now, updatedAt = now))
+        fake.applyDeltaShouldThrow = RuntimeException("disk full")
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("x")
+            awaitItem() // Loading
+            awaitItem() // Preview
+            vm.confirmAdd()
+            val state = awaitItem()
+            val error = state.phase as ScanUiState.Phase.Error
+            assertTrue(error.message.contains("disk full"))
+        }
+    }
+
+    @Test
+    fun submitManualEntry_addNewThrows_transitionsToError() = runTest {
+        fake.addShouldThrow = RuntimeException("constraint violation")
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("777")
+            awaitItem() // Loading
+            assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
+            vm.submitManualEntry(name = "Widget", initialQuantity = 1)
+            val state = awaitItem()
+            val error = state.phase as ScanUiState.Phase.Error
+            assertTrue(error.message.contains("constraint violation"))
+        }
+    }
+
+    // ---- I4: Dismiss-then-rescan ----
+
+    @Test
+    fun onBarcodeDecoded_afterDismissingPreview_sameBarcode_refiresLookup() = runTest {
+        val now = Clock.System.now()
+        fake.seed(Product(id = 1, barcode = "111", name = "Coke",
+            quantity = 0, createdAt = now, updatedAt = now))
+
+        vm.uiState.test {
+            awaitItem() // Idle
+
+            vm.onBarcodeDecoded("111")
+            awaitItem() // Loading
+            awaitItem() // Preview
+            assertEquals(1, fake.lookupCallCount)
+
+            vm.dismissPreview()
+            assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
+
+            vm.onBarcodeDecoded("111")
+            awaitItem() // Loading
+            awaitItem() // Preview
+            assertEquals(2, fake.lookupCallCount)
+        }
+    }
+
     private class FakeProductRepository : ProductRepository {
         private val byBarcode = mutableMapOf<String, Product>()
         var lastDelta: Pair<Long, Int>? = null
 
-        var lookupResponses = mutableMapOf<String, Product?>()
+        // Responses can now be ScanCandidate directly
+        var lookupResponses = mutableMapOf<String, ScanCandidate?>()
         var lookupCallCount = 0
         var suspendOnLookup = false
         val completedLookups = mutableListOf<String>()
+        val cancelledLookups = mutableListOf<String>()
+
+        // I2: exception injection
+        var lookupShouldThrow: Throwable? = null
+        var addShouldThrow: Throwable? = null
+        var applyDeltaShouldThrow: Throwable? = null
 
         fun seed(p: Product) {
             byBarcode[p.barcode!!] = p
@@ -390,14 +475,25 @@ class ScanViewModelTest {
         override suspend fun findById(id: Long): Product? =
             byBarcode.values.firstOrNull { it.id == id }
         override suspend fun findLocalByBarcode(code: String): Product? = byBarcode[code]
-        override suspend fun lookupForPreview(code: String): Product? {
+        override suspend fun lookupForPreview(code: String): ScanCandidate? {
+            lookupShouldThrow?.let { throw it }
             lookupCallCount++
             if (suspendOnLookup) {
-                kotlinx.coroutines.awaitCancellation() // never returns until job is cancelled
+                try {
+                    kotlinx.coroutines.awaitCancellation() // never returns until job is cancelled
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    cancelledLookups += code
+                    throw e
+                }
             }
-            val result = lookupResponses[code] ?: byBarcode[code] // fall back to seeded local row
+            // explicit lookup response takes priority; otherwise fall back to seeded local row
+            val candidate = if (lookupResponses.containsKey(code)) {
+                lookupResponses[code]
+            } else {
+                byBarcode[code]?.let { ScanCandidate.Persisted(it) }
+            }
             completedLookups += code
-            return result
+            return candidate
         }
 
         data class AddCall(
@@ -413,10 +509,12 @@ class ScanViewModelTest {
             name: String, brand: String?, barcode: String?, imageUrl: String?,
             initialQuantity: Int,
         ): Long {
+            addShouldThrow?.let { throw it }
             addedProducts += AddCall(name, brand, barcode, imageUrl, initialQuantity)
             return (addedProducts.size).toLong()
         }
         override suspend fun applyDelta(productId: Long, delta: Int) {
+            applyDeltaShouldThrow?.let { throw it }
             lastDelta = productId to delta
         }
         override suspend fun rename(productId: Long, newName: String) = Unit

@@ -1,10 +1,13 @@
 package de.docgerdsoft.pantrytracker.repository
 
+import android.util.Log
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.local.ProductDao
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.Clock
+
+private const val TAG = "ProductRepositoryImpl"
 
 class ProductRepositoryImpl(
     private val dao: ProductDao,
@@ -58,21 +61,23 @@ class ProductRepositoryImpl(
         dao.deleteById(productId)
     }
 
-    override suspend fun lookupForPreview(code: String): Product? {
+    override suspend fun lookupForPreview(code: String): ScanCandidate? {
         if (code.isBlank()) return null
-        findLocalByBarcode(code)?.let { return it }
+        findLocalByBarcode(code)?.let { return ScanCandidate.Persisted(it) }
         val off = offLookup.lookup(code) ?: return null
-        val name = off.productName?.takeIf { it.isNotBlank() } ?: return null
-        val now = clock.now()
-        return Product(
-            id = 0,
+        val name = off.productName?.takeIf { it.isNotBlank() }
+        if (name == null) {
+            // C6: OFF returned a status=1 envelope but product_name was blank/absent.
+            // We can't preview without a name — drop to manual entry. Log at INFO so
+            // the brand/image loss is auditable without being logcat-noisy.
+            Log.i(TAG, "OFF hit for $code discarded — name blank, brand=${off.brands}")
+            return null
+        }
+        return ScanCandidate.FromOff(
             barcode = code,
             name = name,
             brand = off.brands?.takeIf { it.isNotBlank() },
             imageUrl = off.imageUrl?.takeIf { it.isNotBlank() },
-            quantity = 0,
-            createdAt = now,
-            updatedAt = now,
         )
     }
 }

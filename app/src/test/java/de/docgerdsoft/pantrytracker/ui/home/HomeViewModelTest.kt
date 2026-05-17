@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.home
 import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -205,7 +206,7 @@ class HomeViewModelTest {
 
         override suspend fun findById(id: Long): Product? = all.value.firstOrNull { it.id == id }
         override suspend fun findLocalByBarcode(code: String): Product? = null
-        override suspend fun lookupForPreview(code: String): Product? = null
+        override suspend fun lookupForPreview(code: String): ScanCandidate? = null
 
         override suspend fun addNew(
             name: String,

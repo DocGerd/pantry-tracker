@@ -73,7 +73,7 @@ fun ScanScreen(
                     onCancel = viewModel::dismissPreview,
                 )
                 is ScanUiState.Phase.Preview -> ScanPreviewSheet(
-                    product = phase.product,
+                    candidate = phase.candidate,
                     pendingQuantity = phase.pendingQuantity,
                     onQuantityChange = viewModel::setQuantity,
                     onConfirm = viewModel::confirmAdd,

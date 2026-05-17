@@ -34,7 +34,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +56,7 @@ fun LoadingSheet(barcode: String, onCancel: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScanPreviewSheet(
-    product: Product,
+    candidate: ScanCandidate,
     pendingQuantity: Int,
     onQuantityChange: (Int) -> Unit,
     onConfirm: () -> Unit,
@@ -72,7 +72,7 @@ fun ScanPreviewSheet(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            product.imageUrl?.let { url ->
+            candidate.imageUrl?.let { url ->
                 AsyncImage(
                     model = url,
                     contentDescription = "Product photo",
@@ -80,8 +80,8 @@ fun ScanPreviewSheet(
                     contentScale = ContentScale.Fit,
                 )
             }
-            Text(product.name, style = MaterialTheme.typography.titleLarge)
-            product.brand?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            Text(candidate.name, style = MaterialTheme.typography.titleLarge)
+            candidate.brand?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,

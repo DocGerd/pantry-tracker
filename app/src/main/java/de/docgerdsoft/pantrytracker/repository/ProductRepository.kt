@@ -10,15 +10,15 @@ interface ProductRepository {
     suspend fun findLocalByBarcode(code: String): Product?
 
     /**
-     * Resolve a scanned barcode to a Product for preview-before-confirm.
-     * Local-first: returns the persisted row if present. Otherwise hits OFF; on
-     * a hit returns a Product with `id = 0` and `quantity = 0` carrying only
-     * name / brand / imageUrl from OFF (caller decides initial quantity at confirm).
-     * Returns `null` on OFF miss, network failure, blank barcode, or OFF hit with
-     * missing/blank `product_name` (can't preview without a name) — caller drops
-     * into manual entry per spec §6.2.
+     * Resolve a scanned barcode to a [ScanCandidate] for preview-before-confirm.
+     * Local-first: returns [ScanCandidate.Persisted] if the barcode is already in
+     * the local DB. Otherwise hits OFF; on a hit returns [ScanCandidate.FromOff]
+     * carrying name / brand / imageUrl (not yet persisted — caller calls addNew on
+     * confirm). Returns `null` on OFF miss, network failure, blank barcode, or OFF
+     * hit with missing/blank `product_name` — caller drops into manual entry per
+     * spec §6.2.
      */
-    suspend fun lookupForPreview(code: String): Product?
+    suspend fun lookupForPreview(code: String): ScanCandidate?
 
     /**
      * Inserts a new product row and returns its id. `initialQuantity` is clamped at 0;
