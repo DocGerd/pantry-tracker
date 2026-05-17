@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.ui.scan.components
 
 import android.util.Log
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -28,6 +29,7 @@ import java.util.concurrent.Executors
  * de-duplicating rapid repeat detections — `ScanViewModel.onBarcodeDecoded` does that
  * by ignoring decodes while the phase is anything other than Idle.
  */
+@OptIn(ExperimentalGetImage::class)
 @Composable
 fun CameraPreview(
     onBarcode: (String) -> Unit,
