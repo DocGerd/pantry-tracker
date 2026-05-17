@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.logging.Level
+import java.util.logging.Logger
+
+// java.util.logging works in both Android (forwarded to logcat) and plain JVM
+// unit tests (writes to System.err). Avoids android.util.Log throwing
+// "Method X in android.util.Log not mocked" in non-Robolectric tests.
+private val logger: Logger = Logger.getLogger("ScanViewModel")
 
 class ScanViewModel(
     private val repository: ProductRepository,
@@ -30,8 +37,11 @@ class ScanViewModel(
      * any prior in-flight lookup when a new barcode arrives. Blank barcodes (which
      * ML Kit can surface from low-confidence frames) are dropped.
      *
-     * Spec §6.2 decision matrix: local hit → Preview (Persisted); local miss + OFF
-     * hit → Preview (FromOff); local miss + OFF miss / failure → ManualEntry.
+     * Spec §6.2 decision matrix:
+     * - Add mode: local hit → Preview(Persisted); local miss + OFF hit → Preview(FromOff);
+     *   local miss + OFF miss/failure → ManualEntry.
+     * - Remove mode: local hit (qty > 0) → Preview(Persisted); local miss OR local hit at
+     *   qty 0 → NotInInventory. OFF is skipped entirely.
      */
     fun onBarcodeDecoded(barcode: String) {
         if (barcode.isBlank()) return
@@ -83,6 +93,8 @@ class ScanViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            @Suppress("SwallowedException")
+            logger.log(Level.WARNING, "resolveBarcode($barcode) failed", e)
             ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
         }
         _uiState.update { state ->
@@ -134,14 +146,21 @@ class ScanViewModel(
                         )
                     }
                     ScanMode.Remove -> {
-                        val persisted = phase.candidate as? ScanCandidate.Persisted ?: return@launch
-                        repository.applyDelta(persisted.product.id, -phase.pendingQuantity)
+                        // FromOff in Remove is unreachable per spec D4 — resolveBarcode
+                        // never produces it. check() (vs the previous silent return@launch)
+                        // surfaces the invariant violation as Phase.Error via the catch arm.
+                        check(phase.candidate is ScanCandidate.Persisted) {
+                            "Remove mode requires Persisted candidate, got ${phase.candidate}"
+                        }
+                        repository.applyDelta(phase.candidate.product.id, -phase.pendingQuantity)
                     }
                 }
                 ScanUiState.Phase.Idle
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                @Suppress("SwallowedException")
+                logger.log(Level.WARNING, "confirm() failed (mode=${state.mode}, phase=$phase)", e)
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { s ->
@@ -152,7 +171,13 @@ class ScanViewModel(
         }
     }
 
-    /** From the NotInInventory phase: flip mode to Add and re-resolve the captured barcode. */
+    /**
+     * From the NotInInventory phase: flip mode to Add and re-resolve the captured
+     * barcode in a single atomic state update. Bypasses [onBarcodeDecoded]'s
+     * [isAlreadyShowing] dedup guard (which would early-return on the still-current
+     * NotInInventory(barcode) phase) — the dedup is a noise filter for ML Kit's
+     * repeated frame decodes, not a guard against explicit user actions.
+     */
     fun onSwitchToAdd() {
         val phase = _uiState.value.phase as? ScanUiState.Phase.NotInInventory ?: return
         val barcode = phase.barcode
@@ -193,6 +218,8 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                @Suppress("SwallowedException")
+                logger.log(Level.WARNING, "submitManualEntry(name=$trimmed, qty=$initialQuantity) failed", e)
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { state ->

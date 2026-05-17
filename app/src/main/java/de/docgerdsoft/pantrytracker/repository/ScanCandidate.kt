@@ -15,7 +15,7 @@ sealed interface ScanCandidate {
     val brand: String?
     val imageUrl: String?
 
-    /** Already in the local DB. confirmAdd → applyDelta(product.id, +N). */
+    /** Already in the local DB. confirm() → applyDelta(product.id, ±N) (sign by mode). */
     data class Persisted(val product: Product) : ScanCandidate {
         override val barcode get() = product.barcode!!
         override val name get() = product.name
@@ -23,7 +23,7 @@ sealed interface ScanCandidate {
         override val imageUrl get() = product.imageUrl
     }
 
-    /** Resolved via OFF, not yet persisted. confirmAdd → addNew(name, brand, barcode, imageUrl, +N). */
+    /** Resolved via OFF, not yet persisted. confirm() → addNew(name, brand, barcode, imageUrl, +N). Add-mode only. */
     data class FromOff(
         override val barcode: String,
         override val name: String,
