@@ -11,7 +11,7 @@ class PantryTrackerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
+        container = AppContainer.real(this)
         // OkHttpNetworkFetcherFactory is auto-registered by the coil-network-okhttp
         // artifact — explicit .components { add(...) } is redundant and can be dropped.
         SingletonImageLoader.setSafe { ctx ->

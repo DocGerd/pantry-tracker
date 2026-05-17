@@ -8,18 +8,24 @@ import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ProductRepositoryImpl
 
-class AppContainer(context: Context) {
-
-    // Intentionally no fallbackToDestructiveMigration: per spec §7, a schema mismatch
-    // is "programmer error" and must crash, not silently wipe the user's pantry. Add
-    // a proper Migration via .addMigrations(...) before bumping the @Database version.
-    private val db: AppDatabase = Room.databaseBuilder(
-        context.applicationContext,
-        AppDatabase::class.java,
-        AppDatabase.DB_NAME,
-    ).build()
-
-    private val offLookup: OffLookup by lazy { OffApiClient() }
-
-    val productRepository: ProductRepository = ProductRepositoryImpl(db.productDao(), offLookup)
+/**
+ * Manual DI container for the app. Owns the single instance of every wired
+ * dependency. Tests pass a `productRepository` directly (typically a fake);
+ * production code uses [real] which wires up Room + the OFF client.
+ */
+class AppContainer(val productRepository: ProductRepository) {
+    companion object {
+        fun real(context: Context): AppContainer {
+            // Intentionally no fallbackToDestructiveMigration: per spec §7, a schema mismatch
+            // is "programmer error" and must crash, not silently wipe the user's pantry. Add
+            // a proper Migration via .addMigrations(...) before bumping the @Database version.
+            val db: AppDatabase = Room.databaseBuilder(
+                context.applicationContext,
+                AppDatabase::class.java,
+                AppDatabase.DB_NAME,
+            ).build()
+            val offLookup: OffLookup = OffApiClient()
+            return AppContainer(ProductRepositoryImpl(db.productDao(), offLookup))
+        }
+    }
 }
