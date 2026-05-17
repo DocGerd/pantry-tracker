@@ -1,17 +1,52 @@
 #!/usr/bin/env bash
 # PreToolUse hook: reject Edit/Write/MultiEdit on app/gradle.lockfile.
 #
+# Fail-closed: if JSON parsing fails (python3 missing, malformed input,
+# tool_input.file_path absent), the hook exits 2 with a diagnostic. A guard
+# that silently allows when it can't tell what's happening is worse than no
+# guard. Edit/Write/MultiEdit always populate `file_path` per the Claude
+# Code tool schemas, so an absent field signals real breakage.
+#
 # Test from a shell:
 #   echo '{"tool_input":{"file_path":"app/gradle.lockfile"}}' \
 #     | bash .claude/hooks/block-lockfile-edits.sh ; echo "exit=$?"
 # Expected: exit=2 with the rejection message on stderr.
+#   echo '{"tool_input":{"file_path":"/abs/path/to/app/gradle.lockfile"}}' \
+#     | bash .claude/hooks/block-lockfile-edits.sh ; echo "exit=$?"
+# Expected: exit=2 (absolute path variant).
 #   echo '{"tool_input":{"file_path":"app/build.gradle.kts"}}' \
 #     | bash .claude/hooks/block-lockfile-edits.sh ; echo "exit=$?"
 # Expected: exit=0, no output.
+#   echo 'not json' | bash .claude/hooks/block-lockfile-edits.sh ; echo "exit=$?"
+# Expected: exit=2 (fail-closed on parse failure).
+#   echo '{"tool_input":{}}' | bash .claude/hooks/block-lockfile-edits.sh ; echo "exit=$?"
+# Expected: exit=2 (file_path missing — fail-closed).
 set -euo pipefail
 
 input="$(cat)"
-file_path="$(printf '%s' "$input" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"file_path"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' || true)"
+
+# Fail-closed JSON parsing — same shape as block-dangerous-bash.sh for
+# consistency. python3 must exist, JSON must parse, tool_input.file_path
+# must be present. Any failure → exit 2.
+if ! file_path=$(printf '%s' "$input" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+ti = d.get("tool_input", {})
+if "file_path" not in ti:
+    sys.exit(3)
+print(ti["file_path"])
+'); then
+    cat >&2 <<MSG
+block-lockfile-edits hook: failed to parse Edit/Write/MultiEdit tool input.
+Failing closed — exiting 2 to block the action.
+
+Possible causes:
+- python3 missing from PATH
+- malformed JSON on stdin
+- tool_input.file_path field absent or schema changed
+MSG
+    exit 2
+fi
 
 case "$file_path" in
     */app/gradle.lockfile|app/gradle.lockfile)
