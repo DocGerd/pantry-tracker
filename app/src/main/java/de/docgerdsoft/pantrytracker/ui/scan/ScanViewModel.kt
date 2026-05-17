@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.scan
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,20 +40,28 @@ class ScanViewModel(
         lookupJob?.cancel()
         _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(barcode)) }
         lookupJob = viewModelScope.launch {
-            val newPhase: ScanUiState.Phase = runCatching {
+            // try/catch instead of runCatching — runCatching swallows
+            // CancellationException, which would race with dismissPreview()'s
+            // Idle write and stamp Phase.Error on top of a dismissed sheet.
+            val resolved = try {
                 repository.lookupForPreview(barcode)
-            }.fold(
-                onSuccess = { product ->
-                    if (product != null) {
-                        ScanUiState.Phase.Preview(product, pendingQuantity = 1)
-                    } else {
-                        ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
-                    }
-                },
-                onFailure = { e ->
-                    ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
-                },
-            )
+            } catch (e: CancellationException) {
+                throw e  // structured concurrency: let cancellation propagate
+            } catch (e: Throwable) {
+                _uiState.update {
+                    it.copy(
+                        phase = ScanUiState.Phase.Error(
+                            "Couldn't read inventory: ${e.message ?: "unknown error"}",
+                        ),
+                    )
+                }
+                return@launch
+            }
+            val newPhase = if (resolved != null) {
+                ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
+            } else {
+                ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
+            }
             _uiState.update { it.copy(phase = newPhase) }
         }
     }
@@ -76,15 +85,14 @@ class ScanViewModel(
     fun confirmAdd() {
         val phase = _uiState.value.phase as? ScanUiState.Phase.Preview ?: return
         viewModelScope.launch {
-            val outcome = runCatching {
+            val newPhase: ScanUiState.Phase = try {
                 repository.applyDelta(productId = phase.product.id, delta = phase.pendingQuantity)
+                ScanUiState.Phase.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
-            val newPhase: ScanUiState.Phase = outcome.fold(
-                onSuccess = { ScanUiState.Phase.Idle },
-                onFailure = { e ->
-                    ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
-                },
-            )
             _uiState.update { it.copy(phase = newPhase) }
         }
     }
@@ -99,7 +107,7 @@ class ScanViewModel(
         val trimmed = name.trim()
         if (trimmed.isEmpty() || initialQuantity <= 0) return
         viewModelScope.launch {
-            val outcome = runCatching {
+            val newPhase: ScanUiState.Phase = try {
                 repository.addNew(
                     name = trimmed,
                     brand = null,
@@ -107,13 +115,12 @@ class ScanViewModel(
                     imageUrl = null,
                     initialQuantity = initialQuantity,
                 )
+                ScanUiState.Phase.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
-            val newPhase: ScanUiState.Phase = outcome.fold(
-                onSuccess = { ScanUiState.Phase.Idle },
-                onFailure = { e ->
-                    ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
-                },
-            )
             _uiState.update { it.copy(phase = newPhase) }
         }
     }

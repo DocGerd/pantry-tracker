@@ -302,6 +302,10 @@ class ScanViewModelTest {
             assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
             // No completion happened — lookup was cancelled.
             assertEquals(emptyList<String>(), fake.completedLookups)
+            // No Phase.Error stamped on top of the dismissed Idle — `runCatching`
+            // would catch the CancellationException and race with this Idle write.
+            // We use try/catch with explicit CancellationException rethrow instead.
+            expectNoEvents()
         }
     }
 
