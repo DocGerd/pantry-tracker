@@ -21,8 +21,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPermissionGate
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
 import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
+import de.docgerdsoft.pantrytracker.ui.scan.components.LoadingSheet
+import de.docgerdsoft.pantrytracker.ui.scan.components.ManualEntrySheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.ScanPreviewSheet
-import de.docgerdsoft.pantrytracker.ui.scan.components.UnknownBarcodeSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,31 +67,29 @@ fun ScanScreen(
             }
 
             when (val phase = state.phase) {
-                is ScanUiState.Phase.Preview -> {
-                    ScanPreviewSheet(
-                        product = phase.product,
-                        pendingQuantity = phase.pendingQuantity,
-                        onQuantityChange = viewModel::setQuantity,
-                        onConfirm = viewModel::confirmAdd,
-                        onDismiss = viewModel::dismissPreview,
-                    )
-                }
-                is ScanUiState.Phase.ManualEntry -> {
-                    // TODO(T5): replace with ManualEntrySheet; routing to UnknownBarcodeSheet
-                    //  temporarily to keep compilation green until T5 implements the new sheet.
-                    UnknownBarcodeSheet(
-                        barcode = phase.barcode,
-                        onDismiss = viewModel::dismissPreview,
-                    )
-                }
-                is ScanUiState.Phase.Loading -> Unit // TODO(T5): add LoadingSheet
-                is ScanUiState.Phase.Error -> {
-                    ErrorSheet(
-                        message = phase.message,
-                        onDismiss = viewModel::dismissPreview,
-                    )
-                }
                 ScanUiState.Phase.Idle -> Unit
+                is ScanUiState.Phase.Loading -> LoadingSheet(
+                    barcode = phase.barcode,
+                    onCancel = viewModel::dismissPreview,
+                )
+                is ScanUiState.Phase.Preview -> ScanPreviewSheet(
+                    product = phase.product,
+                    pendingQuantity = phase.pendingQuantity,
+                    onQuantityChange = viewModel::setQuantity,
+                    onConfirm = viewModel::confirmAdd,
+                    onDismiss = viewModel::dismissPreview,
+                )
+                is ScanUiState.Phase.ManualEntry -> ManualEntrySheet(
+                    barcode = phase.barcode,
+                    pendingQuantity = phase.pendingQuantity,
+                    onQuantityChange = viewModel::setQuantity,
+                    onSubmit = viewModel::submitManualEntry,
+                    onDismiss = viewModel::dismissPreview,
+                )
+                is ScanUiState.Phase.Error -> ErrorSheet(
+                    message = phase.message,
+                    onDismiss = viewModel::dismissPreview,
+                )
             }
         }
     }
