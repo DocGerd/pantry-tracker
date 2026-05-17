@@ -5,6 +5,7 @@ import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 /** UI state for the Scan screen. The phase is a small sealed hierarchy modelling
  *  the scan → decode → confirm flow. */
 data class ScanUiState(
+    val mode: ScanMode = ScanMode.Add,
     val phase: Phase = Phase.Idle,
 ) {
     sealed interface Phase {
@@ -31,6 +32,10 @@ data class ScanUiState(
             val barcode: String,
             val pendingQuantity: Int,
         ) : Phase
+
+        /** In Remove mode, a scanned barcode was not found in the inventory. The UI
+         *  shows the barcode and prompts the user to confirm removal or dismiss. */
+        data class NotInInventory(val barcode: String) : Phase
 
         /** A scan/confirm operation failed (DB write, camera bind, etc.). The UI
          *  shows the message and lets the user dismiss back to Idle. Per spec §7
