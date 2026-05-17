@@ -21,9 +21,16 @@ jobs:
     # SARIF upload to GitHub Code Scanning requires GitHub Advanced Security on
     # private repos — we don't have GHAS, so upload-sarif is disabled. Findings
     # show up in the workflow run logs instead.
+    #
+    # Permissions: the reusable workflow declares all three below as required
+    # at workflow level. GitHub refuses to start a caller that grants fewer,
+    # even if the step that would consume them (SARIF upload) is disabled
+    # via `upload-sarif: false`. So we grant the full set declaratively.
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
     permissions:
+      actions: read
       contents: read
+      security-events: write
     with:
       scan-args: |-
         --recursive
