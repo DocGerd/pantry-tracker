@@ -671,6 +671,8 @@ class ScanViewModelTest {
             MutableStateFlow(emptyList<Product>()).asStateFlow()
         override fun search(query: String): Flow<List<Product>> =
             MutableStateFlow(emptyList<Product>()).asStateFlow()
+        override fun observeById(id: Long): Flow<Product?> =
+            MutableStateFlow(byBarcode.values.firstOrNull { it.id == id }).asStateFlow()
         override suspend fun findById(id: Long): Product? =
             byBarcode.values.firstOrNull { it.id == id }
         override suspend fun findLocalByBarcode(code: String): Product? = byBarcode[code]
