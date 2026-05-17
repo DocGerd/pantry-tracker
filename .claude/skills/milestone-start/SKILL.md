@@ -1,11 +1,11 @@
 ---
 name: milestone-start
-description: Scaffold a new milestone — creates branch + spec stub + plan stub matching the M2/M2.5/M3 pattern. Use when starting work on the next milestone from the project issue tracker.
+description: Scaffold a new milestone — creates branch + spec stub + plan stub in the unified milestone-N-slug naming convention. Use when starting work on the next milestone from the project issue tracker.
 ---
 
 # Milestone Start
 
-Scaffold a new milestone branch and seed `docs/superpowers/specs/` + `docs/superpowers/plans/` with stubs that match the established M2 / M2.5 / M3 pattern.
+Scaffold a new milestone branch and seed `docs/superpowers/specs/` + `docs/superpowers/plans/` with stubs. Establishes a unified naming convention going forward: existing M0–M3 files used ad-hoc names (`2026-05-17-milestone-3.md`, `2026-05-17-pantry-tracker-milestone-2.md`, `2026-05-16-pantry-tracker-milestones-0-1.md` are all different shapes), so this skill standardizes new milestones to `<date>-milestone-<number>-<slug>-design.md` for specs and `<date>-milestone-<number>-<slug>.md` for plans.
 
 ## Inputs
 
@@ -29,7 +29,7 @@ If invoked without arguments, ask the user for both.
    git pull --ff-only origin main
    git switch -c "m<number>-<slug>"
    ```
-   Branch naming follows M3 (`m3-off-lookup`) and M2.5 (`ci-hardening` was an exception — going forward use `m<number>-<slug>` consistently).
+   Branch naming follows M3 (`m3-off-lookup`). Two exceptions in history that pre-date this skill: M2.5 (`ci-hardening`) and M2.85 (`claude-automation-toolkit`). Going forward use `m<number>-<slug>` consistently — this skill enforces it.
 
 3. **Resolve today's date:**
    ```bash

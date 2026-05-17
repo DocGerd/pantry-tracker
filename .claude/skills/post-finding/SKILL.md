@@ -66,8 +66,12 @@ gh api graphql -f query='
         }
       }
     }
-  }' -f owner=DocGerd -f repo=pantry-tracker -F pr=<PR#>
+  }' -f owner="$(gh repo view --json owner -q .owner.login)" \
+     -f repo="$(gh repo view --json name -q .name)" \
+     -F pr=<PR#>
 ```
+
+The `owner` / `repo` are resolved dynamically from `gh repo view` so the skill keeps working after a fork, rename, or org transfer.
 
 Match by the comment body prefix; that node `id` is what `resolveReviewThread` wants.
 
