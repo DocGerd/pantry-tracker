@@ -1,0 +1,78 @@
+# Detekt overrides on top of the bundled default config.
+# We only DISABLE rules that produce noise with no signal on this codebase;
+# we keep everything else at default. Real findings still gate the build.
+
+formatting:
+  # ArgumentListWrapping, Wrapping, and ParameterListWrapping enforce strict
+  # ktlint formatting that conflicts with Compose's Modifier-chain style and
+  # produces 100+ findings on this codebase with zero correctness signal.
+  # If a formatter is wanted later, run ktlintFormat as a separate task.
+  ArgumentListWrapping:
+    active: false
+  Wrapping:
+    active: false
+  ParameterListWrapping:
+    active: false
+  # 120 → 140 to match modern wide-monitor norms and avoid wrapping Compose
+  # parameter chains that are clearer on one line.
+  MaximumLineLength:
+    maxLineLength: 140
+
+style:
+  MaxLineLength:
+    maxLineLength: 140
+  MagicNumber:
+    # Detekt's `excludes` REPLACES the default list rather than merging — so
+    # we have to re-declare every default exclusion or the rule silently
+    # starts firing on test/*.kts paths it was never meant to police.
+    # If you bump Detekt and the default list changes, mirror it here.
+    excludes:
+      - '**/test/**'
+      - '**/androidTest/**'
+      - '**/commonTest/**'
+      - '**/jvmTest/**'
+      - '**/androidUnitTest/**'
+      - '**/androidInstrumentedTest/**'
+      - '**/jsTest/**'
+      - '**/iosTest/**'
+      - '**/*.kts'
+      # Project-specific: hex color literals in design-system files are not
+      # "magic numbers" in any useful sense — they're palette values.
+      - '**/ui/theme/**'
+  ForbiddenComment:
+    # Default forbids TODO, which we use intentionally for tracked deferrals
+    # (e.g. /* TODO: wire to scan-remove flow */). Keep FIXME / STOPSHIP.
+    comments:
+      - reason: 'FIXME marker should be resolved before merge'
+        value: 'FIXME:'
+      - reason: 'STOPSHIP marker must be resolved before release'
+        value: 'STOPSHIP:'
+
+naming:
+  FunctionNaming:
+    # Jetpack Compose convention is PascalCase for @Composable functions,
+    # which is the opposite of standard Kotlin. Excluding @Composable here
+    # is the canonical workaround (matches the official Compose lint rules).
+    ignoreAnnotated:
+      - 'Composable'
+      - 'Preview'
+  MatchingDeclarationName:
+    # Files that intentionally group several top-level declarations (a nav
+    # graph + its Routes table) don't match the rule's "one filename = one
+    # declaration" expectation. (Rule lives under `naming`, not `style`.)
+    excludes:
+      - '**/*NavGraph.kt'
+
+complexity:
+  LongMethod:
+    # 60-line default is tight for Compose screen composables that include
+    # both their state hoisting AND their layout tree inline. 80 is a more
+    # realistic threshold; if a Composable still exceeds it, split it.
+    threshold: 80
+  LongParameterList:
+    # Compose functions routinely accept many state/intent params + a
+    # Modifier; 6 (default) flags noise.
+    functionThreshold: 8
+    constructorThreshold: 8
+    ignoreAnnotated:
+      - 'Composable'

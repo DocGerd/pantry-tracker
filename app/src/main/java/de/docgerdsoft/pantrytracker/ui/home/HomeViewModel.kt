@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+private const val STATE_SUBSCRIPTION_TIMEOUT_MILLIS = 5_000L
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     private val repository: ProductRepository,
@@ -37,7 +39,7 @@ class HomeViewModel(
         )
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        started = SharingStarted.WhileSubscribed(STATE_SUBSCRIPTION_TIMEOUT_MILLIS),
         initialValue = HomeUiState(),
     )
 

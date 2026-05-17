@@ -45,6 +45,8 @@ import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 
+private const val OUT_OF_STOCK_ROW_ALPHA = 0.45f
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -160,7 +162,9 @@ private fun ProductRow(product: Product, onLongPress: () -> Unit) {
     ) {
         Text(
             text = product.name,
-            modifier = Modifier.weight(1f).alpha(if (product.quantity == 0) 0.45f else 1f),
+            modifier = Modifier
+                .weight(1f)
+                .alpha(if (product.quantity == 0) OUT_OF_STOCK_ROW_ALPHA else 1f),
             style = MaterialTheme.typography.bodyLarge,
         )
         Text(

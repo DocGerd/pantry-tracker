@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Detect Gradle wrapper
         id: gate
@@ -26,16 +26,16 @@ jobs:
             echo "::notice::No Gradle wrapper yet -- milestone 0 (project skeleton) has not started. CI will activate once the Android skeleton lands."
           fi
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4
         if: steps.gate.outputs.ready == 'true'
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407  # v3
         if: steps.gate.outputs.ready == 'true'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
         if: steps.gate.outputs.ready == 'true'
 
       - name: Build, unit-test, lint
@@ -43,3 +43,13 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+
+      - name: Detekt (Kotlin static analysis)
+        # `!cancelled()` keeps Detekt running even when the build/test/lint step
+        # fails, so devs get static-analysis feedback in the same iteration as
+        # compile errors instead of after the next push.
+        # Bare `detekt` task scans all sources — do NOT swap to `detektDebug`
+        # without verifying the per-variant task exists for the current toolchain;
+        # missing-task failures only surface on CI.
+        if: steps.gate.outputs.ready == 'true' && !cancelled()
+        run: ./gradlew --no-daemon detekt

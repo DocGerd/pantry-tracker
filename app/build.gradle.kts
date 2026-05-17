@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.detekt)
 }
 
 android {
@@ -48,6 +49,32 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+}
+
+// Lock resolved dependency versions so OSV-Scanner has a manifest to scan.
+// OSV-Scanner for Gradle only understands gradle.lockfile / gradle-verification-metadata.xml /
+// pom.xml — NOT version catalogs. Without locking, the Security workflow scans zero packages.
+//
+// Scope: only RUNTIME classpaths (what ships in the APK). Build-tool classpaths
+// (KSP processors, AGP plugin transitives, Detekt rule jars, Robolectric/JUnit
+// scaffolding) pull in 400+ packages — including netty, bouncycastle, and Apache
+// commons — that never reach users' devices. Their CVEs are real but they're the
+// AGP/KSP maintainers' to fix, not ours, and adding them to our gate just teaches
+// us to ignore the gate.
+//
+// Regenerate via `./gradlew :app:dependencies --write-locks` (also run by Security CI).
+configurations.matching {
+    it.name == "releaseRuntimeClasspath" || it.name == "debugRuntimeClasspath"
+}.configureEach {
+    resolutionStrategy.activateDependencyLocking()
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    autoCorrect = false
+    ignoreFailures = false
+    config.setFrom(files("$rootDir/detekt-config.yml"))
 }
 
 ksp {
@@ -103,4 +130,6 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    detektPlugins(libs.detekt.formatting)
 }

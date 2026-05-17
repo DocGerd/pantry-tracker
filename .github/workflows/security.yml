@@ -1,0 +1,73 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly schedule catches CVEs disclosed since the last PR landed.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  osv-scan:
+    name: OSV-Scanner (Gradle deps)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@48b5f213c81028ace310571dc5ec0fbbca0b2947  # v4
+
+      - name: Resolve dependencies & write Gradle lockfile
+        # OSV-Scanner for Gradle only understands gradle.lockfile / verification-metadata.xml /
+        # pom.xml — NOT libs.versions.toml. We enable dependency locking in app/build.gradle.kts
+        # and regenerate the lockfile each run from the current resolved graph. This guarantees
+        # the scan reflects what would actually ship, not what was last committed.
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:dependencies --write-locks
+
+      - name: Install osv-scanner CLI
+        run: |
+          VERSION=v2.3.8
+          curl -fsSL -o /tmp/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/${VERSION}/osv-scanner_linux_amd64"
+          chmod +x /tmp/osv-scanner
+          sudo mv /tmp/osv-scanner /usr/local/bin/osv-scanner
+          osv-scanner --version
+
+      - name: Run OSV-Scanner on the Gradle lockfile
+        # Exits non-zero on any vulnerability found, which fails the job.
+        # If the lockfile is missing this also fails — catching the silent-no-op
+        # regression we hit during this milestone's first iteration.
+        run: |
+          test -f app/gradle.lockfile || { echo "::error::app/gradle.lockfile missing — locking misconfigured"; exit 1; }
+          osv-scanner scan source -L app/gradle.lockfile
+
+  gitleaks:
+    name: Gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          # Gitleaks needs full history to scan the PR diff against the base.
+          fetch-depth: 0
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # If this repo ever moves under an organization account, set GITLEAKS_LICENSE.

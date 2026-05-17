@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
+private const val MAX_QUANTITY_DIGITS = 4
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddProductSheet(
@@ -59,7 +61,9 @@ fun AddProductSheet(
             )
             OutlinedTextField(
                 value = quantityText,
-                onValueChange = { input -> quantityText = input.filter { it.isDigit() }.take(4) },
+                onValueChange = { input ->
+                    quantityText = input.filter { it.isDigit() }.take(MAX_QUANTITY_DIGITS)
+                },
                 label = { Text("Initial quantity") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
