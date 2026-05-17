@@ -26,21 +26,43 @@ class DetailViewModel(
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch { collectProduct() }
+        viewModelScope.launch { initialize() }
     }
 
-    // Extracted from init so the @Suppress for the broad catch is scoped to one
-    // function rather than the whole class (matches the pattern on rename /
-    // stepperDelta / confirmDelete).
+    // Spec D2: stale nav arg must auto-pop. A one-shot findById precheck
+    // distinguishes "row never existed" (pop immediately) from "row exists,
+    // start watching" (any subsequent null = deletion → pop). Drops the
+    // previous `everSeen` flag — after the precheck succeeds, any null from
+    // observeById is unambiguously a deletion event.
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun initialize() {
+        val initial = try {
+            repository.findById(productId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            @Suppress("SwallowedException")
+            logger.log(Level.WARNING, "findById($productId) precheck failed", e)
+            _uiState.update { it.copy(shouldNavigateBack = true) }
+            return
+        }
+        if (initial == null) {
+            _uiState.update { it.copy(shouldNavigateBack = true) }
+            return
+        }
+        _uiState.update { it.copy(product = initial) }
+        collectProduct()
+    }
+
     @Suppress("TooGenericExceptionCaught")
     private suspend fun collectProduct() {
         try {
             repository.observeById(productId).collect { product ->
                 _uiState.update { state ->
-                    when {
-                        product != null -> state.copy(product = product, everSeen = true)
-                        state.everSeen -> state.copy(product = null, shouldNavigateBack = true)
-                        else -> state // initial-load null, ignore
+                    if (product != null) {
+                        state.copy(product = product)
+                    } else {
+                        state.copy(product = null, shouldNavigateBack = true)
                     }
                 }
             }

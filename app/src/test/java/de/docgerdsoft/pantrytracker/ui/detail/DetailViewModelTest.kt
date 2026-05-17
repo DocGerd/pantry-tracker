@@ -43,29 +43,38 @@ class DetailViewModelTest {
     fun tearDown() { Dispatchers.resetMain() }
 
     @Test
-    fun observe_emitsProduct_thenNull_setsShouldNavigateBack() = runTest {
-        val repo = FakeRepo()
+    fun init_findByIdReturnsNull_setsShouldNavigateBack_immediately() = runTest {
+        // Stale nav arg — row no longer exists. Spec D2: must auto-pop.
+        val repo = FakeRepo() // no seed → findById returns null
         val vm = DetailViewModel(repo, productId = 1L)
-        repo.emit(product())
-        advanceUntilIdle()
-        assertEquals("Coke", vm.uiState.value.product?.name)
-        assertTrue(vm.uiState.value.everSeen)
-        assertFalse(vm.uiState.value.shouldNavigateBack)
-
-        repo.emit(null) // deleted
         advanceUntilIdle()
         assertNull(vm.uiState.value.product)
-        assertTrue(vm.uiState.value.shouldNavigateBack)
+        assertTrue("stale nav arg should trigger pop", vm.uiState.value.shouldNavigateBack)
     }
 
     @Test
-    fun observe_initialNull_doesNotSetShouldNavigateBack() = runTest {
+    fun init_findByIdReturnsProduct_seedsState_withoutNavigateBack() = runTest {
         val repo = FakeRepo()
+        repo.emit(product())
         val vm = DetailViewModel(repo, productId = 1L)
-        // Flow starts with null — VM hits the `else -> state` branch (everSeen is false)
         advanceUntilIdle()
-        assertFalse(vm.uiState.value.everSeen)
+        assertEquals("Coke", vm.uiState.value.product?.name)
         assertFalse(vm.uiState.value.shouldNavigateBack)
+    }
+
+    @Test
+    fun observe_emitsNull_afterSuccessfulInit_setsShouldNavigateBack() = runTest {
+        // Row existed at open time, then deleted while screen is up.
+        val repo = FakeRepo()
+        repo.emit(product())
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.shouldNavigateBack)
+
+        repo.emit(null) // deleted while open
+        advanceUntilIdle()
+        assertNull(vm.uiState.value.product)
+        assertTrue(vm.uiState.value.shouldNavigateBack)
     }
 
     @Test
@@ -144,11 +153,8 @@ class DetailViewModelTest {
 
     @Test
     fun onNavigatedBack_clearsShouldNavigateBack() = runTest {
-        val repo = FakeRepo()
+        val repo = FakeRepo() // no seed → init detects stale id → flag is true
         val vm = DetailViewModel(repo, productId = 1L)
-        repo.emit(product())
-        advanceUntilIdle()
-        repo.emit(null) // triggers shouldNavigateBack = true
         advanceUntilIdle()
         assertTrue(vm.uiState.value.shouldNavigateBack)
 
