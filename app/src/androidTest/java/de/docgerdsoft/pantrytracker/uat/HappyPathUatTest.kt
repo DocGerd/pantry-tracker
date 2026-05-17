@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.uat
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -17,7 +18,7 @@ import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.junit.Rule
 import org.junit.Test
@@ -63,12 +64,17 @@ class HappyPathUatTest {
         }
 
         // --- 1. Empty pantry baseline ---
+        // We don't assert "Scan to Add" here — it appears twice when the pantry
+        // is empty (once in the always-rendered ScanButtonsRow, once in the
+        // EmptyState row), which would make `assertIsDisplayed()` (single-node)
+        // crash. "Your pantry is empty" is unambiguous and proves the
+        // empty-state branch is active.
         rule.onNodeWithText("Your pantry is empty").assertIsDisplayed()
-        rule.onNodeWithText("Scan to Add").assertIsDisplayed()
         // "Add manually" appears in BOTH the EmptyState OutlinedButton (Text)
-        // and the FAB (contentDescription). Tapping the Text node hits the
-        // EmptyState button, which routes to the same openAddSheet method
-        // the FAB does — so this is the canonical empty-state entry point.
+        // and the FAB (contentDescription). `onNodeWithText` only matches
+        // text/EditableText, not contentDescription — so this finds exactly
+        // the EmptyState button. Tapping it routes to the same openAddSheet
+        // method the FAB does, i.e. the canonical empty-state entry point.
         rule.onNodeWithText("Add manually").performClick()
 
         // --- 2. AddProductSheet → type name → Add ---
@@ -90,26 +96,69 @@ class HappyPathUatTest {
 
         // --- 5. Rename via IME Done action ---
         // The OutlinedTextField labelled "Name" holds the current name. Replace
-        // it and trigger the IME Done action, which calls commitName() → rename.
+        // it and trigger the IME Done action, which calls commitName() → rename
+        // via viewModelScope.launch. We waitUntil the StateFlow propagates the
+        // new product.name back into the field before navigating away — without
+        // this guard, the back-arrow can unmount the screen before the rename
+        // coroutine commits (the focus-loss commit at DetailScreen.kt:186 saves
+        // us today by accident, which is too fragile).
         rule.onNodeWithText("Test Coke").performTextReplacement("Test Cola")
         rule.onNodeWithText("Test Cola").performImeAction()
+        rule.waitUntil(timeoutMillis = 2_000) {
+            // After the rename commits, the InMemoryRepo emits a new Product
+            // whose name = "Test Cola", which propagates through observeById
+            // into DetailUiState.product and re-renders the field with the
+            // new product.name (the remember(product.name) re-keys localName).
+            // We can't observe the field's value directly via Text matching
+            // because the EditableText was already "Test Cola" pre-commit;
+            // instead we wait for the underlying state to settle by checking
+            // that "Test Coke" is no longer findable anywhere (a robust
+            // "rename has been observed by the UI" signal).
+            rule.onAllNodesWithText("Test Coke").fetchSemanticsNodes().isEmpty()
+        }
+
+        // --- 6. Test the stepper before leaving Detail ---
+        // Closes the cheap test-coverage gap noted in PR #26 review (H2):
+        // verifies +/- wiring + that quantity survives independently of rename.
+        rule.onNodeWithContentDescription("Increase quantity").performClick()
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("2").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithContentDescription("Decrease quantity").performClick()
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("1").fetchSemanticsNodes().isNotEmpty()
+        }
 
         // Navigate back to Home via the top-bar back arrow (contentDescription="Back").
         rule.onNodeWithContentDescription("Back").performClick()
 
-        // --- 6. Verify renamed in Home ---
+        // --- 7. Verify renamed in Home (and quantity preserved) ---
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("Test Cola").fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithText("Test Cola").assertIsDisplayed()
+        // ×1 must survive the rename round-trip — closes H2 quantity-loss gap.
+        rule.onNodeWithText("×1").assertIsDisplayed()
         rule.onNodeWithText("Test Coke").assertDoesNotExist()
 
-        // --- 7. Tap renamed row → Detail → Delete → confirm ---
+        // --- 8. Tap renamed row → Detail → Delete → confirm ---
         rule.onNodeWithText("Test Cola").performClick()
         rule.onNodeWithText("Product details").assertIsDisplayed()
         rule.onNodeWithContentDescription("Delete product").performClick()
-        // Confirm dialog appears
         rule.onNodeWithText("Delete this product?").assertIsDisplayed()
         rule.onNodeWithText("Delete").performClick()
 
-        // --- 8. DetailScreen's LaunchedEffect(shouldNavigateBack) auto-pops to Home ---
+        // --- 9. DetailScreen's LaunchedEffect(shouldNavigateBack) auto-pops to Home ---
+        // The chain is: confirmDelete → viewModelScope.launch { repo.delete } →
+        // StateFlow emit → DetailVM.shouldNavigateBack=true → LaunchedEffect
+        // calls onNavigateBack → NavHost recomposes to Home → Home's
+        // WhileSubscribed re-subscribes to observeProducts → empty list emit.
+        // The compose-test idle covers Main-dispatched work but the
+        // WhileSubscribed cold-start chain can race on slow emulators —
+        // waitUntil hardens against CI flake.
+        rule.waitUntil(timeoutMillis = 5_000) {
+            rule.onAllNodesWithText("Your pantry is empty").fetchSemanticsNodes().isNotEmpty()
+        }
         rule.onNodeWithText("Your pantry is empty").assertIsDisplayed()
         rule.onNodeWithText("Test Cola").assertDoesNotExist()
     }
@@ -139,7 +188,15 @@ class HappyPathUatTest {
 
         override suspend fun findById(id: Long): Product? = rows.value[id]
 
-        override fun observeById(id: Long): Flow<Product?> = rows.map { it[id] }
+        // `distinctUntilChanged` matches production Room semantics: a per-row
+        // observable only fires when *this* row changes, not when other rows
+        // in the table mutate. Without it, the bare `rows.map { it[id] }`
+        // would re-emit on every map mutation (other rows added/deleted),
+        // and Flow.map drops StateFlow's built-in distinct-until-changed —
+        // both differences would mask production bugs where another row's
+        // update could clobber the DetailScreen's in-flight edit.
+        override fun observeById(id: Long): Flow<Product?> =
+            rows.map { it[id] }.distinctUntilChanged()
 
         override suspend fun findLocalByBarcode(code: String): Product? =
             rows.value.values.firstOrNull { it.barcode == code }
