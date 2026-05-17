@@ -12,12 +12,14 @@ import androidx.navigation.compose.rememberNavController
 import de.docgerdsoft.pantrytracker.di.AppContainer
 import de.docgerdsoft.pantrytracker.ui.home.HomeScreen
 import de.docgerdsoft.pantrytracker.ui.home.HomeViewModel
+import de.docgerdsoft.pantrytracker.ui.scan.ScanMode
 import de.docgerdsoft.pantrytracker.ui.scan.ScanScreen
 import de.docgerdsoft.pantrytracker.ui.scan.ScanViewModel
 
 object Routes {
     const val HOME = "home"
     const val SCAN_ADD = "scan/add"
+    const val SCAN_REMOVE = "scan/remove"
 }
 
 @Composable
@@ -35,13 +37,25 @@ fun PantryTrackerNavGraph(container: AppContainer) {
             HomeScreen(
                 viewModel = vm,
                 onScanAddClick = { navController.navigate(Routes.SCAN_ADD) },
-                onScanRemoveClick = { /* TODO: wire to scan-remove flow */ },
+                onScanRemoveClick = { navController.navigate(Routes.SCAN_REMOVE) },
             )
         }
         composable(Routes.SCAN_ADD) {
             val factory = remember(container) {
                 viewModelFactory {
-                    initializer { ScanViewModel(container.productRepository) }
+                    initializer { ScanViewModel(container.productRepository, initialMode = ScanMode.Add) }
+                }
+            }
+            val vm: ScanViewModel = viewModel(factory = factory)
+            ScanScreen(
+                viewModel = vm,
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
+        composable(Routes.SCAN_REMOVE) {
+            val factory = remember(container) {
+                viewModelFactory {
+                    initializer { ScanViewModel(container.productRepository, initialMode = ScanMode.Remove) }
                 }
             }
             val vm: ScanViewModel = viewModel(factory = factory)
