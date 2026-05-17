@@ -8,6 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,7 +63,10 @@ class HomeScreenTest {
         override fun observeProducts(): Flow<List<Product>> = flow.asStateFlow()
         override fun search(query: String): Flow<List<Product>> = flow.asStateFlow()
         override suspend fun findById(id: Long): Product? = flow.value.firstOrNull { it.id == id }
+        override fun observeById(id: Long): Flow<Product?> =
+            MutableStateFlow(flow.value.firstOrNull { it.id == id }).asStateFlow()
         override suspend fun findLocalByBarcode(code: String): Product? = null
+        override suspend fun lookupForPreview(code: String): ScanCandidate? = null
         override suspend fun addNew(
             name: String,
             brand: String?,
