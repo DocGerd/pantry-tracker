@@ -7,6 +7,7 @@ interface ProductRepository {
     fun observeProducts(): Flow<List<Product>>
     fun search(query: String): Flow<List<Product>>
     suspend fun findById(id: Long): Product?
+    fun observeById(id: Long): Flow<Product?>
     suspend fun findLocalByBarcode(code: String): Product?
 
     /**

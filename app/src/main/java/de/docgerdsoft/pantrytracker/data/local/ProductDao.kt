@@ -14,6 +14,9 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): Product?
 
+    @Query("SELECT * FROM products WHERE id = :id")
+    fun observeById(id: Long): Flow<Product?>
+
     @Query("SELECT * FROM products WHERE barcode = :code LIMIT 1")
     suspend fun findByBarcode(code: String): Product?
 
