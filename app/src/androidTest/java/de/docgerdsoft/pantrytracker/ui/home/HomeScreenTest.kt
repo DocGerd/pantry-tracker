@@ -31,7 +31,7 @@ class HomeScreenTest {
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
-            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm) } }
+            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}) } }
         }
 
         composeRule.onNodeWithText("Coke 0.5L").assertIsDisplayed()
@@ -45,7 +45,7 @@ class HomeScreenTest {
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
-            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm) } }
+            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}) } }
         }
 
         composeRule.onNodeWithText("Add manually").performClick()

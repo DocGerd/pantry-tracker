@@ -47,7 +47,11 @@ import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    onScanAddClick: () -> Unit,
+    onScanRemoveClick: () -> Unit,
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -65,8 +69,8 @@ fun HomeScreen(viewModel: HomeViewModel) {
                 .padding(horizontal = 16.dp),
         ) {
             ScanButtonsRow(
-                onAddClick = { /* TODO: wire to barcode-scan add flow */ },
-                onRemoveClick = { /* TODO: wire to barcode-scan remove flow */ },
+                onAddClick = onScanAddClick,
+                onRemoveClick = onScanRemoveClick,
             )
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
