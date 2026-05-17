@@ -104,6 +104,10 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig is enabled so OffApiClient can derive its User-Agent
+        // from BuildConfig.VERSION_NAME, keeping the OFF-side identifier
+        // in lockstep with future version bumps.
+        buildConfig = true
     }
 
     packaging {
