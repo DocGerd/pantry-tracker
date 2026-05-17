@@ -1,10 +1,10 @@
 package de.docgerdsoft.pantrytracker.ui.common
 
-import kotlinx.datetime.Instant
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 private const val DAYS_PER_WEEK = 7L
 private const val DAYS_PER_MONTH_ROUGH = 30L

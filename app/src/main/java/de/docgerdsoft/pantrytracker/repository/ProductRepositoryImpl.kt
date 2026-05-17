@@ -5,7 +5,7 @@ import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.local.ProductDao
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import kotlinx.coroutines.flow.Flow
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 
 private const val TAG = "ProductRepositoryImpl"
 
