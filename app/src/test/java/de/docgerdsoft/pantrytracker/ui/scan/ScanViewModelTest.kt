@@ -130,7 +130,7 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun confirmAdd_appliesDeltaAndReturnsToIdle() = runTest {
+    fun confirm_appliesDeltaAndReturnsToIdle() = runTest {
         val now = Clock.System.now()
         fake.seed(Product(id = 1, barcode = "x", name = "P", quantity = 0,
             createdAt = now, updatedAt = now))
@@ -179,7 +179,7 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun confirmAdd_fromIdle_isNoOp() = runTest {
+    fun confirm_fromIdle_isNoOp() = runTest {
         vm.uiState.test {
             awaitItem() // Idle
             vm.confirm()
@@ -211,7 +211,7 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun confirmAdd_passesCorrectProductId() = runTest {
+    fun confirm_passesCorrectProductId() = runTest {
         val now = Clock.System.now()
         fake.seed(Product(id = 42L, barcode = "x", name = "P", quantity = 0,
             createdAt = now, updatedAt = now))
@@ -388,7 +388,7 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun confirmAdd_applyDeltaThrows_transitionsToError() = runTest {
+    fun confirm_applyDeltaThrows_transitionsToError() = runTest {
         val now = Clock.System.now()
         fake.seed(Product(id = 1, barcode = "x", name = "P", quantity = 0,
             createdAt = now, updatedAt = now))
@@ -451,7 +451,7 @@ class ScanViewModelTest {
     // ---- Remove-mode tests ----
 
     @Test
-    fun remove_localHit_showsPreviewWithStepperMaxAtQuantity() = runTest {
+    fun remove_localHit_setQuantityClampsBothBounds() = runTest {
         val now = Clock.System.now()
         val product = Product(id = 1, barcode = "111", name = "Coke", quantity = 5,
             createdAt = now, updatedAt = now)
@@ -467,10 +467,14 @@ class ScanViewModelTest {
             val phase = state.phase as ScanUiState.Phase.Preview
             assertEquals(1, phase.pendingQuantity)
 
-            // setQuantity above current quantity (5) clamps to 5
+            // Upper clamp: setQuantity above current quantity (5) clamps to 5.
             vm.setQuantity(99)
-            val coerced = (awaitItem().phase as ScanUiState.Phase.Preview).pendingQuantity
-            assertEquals(5, coerced)
+            assertEquals(5, (awaitItem().phase as ScanUiState.Phase.Preview).pendingQuantity)
+
+            // Lower clamp: setQuantity below 1 clamps to 1 (Remove mode goes through
+            // coerceIn(1, max), a different code path from Add mode's coerceAtLeast(1)).
+            vm.setQuantity(0)
+            assertEquals(1, (awaitItem().phase as ScanUiState.Phase.Preview).pendingQuantity)
         }
     }
 
@@ -512,6 +516,8 @@ class ScanViewModelTest {
 
             assertEquals(ScanMode.Add, vm.uiState.value.mode)
             assertEquals("Pepsi", (preview.candidate as ScanCandidate.FromOff).name)
+            // Exactly one Add-path lookup fired — no double-fire from a stale Loading.
+            assertEquals(1, repo.lookupCallCount)
         }
     }
 
@@ -535,6 +541,110 @@ class ScanViewModelTest {
             assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
         }
         assertEquals(listOf(7L to -2), repo.deltaCalls)
+    }
+
+    @Test
+    fun remove_confirmAllOfQuantity_appliesFullNegativeDelta() = runTest {
+        // Boundary case: user removes everything in stock (the common "I'm using up
+        // the last of this" UX). pendingQuantity == current quantity.
+        val now = Clock.System.now()
+        val product = Product(id = 9, barcode = "555", name = "Sugar", quantity = 5,
+            createdAt = now, updatedAt = now)
+        val repo = FakeProductRepository()
+        repo.seed(product)
+        val vm = ScanViewModel(repo, initialMode = ScanMode.Remove)
+
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("555")
+            awaitItem() // Loading
+            awaitItem() // Preview pendingQuantity=1
+            vm.setQuantity(5) // remove all 5 of 5
+            awaitItem()
+            vm.confirm()
+            assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
+        }
+        assertEquals(listOf(9L to -5), repo.deltaCalls)
+    }
+
+    @Test
+    fun remove_localHit_quantityZero_yieldsNotInInventory() = runTest {
+        // Depleted row (quantity 0) routes to NotInInventory, not Preview — prevents
+        // the silent-no-op stepper-at-0 confirm bug. The Switch-to-Add affordance is
+        // the right next-step for a depleted row.
+        val now = Clock.System.now()
+        val depleted = Product(id = 11, barcode = "666", name = "Salt", quantity = 0,
+            createdAt = now, updatedAt = now)
+        val repo = FakeProductRepository()
+        repo.seed(depleted)
+        val vm = ScanViewModel(repo, initialMode = ScanMode.Remove)
+
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("666")
+            awaitItem() // Loading
+            val phase = awaitItem().phase
+            assertTrue("expected NotInInventory (quantity=0), was $phase",
+                phase is ScanUiState.Phase.NotInInventory)
+            assertEquals("666", (phase as ScanUiState.Phase.NotInInventory).barcode)
+        }
+        assertEquals(0, repo.deltaCalls.size) // no removal attempted
+    }
+
+    @Test
+    fun confirm_fromNotInInventoryPhase_isNoOp() = runTest {
+        // confirm() guards on `as? Preview ?: return`. From NotInInventory it must
+        // be a true no-op — no applyDelta, no addNew, no state change.
+        val repo = FakeProductRepository()
+        val vm = ScanViewModel(repo, initialMode = ScanMode.Remove)
+
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("777")
+            awaitItem() // Loading
+            val phaseBefore = awaitItem().phase // NotInInventory
+            assertTrue(phaseBefore is ScanUiState.Phase.NotInInventory)
+
+            vm.confirm() // must no-op
+            expectNoEvents()
+            assertEquals(phaseBefore, vm.uiState.value.phase)
+        }
+        assertEquals(0, repo.deltaCalls.size)
+    }
+
+    @Test
+    fun onSwitchToAdd_fromNonNotInInventoryPhase_isNoOp() = runTest {
+        // onSwitchToAdd guards on `as? NotInInventory ?: return`. From Idle and Preview
+        // it must be a true no-op — mode stays, phase stays, no lookup fires.
+        val now = Clock.System.now()
+        val product = Product(id = 13, barcode = "888", name = "Tea", quantity = 2,
+            createdAt = now, updatedAt = now)
+        val repo = FakeProductRepository()
+        repo.seed(product)
+        val vm = ScanViewModel(repo, initialMode = ScanMode.Remove)
+
+        vm.uiState.test {
+            awaitItem() // Idle
+
+            // From Idle: must no-op.
+            vm.onSwitchToAdd()
+            expectNoEvents()
+            assertEquals(ScanMode.Remove, vm.uiState.value.mode)
+
+            // Decode → Preview, then onSwitchToAdd from Preview: must also no-op.
+            vm.onBarcodeDecoded("888")
+            awaitItem() // Loading
+            val previewState = awaitItem()
+            assertTrue(previewState.phase is ScanUiState.Phase.Preview)
+
+            vm.onSwitchToAdd()
+            expectNoEvents()
+            assertEquals(ScanMode.Remove, vm.uiState.value.mode)
+            assertEquals(previewState.phase, vm.uiState.value.phase)
+        }
+        // lookupForPreview should never have fired (Remove mode skips it; Add path
+        // never started because onSwitchToAdd no-opped both times).
+        assertEquals(0, repo.lookupCallCount)
     }
 
     private class FakeProductRepository : ProductRepository {
