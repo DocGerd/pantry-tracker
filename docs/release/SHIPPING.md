@@ -101,52 +101,40 @@ from `~/.gradle/gradle.properties` (or env vars in CI):
 
 Add to `~/.gradle/gradle.properties` (on your machine, not in the repo):
 ```properties
+# Path MUST be absolute — Gradle's file() resolves relative to the :app
+# module dir, and does NOT expand ~. /home/you/... or /Users/you/... works;
+# ~/keystores/... does not.
 PANTRY_TRACKER_RELEASE_STORE_FILE=/home/you/keystores/pantry-tracker-release.jks
 PANTRY_TRACKER_RELEASE_STORE_PASSWORD=<keystore password>
 PANTRY_TRACKER_RELEASE_KEY_ALIAS=pantrytracker
 PANTRY_TRACKER_RELEASE_KEY_PASSWORD=<key password>
 ```
 
-Then add to `app/build.gradle.kts`:
+The matching `signingConfigs.release { ... }` block lives in
+[`app/build.gradle.kts`](../../app/build.gradle.kts) and reads these four
+properties. Three configurations are supported:
 
-```kotlin
-android {
-    // ...existing config above...
+- **All four set** → release signing wired; `assembleRelease` produces
+  `app-release.apk` (signed, installable).
+- **None set** → release signing left unconfigured; `assembleDebug` works
+  normally; `assembleRelease` produces `app-release-unsigned.apk` (note the
+  suffix — that file cannot be installed; useful only for build-size checks).
+- **Some-but-not-all set** → configuration fails fast with a
+  `GradleException` naming the missing properties, so a typo in one
+  property doesn't surface as a generic `MissingValueException` that breaks
+  even `assembleDebug`.
 
-    signingConfigs {
-        create("release") {
-            val storeFilePath = providers.gradleProperty("PANTRY_TRACKER_RELEASE_STORE_FILE")
-            // Only configure if all four properties are present — otherwise
-            // assembleRelease still works locally without signing for
-            // smoke tests (Android refuses to install it but `assemble`
-            // succeeds, useful for build-size checks).
-            if (storeFilePath.isPresent) {
-                storeFile = file(storeFilePath.get())
-                storePassword = providers.gradleProperty("PANTRY_TRACKER_RELEASE_STORE_PASSWORD").get()
-                keyAlias = providers.gradleProperty("PANTRY_TRACKER_RELEASE_KEY_ALIAS").get()
-                keyPassword = providers.gradleProperty("PANTRY_TRACKER_RELEASE_KEY_PASSWORD").get()
-            }
-        }
-    }
-
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
-            // existing isMinifyEnabled + proguardFiles config remains
-        }
-    }
-}
-```
-
-(This block is **NOT** in `app/build.gradle.kts` yet — adding it is the
-first task of the v1.0 release commit. The chosen scope is "docs only" for
-this PR; the actual wire-up lands separately. See [task list](#v10-release-cut-checklist).)
+The store-file path is checked for existence at configuration time, so a
+typo'd path fails with a clear message instead of surfacing late during
+`validateSigningRelease`.
 
 ### Build the release APK
 
 ```bash
 ./gradlew :app:assembleRelease
 ls -lh app/build/outputs/apk/release/app-release.apk
+# If you see "No such file" — only app-release-unsigned.apk exists — your
+# keystore properties weren't picked up. Re-check ~/.gradle/gradle.properties.
 ```
 
 If signing succeeded, `apksigner verify` should pass:
@@ -259,3 +247,6 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
 | `apksigner: ERROR: …minSdkVersion…` | Build-tools version too old for the configured `minSdk` | `sdkmanager "build-tools;<latest>"`, then call `apksigner` from the new build-tools dir |
 | First scan on a fresh install always errors | ML Kit barcode model is still downloading from Play Services | Wait ~30 s, retry. See [arc42 §11 R-2](../architecture/11-risks-and-technical-debt.md). |
 | Build fails on `assembleRelease` with "key not found" but assembleDebug works | Gradle properties not set in `~/.gradle/gradle.properties` | Confirm the four `PANTRY_TRACKER_RELEASE_*` keys are present and non-empty |
+| `assembleRelease` succeeds but `app/build/outputs/apk/release/app-release.apk` doesn't exist (only `app-release-unsigned.apk` does) | Keystore properties absent or empty — AGP emitted unsigned APK | Populate the four `PANTRY_TRACKER_RELEASE_*` properties (see §B above) and re-run |
+| `GradleException: Incomplete release-signing config. Missing: …` on any Gradle command | Some keystore properties are set but not all four | Set the missing one(s), OR unset `PANTRY_TRACKER_RELEASE_STORE_FILE` to revert to the unsigned-release fallback |
+| `PANTRY_TRACKER_RELEASE_STORE_FILE points at <path> which does not exist` | Path typo, moved keystore, or used `~` (Gradle doesn't expand it) | Use an absolute path (`/home/you/...` not `~/...`) and confirm the file is at that path |
