@@ -245,7 +245,9 @@ class ScanViewModel(
 
     /** Called by CameraPreview when the camera or scanner permanently fails.
      *  [reason] is the bare exception message (no verb prefix) — this method
-     *  wraps it in the spec §2.5 "Couldn't <verb>: <reason>" tone. */
+     *  wraps it in the canonical "Couldn't <verb>: <reason>" error tone.
+     *  The Throwable itself is already logged at the catch site in
+     *  CameraPreview, so we only need the user-facing reason here. */
     fun onCameraError(reason: String) {
         lookupJob?.cancel()
         confirmJob?.cancel()
