@@ -47,19 +47,19 @@ MSG
     exit 2
 }
 
-# Word-boundaried matches via regex with shell parameter expansion.
-if [[ " $command " == *" --no-verify "* ]]; then reject "--no-verify"; fi
-if [[ " $command " == *" --force "* ]]; then reject "--force"; fi
-if [[ " $command " == *" --force-with-lease "* ]]; then reject "--force-with-lease"; fi
+# Word-boundaried matches via bash regex with [[:space:]] (catches spaces and tabs).
+if [[ " $command " =~ (^|[[:space:]])--no-verify([[:space:]]|$) ]]; then reject "--no-verify"; fi
+if [[ " $command " =~ (^|[[:space:]])--force([[:space:]]|$) ]]; then reject "--force"; fi
+if [[ " $command " =~ (^|[[:space:]])--force-with-lease([[:space:]]|$) ]]; then reject "--force-with-lease"; fi
 
 # git commit -n / git push -f need git-aware matching to avoid false positives
 # (e.g. `tar -f` or `grep -n`).
 if [[ "$command" =~ (^|[[:space:]\;\|\&])git[[:space:]]+commit[[:space:]] ]] && \
-   [[ " $command " == *" -n "* ]]; then
+   [[ " $command " =~ (^|[[:space:]])-n([[:space:]]|$) ]]; then
     reject "git commit -n"
 fi
 if [[ "$command" =~ (^|[[:space:]\;\|\&])git[[:space:]]+push[[:space:]] ]] && \
-   [[ " $command " == *" -f "* ]]; then
+   [[ " $command " =~ (^|[[:space:]])-f([[:space:]]|$) ]]; then
     reject "git push -f"
 fi
 
