@@ -13,9 +13,9 @@ import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.datetime.Clock
 import org.junit.Rule
 import org.junit.Test
+import kotlin.time.Clock
 
 class DetailScreenTest {
 

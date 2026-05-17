@@ -7,8 +7,6 @@ import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
 import kotlinx.coroutines.test.runTest
-import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -18,6 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])

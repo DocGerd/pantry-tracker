@@ -1,12 +1,12 @@
 package de.docgerdsoft.pantrytracker.ui.common
 
-import kotlinx.datetime.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 class RelativeTimeTest {
     private val now = Instant.fromEpochSeconds(1_000_000)
