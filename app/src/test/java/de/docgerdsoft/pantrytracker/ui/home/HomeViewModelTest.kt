@@ -203,6 +203,8 @@ class HomeViewModelTest {
             lastSearchQuery = query
             return all.asStateFlow()
         }
+        override fun observeById(id: Long): Flow<Product?> =
+            MutableStateFlow(all.value.firstOrNull { it.id == id }).asStateFlow()
 
         override suspend fun findById(id: Long): Product? = all.value.firstOrNull { it.id == id }
         override suspend fun findLocalByBarcode(code: String): Product? = null

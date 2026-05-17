@@ -1,7 +1,8 @@
 package de.docgerdsoft.pantrytracker.ui.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,7 +37,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,6 +53,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onScanAddClick: () -> Unit,
     onScanRemoveClick: () -> Unit,
+    onProductClick: (Long) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -91,6 +92,7 @@ fun HomeScreen(
                     items(state.products, key = { it.id }) { product ->
                         ProductRow(
                             product = product,
+                            onClick = { onProductClick(product.id) },
                             onLongPress = { viewModel.requestDelete(product) },
                         )
                     }
@@ -147,16 +149,19 @@ private fun ScanButtonsRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ProductRow(product: Product, onLongPress: () -> Unit) {
+private fun ProductRow(
+    product: Product,
+    onClick: () -> Unit,
+    onLongPress: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .semantics(mergeDescendants = true) {}
-            .pointerInput(product.id) {
-                detectTapGestures(onLongPress = { onLongPress() })
-            }
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

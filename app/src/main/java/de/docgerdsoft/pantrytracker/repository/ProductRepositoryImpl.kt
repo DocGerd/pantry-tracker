@@ -21,6 +21,8 @@ class ProductRepositoryImpl(
 
     override suspend fun findById(id: Long): Product? = dao.findById(id)
 
+    override fun observeById(id: Long): Flow<Product?> = dao.observeById(id)
+
     override suspend fun findLocalByBarcode(code: String): Product? = dao.findByBarcode(code)
 
     override suspend fun addNew(
