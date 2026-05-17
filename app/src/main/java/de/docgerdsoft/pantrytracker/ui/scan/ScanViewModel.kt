@@ -150,8 +150,15 @@ class ScanViewModel(
     /** From the NotInInventory phase: flip mode to Add and re-resolve the captured barcode. */
     fun onSwitchToAdd() {
         val phase = _uiState.value.phase as? ScanUiState.Phase.NotInInventory ?: return
-        _uiState.update { it.copy(mode = ScanMode.Add) }
-        onBarcodeDecoded(phase.barcode)
+        val barcode = phase.barcode
+        lookupJob?.cancel()
+        _uiState.update {
+            it.copy(
+                mode = ScanMode.Add,
+                phase = ScanUiState.Phase.Loading(barcode),
+            )
+        }
+        lookupJob = viewModelScope.launch { resolveBarcode(barcode) }
     }
 
     /**
