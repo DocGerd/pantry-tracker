@@ -2,8 +2,12 @@ package de.docgerdsoft.pantrytracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Pantry/produce-evocative seed colour. Material 3 derives the rest of the
- *  scheme (secondary, tertiary, surface, error, …) from this one anchor. */
+/** Pantry/produce-evocative primary colour. Only the `primary` slot is
+ *  overridden in [PantryTrackerTheme]; the rest of the scheme (secondary,
+ *  tertiary, surface, error, …) comes from M3's hardcoded Baseline palette,
+ *  not from this colour. True seed-derived tonal expansion would require
+ *  `dynamicLightColorScheme(context)` (Android 12+, user-wallpaper-driven)
+ *  or `material-color-utilities` — neither is wired up. */
 val Fern: Color = Color(0xFF4F7942)
 
 // Used by ScanButtonsRow in HomeScreen for the two big primary actions.
