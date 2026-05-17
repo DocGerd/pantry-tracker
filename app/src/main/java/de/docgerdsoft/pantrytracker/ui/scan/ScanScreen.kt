@@ -33,10 +33,10 @@ fun ScanScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val view = LocalView.current
 
-    // Haptic on transition into Preview/UnknownBarcode (i.e. each successful decode).
+    // Haptic on transition into Preview/ManualEntry (i.e. each successful decode).
     LaunchedEffect(state.phase) {
         if (state.phase is ScanUiState.Phase.Preview ||
-            state.phase is ScanUiState.Phase.UnknownBarcode
+            state.phase is ScanUiState.Phase.ManualEntry
         ) {
             view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
@@ -75,12 +75,15 @@ fun ScanScreen(
                         onDismiss = viewModel::dismissPreview,
                     )
                 }
-                is ScanUiState.Phase.UnknownBarcode -> {
+                is ScanUiState.Phase.ManualEntry -> {
+                    // TODO(T5): replace with ManualEntrySheet; routing to UnknownBarcodeSheet
+                    //  temporarily to keep compilation green until T5 implements the new sheet.
                     UnknownBarcodeSheet(
                         barcode = phase.barcode,
                         onDismiss = viewModel::dismissPreview,
                     )
                 }
+                is ScanUiState.Phase.Loading -> Unit // TODO(T5): add LoadingSheet
                 is ScanUiState.Phase.Error -> {
                     ErrorSheet(
                         message = phase.message,

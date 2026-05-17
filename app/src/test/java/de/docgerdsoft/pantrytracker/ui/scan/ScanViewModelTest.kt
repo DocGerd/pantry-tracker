@@ -56,6 +56,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem() // initial Idle
             vm.onBarcodeDecoded("5449000000996")
+            awaitItem() // Loading
             val state = awaitItem()
             val preview = state.phase as ScanUiState.Phase.Preview
             assertEquals("Coca-Cola 0.5L", preview.product.name)
@@ -64,13 +65,14 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun onBarcodeDecoded_unknownBarcode_movesToUnknownBarcode() = runTest {
+    fun onBarcodeDecoded_localMissAndOffMiss_movesToManualEntry() = runTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("0000000000000")
+            awaitItem() // Loading
             val state = awaitItem()
-            val unknown = state.phase as ScanUiState.Phase.UnknownBarcode
-            assertEquals("0000000000000", unknown.barcode)
+            val manual = state.phase as ScanUiState.Phase.ManualEntry
+            assertEquals("0000000000000", manual.barcode)
         }
     }
 
@@ -83,6 +85,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("5449000000996")
+            awaitItem() // Loading
             awaitItem() // Preview
             vm.onBarcodeDecoded("5449000000996") // duplicate scan while sheet open
             expectNoEvents()
@@ -98,6 +101,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("x")
+            awaitItem() // Loading
             awaitItem() // Preview pendingQuantity=1
             vm.setQuantity(0)
             expectNoEvents() // already at 1, no new emission
@@ -116,6 +120,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("x")
+            awaitItem() // Loading
             awaitItem()
             vm.setQuantity(6)
             val state = awaitItem()
@@ -132,6 +137,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("x")
+            awaitItem() // Loading
             awaitItem()
             vm.setQuantity(3)
             awaitItem()
@@ -151,6 +157,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("x")
+            awaitItem() // Loading
             awaitItem()
             vm.dismissPreview()
             assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
@@ -159,11 +166,12 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun dismissUnknownBarcode_returnsToIdle() = runTest {
+    fun dismissManualEntry_returnsToIdle() = runTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("nope")
-            assertTrue(awaitItem().phase is ScanUiState.Phase.UnknownBarcode)
+            awaitItem() // Loading
+            assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
             vm.dismissPreview()
             assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
         }
@@ -190,11 +198,12 @@ class ScanViewModelTest {
     }
 
     @Test
-    fun onBarcodeDecoded_ignoredWhenAlreadyInUnknownBarcodePhase() = runTest {
+    fun onBarcodeDecoded_ignoredWhenAlreadyInManualEntryPhase() = runTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("nope")
-            assertTrue(awaitItem().phase is ScanUiState.Phase.UnknownBarcode)
+            awaitItem() // Loading
+            assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
             vm.onBarcodeDecoded("nope") // duplicate while sheet is open
             expectNoEvents()
         }
@@ -209,6 +218,7 @@ class ScanViewModelTest {
         vm.uiState.test {
             awaitItem()
             vm.onBarcodeDecoded("x")
+            awaitItem() // Loading
             awaitItem()
             vm.setQuantity(2)
             awaitItem()
@@ -229,9 +239,141 @@ class ScanViewModelTest {
         }
     }
 
+    // ---- New tests for T4 ----
+
+    @Test
+    fun onBarcodeDecoded_localMiss_offHit_transitionsThroughLoadingToPreview() = runTest {
+        val now = Clock.System.now()
+        fake.lookupResponses["222"] = Product(id = 0, barcode = "222", name = "OFF Result",
+            quantity = 0, createdAt = now, updatedAt = now)
+        vm.uiState.test {
+            awaitItem()  // initial Idle
+            vm.onBarcodeDecoded("222")
+            val loading = awaitItem().phase
+            assertTrue("expected Loading, was $loading", loading is ScanUiState.Phase.Loading)
+            assertEquals("222", (loading as ScanUiState.Phase.Loading).barcode)
+            val preview = awaitItem().phase
+            assertTrue(preview is ScanUiState.Phase.Preview)
+            assertEquals("OFF Result", (preview as ScanUiState.Phase.Preview).product.name)
+        }
+    }
+
+    @Test
+    fun onBarcodeDecoded_localHit_transitionsThroughLoadingToPreview() = runTest {
+        val now = Clock.System.now()
+        fake.seed(Product(id = 1, barcode = "111", name = "Local Coke",
+            quantity = 3, createdAt = now, updatedAt = now))
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("111")
+            // Loading sheet flashes even for local hits — caller decision, keeps the path
+            // identical regardless of where the data comes from.
+            awaitItem()  // Loading
+            val preview = awaitItem().phase
+            assertTrue(preview is ScanUiState.Phase.Preview)
+            assertEquals("Local Coke", (preview as ScanUiState.Phase.Preview).product.name)
+        }
+    }
+
+    @Test
+    fun onBarcodeDecoded_whileLoading_secondBarcode_cancelsFirst() = runTest {
+        fake.suspendOnLookup = true
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("111")
+            assertEquals("111", (awaitItem().phase as ScanUiState.Phase.Loading).barcode)
+            vm.onBarcodeDecoded("222")
+            assertEquals("222", (awaitItem().phase as ScanUiState.Phase.Loading).barcode)
+            // First lookup was cancelled; only the second one is still running.
+            // (completedLookups would only have entries IF suspendOnLookup were turned off;
+            //  we don't drain — the test asserts the visible state transition only.)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun dismissPreview_duringLoading_cancelsLookup_andReturnsToIdle() = runTest {
+        fake.suspendOnLookup = true
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("111")
+            assertTrue(awaitItem().phase is ScanUiState.Phase.Loading)
+            vm.dismissPreview()
+            assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
+            // No completion happened — lookup was cancelled.
+            assertEquals(emptyList<String>(), fake.completedLookups)
+        }
+    }
+
+    @Test
+    fun submitManualEntry_blankName_isNoOp() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("444")
+            awaitItem()  // Loading
+            assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
+            vm.submitManualEntry(name = "   ", initialQuantity = 1)
+            expectNoEvents()
+            assertTrue(vm.uiState.value.phase is ScanUiState.Phase.ManualEntry)
+        }
+        assertEquals(0, fake.addedProducts.size)
+    }
+
+    @Test
+    fun submitManualEntry_nonPositiveQuantity_isNoOp() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("555")
+            awaitItem()
+            assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
+            vm.submitManualEntry(name = "Cinnamon", initialQuantity = 0)
+            expectNoEvents()
+            vm.submitManualEntry(name = "Cinnamon", initialQuantity = -3)
+            expectNoEvents()
+        }
+        assertEquals(0, fake.addedProducts.size)
+    }
+
+    @Test
+    fun submitManualEntry_validInputs_addsProduct_andReturnsIdle() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("555")
+            awaitItem()  // Loading
+            assertTrue(awaitItem().phase is ScanUiState.Phase.ManualEntry)
+            vm.submitManualEntry(name = " Cinnamon ", initialQuantity = 2)
+            assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
+        }
+        assertEquals(1, fake.addedProducts.size)
+        val added = fake.addedProducts.last()
+        assertEquals("Cinnamon", added.name)
+        assertEquals("555", added.barcode)
+        assertEquals(2, added.initialQuantity)
+        assertNull(added.brand)
+        assertNull(added.imageUrl)
+    }
+
+    @Test
+    fun setQuantity_inManualEntryPhase_updatesPendingQuantity() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("666")
+            awaitItem()  // Loading
+            val manual = awaitItem().phase as ScanUiState.Phase.ManualEntry
+            assertEquals(1, manual.pendingQuantity)
+            vm.setQuantity(4)
+            assertEquals(4, (awaitItem().phase as ScanUiState.Phase.ManualEntry).pendingQuantity)
+        }
+    }
+
     private class FakeProductRepository : ProductRepository {
         private val byBarcode = mutableMapOf<String, Product>()
         var lastDelta: Pair<Long, Int>? = null
+
+        var lookupResponses = mutableMapOf<String, Product?>()
+        var lookupCallCount = 0
+        var suspendOnLookup = false
+        val completedLookups = mutableListOf<String>()
 
         fun seed(p: Product) {
             byBarcode[p.barcode!!] = p
@@ -244,10 +386,32 @@ class ScanViewModelTest {
         override suspend fun findById(id: Long): Product? =
             byBarcode.values.firstOrNull { it.id == id }
         override suspend fun findLocalByBarcode(code: String): Product? = byBarcode[code]
+        override suspend fun lookupForPreview(code: String): Product? {
+            lookupCallCount++
+            if (suspendOnLookup) {
+                kotlinx.coroutines.awaitCancellation()  // never returns until job is cancelled
+            }
+            val result = lookupResponses[code] ?: byBarcode[code]  // fall back to seeded local row
+            completedLookups += code
+            return result
+        }
+
+        data class AddCall(
+            val name: String,
+            val brand: String?,
+            val barcode: String?,
+            val imageUrl: String?,
+            val initialQuantity: Int,
+        )
+        val addedProducts = mutableListOf<AddCall>()
+
         override suspend fun addNew(
             name: String, brand: String?, barcode: String?, imageUrl: String?,
             initialQuantity: Int,
-        ): Long = 0L
+        ): Long {
+            addedProducts += AddCall(name, brand, barcode, imageUrl, initialQuantity)
+            return (addedProducts.size).toLong()
+        }
         override suspend fun applyDelta(productId: Long, delta: Int) {
             lastDelta = productId to delta
         }

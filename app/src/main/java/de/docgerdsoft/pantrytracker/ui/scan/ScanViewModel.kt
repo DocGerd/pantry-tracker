@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.scan
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,25 +17,36 @@ class ScanViewModel(
     private val _uiState = MutableStateFlow(ScanUiState())
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
 
+    private var lookupJob: Job? = null
+
     /**
-     * De-duplicates rapid repeat decodes by ignoring any callback while a
-     * Preview/UnknownBarcode/Error sheet is open. Empty/blank barcodes (which ML Kit
-     * can occasionally surface from low-confidence frames) are also dropped. Otherwise
-     * looks up the barcode in the local DB and transitions to Preview (match) or
-     * UnknownBarcode (miss). On DB failure transitions to Error per spec §7.
+     * Dispatch a barcode to the repository for resolution. De-duplicates the same
+     * barcode while it's already being shown (Loading/Preview/ManualEntry); cancels
+     * any prior in-flight lookup when a new barcode arrives. Blank barcodes (which
+     * ML Kit can surface from low-confidence frames) are dropped.
+     *
+     * Spec §6.2 decision matrix: local hit → Preview from row; local miss + OFF hit
+     * → Preview with id=0; local miss + OFF miss / failure → ManualEntry.
      */
     fun onBarcodeDecoded(barcode: String) {
         if (barcode.isBlank()) return
-        if (_uiState.value.phase !is ScanUiState.Phase.Idle) return
-        viewModelScope.launch {
+        when (val current = _uiState.value.phase) {
+            is ScanUiState.Phase.Loading -> if (current.barcode == barcode) return
+            is ScanUiState.Phase.Preview -> if (current.product.barcode == barcode) return
+            is ScanUiState.Phase.ManualEntry -> if (current.barcode == barcode) return
+            ScanUiState.Phase.Idle, is ScanUiState.Phase.Error -> Unit
+        }
+        lookupJob?.cancel()
+        _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(barcode)) }
+        lookupJob = viewModelScope.launch {
             val newPhase: ScanUiState.Phase = runCatching {
-                repository.findLocalByBarcode(barcode)
+                repository.lookupForPreview(barcode)
             }.fold(
                 onSuccess = { product ->
                     if (product != null) {
                         ScanUiState.Phase.Preview(product, pendingQuantity = 1)
                     } else {
-                        ScanUiState.Phase.UnknownBarcode(barcode)
+                        ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
                     }
                 },
                 onFailure = { e ->
@@ -45,11 +57,20 @@ class ScanViewModel(
         }
     }
 
+    /** Used by both the Preview stepper and the ManualEntry quantity input. */
     fun setQuantity(value: Int) {
-        val phase = _uiState.value.phase as? ScanUiState.Phase.Preview ?: return
         val clamped = value.coerceAtLeast(1)
-        if (clamped == phase.pendingQuantity) return
-        _uiState.update { it.copy(phase = phase.copy(pendingQuantity = clamped)) }
+        _uiState.update { state ->
+            when (val phase = state.phase) {
+                is ScanUiState.Phase.Preview ->
+                    if (phase.pendingQuantity == clamped) state
+                    else state.copy(phase = phase.copy(pendingQuantity = clamped))
+                is ScanUiState.Phase.ManualEntry ->
+                    if (phase.pendingQuantity == clamped) state
+                    else state.copy(phase = phase.copy(pendingQuantity = clamped))
+                else -> state
+            }
+        }
     }
 
     fun confirmAdd() {
@@ -68,8 +89,38 @@ class ScanViewModel(
         }
     }
 
-    /** Dismiss any non-Idle phase (Preview, UnknownBarcode, or Error) back to Idle. */
+    /**
+     * Insert a brand-new product keyed to the manually-entered barcode. Validates
+     * non-blank name + positive quantity; silently no-ops on invalid input (the sheet
+     * stays open). On DB failure transitions to Error per spec §7.
+     */
+    fun submitManualEntry(name: String, initialQuantity: Int) {
+        val phase = _uiState.value.phase as? ScanUiState.Phase.ManualEntry ?: return
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || initialQuantity <= 0) return
+        viewModelScope.launch {
+            val outcome = runCatching {
+                repository.addNew(
+                    name = trimmed,
+                    brand = null,
+                    barcode = phase.barcode,
+                    imageUrl = null,
+                    initialQuantity = initialQuantity,
+                )
+            }
+            val newPhase: ScanUiState.Phase = outcome.fold(
+                onSuccess = { ScanUiState.Phase.Idle },
+                onFailure = { e ->
+                    ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
+                },
+            )
+            _uiState.update { it.copy(phase = newPhase) }
+        }
+    }
+
+    /** Dismiss any non-Idle phase back to Idle; cancels any in-flight lookup. */
     fun dismissPreview() {
+        lookupJob?.cancel()
         _uiState.update { it.copy(phase = ScanUiState.Phase.Idle) }
     }
 
