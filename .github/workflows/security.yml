@@ -1,0 +1,40 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Monday 06:00 UTC — catches CVEs disclosed since the last PR.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  osv-scan:
+    name: OSV-Scanner (Gradle deps)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.2.0
+        with:
+          scan-args: |-
+            --recursive
+            --skip-git
+            ./
+          fail-on-vuln: true
+        env:
+          OSV_SCANNER_FAIL_ON_SEVERITY: HIGH
+      - name: Upload SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: osv-scanner-results
+          path: results.sarif
+          if-no-files-found: ignore
