@@ -8,13 +8,9 @@ import kotlinx.datetime.Clock
 
 class ProductRepositoryImpl(
     private val dao: ProductDao,
-    private val offLookup: OffLookup = NullOffLookup,
+    private val offLookup: OffLookup,
     private val clock: Clock = Clock.System,
 ) : ProductRepository {
-
-    private object NullOffLookup : OffLookup {
-        override suspend fun lookup(barcode: String): Nothing? = null
-    }
 
     override fun observeProducts(): Flow<List<Product>> = dao.observeAll()
 

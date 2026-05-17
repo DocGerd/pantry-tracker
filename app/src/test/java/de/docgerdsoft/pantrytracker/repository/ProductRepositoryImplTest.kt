@@ -36,7 +36,9 @@ class ProductRepositoryImplTest {
             .allowMainThreadQueries()
             .build()
         clock = FakeClock(Instant.fromEpochMilliseconds(1_000_000L))
-        repo = ProductRepositoryImpl(db.productDao(), clock = clock)
+        // Tests that don't exercise lookupForPreview pass an empty FakeOffLookup;
+        // any unexpected call would still record into lookupCallCount and could be asserted.
+        repo = ProductRepositoryImpl(db.productDao(), FakeOffLookup(), clock = clock)
     }
 
     @After
