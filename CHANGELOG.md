@@ -10,7 +10,7 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ---
 
-## [1.0.0] — TBD
+## [1.0.0] — TBD (footnote link active once the v1.0 tag is pushed)
 
 First public-ready release. Single-user, sideloaded — no Play Store presence.
 
@@ -42,7 +42,7 @@ First public-ready release. Single-user, sideloaded — no Play Store presence.
 
 ### Added — theme + icon
 
-- **Material 3** theme with a single **Fern** (`#4F7942`) seed colour driving the M3 primary slot. Light + dark scheme follow the system setting.
+- **Material 3** theme with **Fern** (`#4F7942`) as the M3 `primary` slot; remaining roles (secondary, tertiary, surface, error, …) come from M3's Baseline palette (no seed-derived tonal expansion). Light + dark scheme follow the system setting.
 - **Adaptive launcher icon** — three white jars on a horizontal shelf, white-on-fern. Adapts to round / squircle / teardrop launcher masks; the foreground vector stays inside the 66dp safe zone.
 
 ### Added — camera-permission UX
@@ -59,7 +59,7 @@ First public-ready release. Single-user, sideloaded — no Play Store presence.
 
 ### Privacy
 
-- **No accounts, no analytics, no crash reporter.** The app makes no outbound network calls of its own except the single OFF lookup (`GET world.openfoodfacts.org/api/v2/product/<barcode>.json`), which is anonymous and carries only the scanned barcode.
+- **No accounts, no analytics, no crash reporter.** The app makes no outbound network calls of its own except the single OFF lookup (`GET world.openfoodfacts.org/api/v2/product/<barcode>.json`). The request carries only the scanned barcode plus a static `PantryTracker/<version> (<repo URL>)` User-Agent — no user identifier, no cookie, no device fingerprint.
 - **No cleartext network traffic.** OFF is HTTPS-only; no certificate pinning (intentional — pinning would break the app on routine cert rotation).
 - **`android:allowBackup = false`** — Google Backup does NOT auto-restore the pantry on a fresh install. Trade-off documented in [arc42 §8.9](docs/architecture/08-crosscutting-concepts.md#89-security).
 - **Permissions: only `CAMERA` (runtime) and `INTERNET` (install-time).** No location, contacts, storage, microphone, or sensor permissions.
