@@ -81,6 +81,7 @@ scanning against real products).
 - [ ] App shows **"Camera access blocked"** screen with body "Open Settings and allow camera access for Pantry Tracker, then come back."
 - [ ] **"Open settings"** (filled) + **"Go back"** (outlined)
 - [ ] Tap "Open settings" → **system Settings app opens directly to the Pantry Tracker permission page**
+  - [ ] **OEM-fail fallback path** (Xiaomi/MIUI, some Huawei builds may land on a generic settings screen, or the Settings activity may be disabled entirely): if Open settings does NOT reach the permission page, the app must surface a "Couldn't open settings on this device" Toast — not silently fail
 - [ ] Toggle Camera to Allow → press device Back to return to the app
 - [ ] App **automatically transitions to the camera preview** (no extra tap needed) — this is the M6-caught regression
 
@@ -156,12 +157,14 @@ scanning against real products).
 - [ ] Body mentions "This removes it from your inventory. Cannot be undone in v1."
 - [ ] Tap Cancel → dialog dismisses, row remains
 - [ ] Long-press again → tap Delete → row disappears from Home
+- [ ] **Long-press a quantity=0 (greyed) row** → confirm dialog appears the same way → tap Delete → row disappears. Verifies the long-press click area + dialog still work on out-of-stock rows (which render at ~45% alpha so the gesture surface could theoretically be confused with the dim).
 
 ## 14. Persistence
 
 - [ ] Force-stop the app (Settings → Apps → Pantry Tracker → Force stop)
 - [ ] Re-launch → all your products are still there, with the right quantities
 - [ ] Reboot the device → re-launch → still there
+- [ ] **Configuration change** — open the Detail screen of any product, edit the Name field but do NOT tap Save / lose focus yet. Rotate the device (or change dark/light mode, or system font scale): the app must rebuild the Activity cleanly, the row still exists with its committed state, the nav backstack is preserved. (The typed-but-uncommitted edit is currently NOT preserved — that's a known v1 limitation; this step verifies nothing CRASHES during the rebuild.)
 - [ ] (Bonus, only on a dev install you don't mind losing data on:) `adb shell pm clear de.docgerdsoft.pantrytracker` → re-launch → pantry is empty (clean slate)
 
 ## 15. Error tone audit

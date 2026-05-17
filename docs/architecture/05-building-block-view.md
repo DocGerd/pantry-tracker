@@ -33,13 +33,23 @@ four conventional layers:
               └─────────────────────┘ └─────────────────────┘
 
                       ┌──────────────────────────────────────┐
-                      │   di — AppContainer (wires the rest) │
+                      │   di — AppContainer                  │◀─┐
+                      │   (constructs Room db, OffApiClient, │  │ constructs at app start
+                      │    ProductRepositoryImpl; passes the │  │ from PantryTrackerApp.onCreate
+                      │    repository to PantryTrackerNavGraph) │
                       └──────────────────────────────────────┘
 ```
 
 Dependency direction is strictly downward: `ui → repository → data.*`.
 `data.local` and `data.remote` do not know about each other; the
 repository composes them. `ui` does not import from `data.*` at all.
+
+The `di` block is the construction site for everything below it —
+`AppContainer.real(context)` builds the `Room` database, the
+`OffApiClient`, and the `ProductRepositoryImpl` that wraps them, then
+exposes only the `ProductRepository` interface to the nav graph.
+Tests skip `real(context)` and call `AppContainer(fakeRepository)`
+directly (see [HappyPathUatTest](../../app/src/androidTest/java/de/docgerdsoft/pantrytracker/uat/HappyPathUatTest.kt)).
 
 ## 5.2 The package tree (33 files in main)
 
@@ -90,7 +100,7 @@ on a hit; otherwise calls OFF, returns `ScanCandidate.FromOff` on a hit,
 
 ## 5.4 Level 2 — `ui.scan` package
 
-The most complex screen. Three orthogonal building blocks:
+The most complex screen. Four orthogonal building blocks:
 
 | Block | Type | Responsibility |
 |-------|------|----------------|

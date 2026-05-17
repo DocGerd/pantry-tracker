@@ -153,7 +153,8 @@ If signing succeeded, `apksigner verify` should pass:
 ```bash
 $ANDROID_HOME/build-tools/<latest>/apksigner verify \
   app/build/outputs/apk/release/app-release.apk
-# Verifies — and prints nothing on success
+# On success: prints "Verifies" and exits 0.
+# (Add --quiet to suppress the "Verifies" line if scripting.)
 ```
 
 ### Get it onto a device

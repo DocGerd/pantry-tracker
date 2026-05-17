@@ -127,7 +127,27 @@ is grabbed via the `Application` cast.
 No `@Inject`, no `@Module`, no Hilt component graph. Adding a new dependency
 is an explicit `val foo: Foo = ...` in `AppContainer`.
 
-## 8.9 Resource organization
+## 8.9 Security
+
+Privacy is the #1 quality goal (see [§1.2](01-introduction-and-goals.md#12-quality-goals));
+this section captures the concrete manifest/network/storage facts that
+enforce it.
+
+| Concern | Choice / current state |
+|---------|------------------------|
+| **`android:allowBackup`** | `false` (`AndroidManifest.xml` `<application android:allowBackup="false">`). Google Backup will NOT auto-restore the pantry on a fresh install on a new device. The user can avoid losing data only by re-installing on the same device or by manual export. Trade-off: privacy-respecting (no opaque cloud copy of the pantry) vs. no recovery story if the device dies. v1 accepts the trade-off; v1.1 considers a manual CSV/JSON export. |
+| **Network security config** | None declared — uses the platform default. Since `targetSdk >= 28`, the platform default already forbids cleartext HTTP. The only outbound endpoint (OFF) is HTTPS-only anyway. No `network_security_config.xml` is needed. |
+| **TLS for OFF** | Standard system trust store. No certificate pinning — OFF's certificate cycles independently and pinning would risk breaking the app on a routine cert rotation. The threat model is "OFF returns honest data over a secure connection", not "defend against a state-level MITM on OFF". |
+| **Room data-at-rest** | Not encrypted. The `pantry-tracker.db` SQLite file lives in the app's private data directory (`/data/data/de.docgerdsoft.pantrytracker/databases/`) which is OS-protected on a non-rooted device. On a rooted or backed-up-via-`adb` device the file is readable. Acceptable for v1 — the pantry is not sensitive data (it's grocery names). SQLCipher would add a key-management problem we don't want to solve for v1. |
+| **Permissions** | Only `CAMERA` (runtime, user-prompted via the rationale gate) and `INTERNET` (install-time, normal). No location, contacts, storage, microphone, or sensor permissions. See [§7.5](07-deployment-view.md#75-permissions). |
+| **Analytics / crash reporter** | None. See [ADR-008](09-architecture-decisions.md#adr-008--no-crash-reporter--analytics-in-v10). |
+| **Third-party network endpoints** | One: `world.openfoodfacts.org/api/v2/product/<barcode>.json`. No other outbound traffic anywhere. The OFF request is anonymous (no User-Agent fingerprinting beyond `PantryTracker/<version> (repo URL)` per OFF API etiquette). |
+
+Threat model for v1: opportunistic-attacker model on a non-rooted device.
+Out of scope: rooted-device data theft, state-level adversaries, backup-
+restore-key threats.
+
+## 8.10 Resource organization
 
 | Folder | Contents |
 |--------|----------|
