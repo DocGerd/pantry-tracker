@@ -169,6 +169,66 @@ class ScanViewModelTest {
         }
     }
 
+    @Test
+    fun confirmAdd_fromIdle_isNoOp() = runTest {
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.confirmAdd()
+            expectNoEvents()
+        }
+        assertNull(fake.lastDelta)
+    }
+
+    @Test
+    fun setQuantity_fromIdle_isNoOp() = runTest {
+        vm.uiState.test {
+            assertEquals(ScanUiState.Phase.Idle, awaitItem().phase)
+            vm.setQuantity(5)
+            expectNoEvents()
+            assertEquals(ScanUiState.Phase.Idle, vm.uiState.value.phase)
+        }
+    }
+
+    @Test
+    fun onBarcodeDecoded_ignoredWhenAlreadyInUnknownBarcodePhase() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("nope")
+            assertTrue(awaitItem().phase is ScanUiState.Phase.UnknownBarcode)
+            vm.onBarcodeDecoded("nope") // duplicate while sheet is open
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun confirmAdd_passesCorrectProductId() = runTest {
+        val now = Clock.System.now()
+        fake.seed(Product(id = 42L, barcode = "x", name = "P", quantity = 0,
+            createdAt = now, updatedAt = now))
+
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("x")
+            awaitItem()
+            vm.setQuantity(2)
+            awaitItem()
+            vm.confirmAdd()
+            awaitItem()
+        }
+        assertEquals(42L to 2, fake.lastDelta)
+    }
+
+    @Test
+    fun onBarcodeDecoded_blankBarcode_isIgnored() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("")
+            expectNoEvents()
+            vm.onBarcodeDecoded("   ")
+            expectNoEvents()
+        }
+    }
+
     private class FakeProductRepository : ProductRepository {
         private val byBarcode = mutableMapOf<String, Product>()
         var lastDelta: Pair<Long, Int>? = null

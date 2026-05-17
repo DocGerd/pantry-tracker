@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.scan.components
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -17,43 +18,71 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 /**
  * Wraps [content] in a camera-permission gate. While the permission has not been
  * granted, shows a rationale + Grant button. Tapping Grant launches the system
- * permission dialog. If the user has previously denied with "don't ask again",
- * the button label switches to "Open settings" and routes them to the
- * app-settings page where they can flip the toggle.
+ * permission dialog. After a denial, uses `shouldShowRequestPermissionRationale` to
+ * detect the "Don't ask again" state; in that case the button switches to
+ * "Open settings" and routes the user to the app-settings page.
+ *
+ * The granted state is re-evaluated on every `ON_RESUME` so the recovery path
+ * (user goes to Settings, grants, returns) flips the gate to the content view
+ * without requiring a relaunch.
  */
 @Composable
 fun CameraPermissionGate(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var granted by remember { mutableStateOf(context.hasCameraPermission()) }
-    var permanentlyDenied by remember { mutableStateOf(false) }
-    var attempted by remember { mutableStateOf(false) }
+    var permanentlyDenied by rememberSaveable { mutableStateOf(false) }
+
+    // Re-check permission on each ON_RESUME so the Settings round-trip recovers.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val now = context.hasCameraPermission()
+                granted = now
+                if (now) permanentlyDenied = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { ok ->
         granted = ok
-        // If the system did NOT show its dialog (returns immediately denied), the
-        // permission is effectively permanently denied. We track 'attempted' so we
-        // only flip to the settings-fallback after the user has tried once.
-        if (!ok && attempted) permanentlyDenied = true
-        attempted = true
+        if (!ok) {
+            // After a denial, the canonical "Don't ask again" signal is
+            // !shouldShowRequestPermissionRationale on the hosting Activity.
+            val activity = context.findActivity()
+            permanentlyDenied = activity != null &&
+                !ActivityCompat.shouldShowRequestPermissionRationale(
+                    activity,
+                    Manifest.permission.CAMERA,
+                )
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -99,3 +128,9 @@ fun CameraPermissionGate(
 private fun Context.hasCameraPermission(): Boolean =
     ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
         PackageManager.PERMISSION_GRANTED
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
+}

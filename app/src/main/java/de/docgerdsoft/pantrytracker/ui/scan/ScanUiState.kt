@@ -17,9 +17,15 @@ data class ScanUiState(
             val pendingQuantity: Int,
         ) : Phase
 
-        /** A barcode was decoded but is not in the local DB.
-         *  For M2 this is the terminal "Not seeded" state. M3 replaces this with
-         *  the Open Food Facts lookup + manual-entry fallback flow. */
+        /** A barcode was decoded but no matching `Product` exists locally.
+         *  Terminal state in the current scan flow; the user dismisses back to Idle.
+         *  (An Open Food Facts lookup + manual-entry fallback is planned to replace
+         *  this terminal state.) */
         data class UnknownBarcode(val barcode: String) : Phase
+
+        /** A scan/confirm operation failed (DB write, camera bind, OFF lookup, etc.).
+         *  The UI shows the message and lets the user dismiss back to Idle. Per spec §7
+         *  we surface failures inline rather than swallowing them. */
+        data class Error(val message: String) : Phase
     }
 }

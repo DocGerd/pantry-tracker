@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPermissionGate
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
+import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.ScanPreviewSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.UnknownBarcodeSheet
 
@@ -34,7 +35,9 @@ fun ScanScreen(
 
     // Haptic on transition into Preview/UnknownBarcode (i.e. each successful decode).
     LaunchedEffect(state.phase) {
-        if (state.phase !is ScanUiState.Phase.Idle) {
+        if (state.phase is ScanUiState.Phase.Preview ||
+            state.phase is ScanUiState.Phase.UnknownBarcode
+        ) {
             view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
@@ -55,28 +58,37 @@ fun ScanScreen(
             CameraPermissionGate {
                 CameraPreview(
                     onBarcode = viewModel::onBarcodeDecoded,
+                    onCameraError = { e ->
+                        viewModel.onCameraError(e.message ?: "Camera unavailable")
+                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-        }
 
-        when (val phase = state.phase) {
-            is ScanUiState.Phase.Preview -> {
-                ScanPreviewSheet(
-                    product = phase.product,
-                    pendingQuantity = phase.pendingQuantity,
-                    onQuantityChange = viewModel::setQuantity,
-                    onConfirm = viewModel::confirmAdd,
-                    onDismiss = viewModel::dismissPreview,
-                )
+            when (val phase = state.phase) {
+                is ScanUiState.Phase.Preview -> {
+                    ScanPreviewSheet(
+                        product = phase.product,
+                        pendingQuantity = phase.pendingQuantity,
+                        onQuantityChange = viewModel::setQuantity,
+                        onConfirm = viewModel::confirmAdd,
+                        onDismiss = viewModel::dismissPreview,
+                    )
+                }
+                is ScanUiState.Phase.UnknownBarcode -> {
+                    UnknownBarcodeSheet(
+                        barcode = phase.barcode,
+                        onDismiss = viewModel::dismissPreview,
+                    )
+                }
+                is ScanUiState.Phase.Error -> {
+                    ErrorSheet(
+                        message = phase.message,
+                        onDismiss = viewModel::dismissPreview,
+                    )
+                }
+                ScanUiState.Phase.Idle -> Unit
             }
-            is ScanUiState.Phase.UnknownBarcode -> {
-                UnknownBarcodeSheet(
-                    barcode = phase.barcode,
-                    onDismiss = viewModel::dismissPreview,
-                )
-            }
-            ScanUiState.Phase.Idle -> Unit
         }
     }
 }

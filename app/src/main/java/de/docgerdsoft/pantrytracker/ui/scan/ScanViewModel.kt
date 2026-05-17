@@ -16,20 +16,32 @@ class ScanViewModel(
     private val _uiState = MutableStateFlow(ScanUiState())
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
 
-    /** Called from the camera analyzer when ML Kit successfully decodes a barcode. */
+    /**
+     * De-duplicates rapid repeat decodes by ignoring any callback while a
+     * Preview/UnknownBarcode/Error sheet is open. Empty/blank barcodes (which ML Kit
+     * can occasionally surface from low-confidence frames) are also dropped. Otherwise
+     * looks up the barcode in the local DB and transitions to Preview (match) or
+     * UnknownBarcode (miss). On DB failure transitions to Error per spec §7.
+     */
     fun onBarcodeDecoded(barcode: String) {
+        if (barcode.isBlank()) return
         if (_uiState.value.phase !is ScanUiState.Phase.Idle) return
         viewModelScope.launch {
-            val product = repository.findLocalByBarcode(barcode)
-            _uiState.update {
-                it.copy(
-                    phase = if (product != null) {
+            val newPhase: ScanUiState.Phase = runCatching {
+                repository.findLocalByBarcode(barcode)
+            }.fold(
+                onSuccess = { product ->
+                    if (product != null) {
                         ScanUiState.Phase.Preview(product, pendingQuantity = 1)
                     } else {
                         ScanUiState.Phase.UnknownBarcode(barcode)
-                    },
-                )
-            }
+                    }
+                },
+                onFailure = { e ->
+                    ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
+                },
+            )
+            _uiState.update { it.copy(phase = newPhase) }
         }
     }
 
@@ -43,13 +55,26 @@ class ScanViewModel(
     fun confirmAdd() {
         val phase = _uiState.value.phase as? ScanUiState.Phase.Preview ?: return
         viewModelScope.launch {
-            repository.applyDelta(productId = phase.product.id, delta = phase.pendingQuantity)
-            _uiState.update { it.copy(phase = ScanUiState.Phase.Idle) }
+            val outcome = runCatching {
+                repository.applyDelta(productId = phase.product.id, delta = phase.pendingQuantity)
+            }
+            val newPhase: ScanUiState.Phase = outcome.fold(
+                onSuccess = { ScanUiState.Phase.Idle },
+                onFailure = { e ->
+                    ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
+                },
+            )
+            _uiState.update { it.copy(phase = newPhase) }
         }
     }
 
-    /** Used by both the Cancel button on the preview sheet AND the "Not in inventory" close button. */
+    /** Dismiss any non-Idle phase (Preview, UnknownBarcode, or Error) back to Idle. */
     fun dismissPreview() {
         _uiState.update { it.copy(phase = ScanUiState.Phase.Idle) }
+    }
+
+    /** Called by CameraPreview when the camera or scanner permanently fails. */
+    fun onCameraError(message: String) {
+        _uiState.update { it.copy(phase = ScanUiState.Phase.Error(message)) }
     }
 }

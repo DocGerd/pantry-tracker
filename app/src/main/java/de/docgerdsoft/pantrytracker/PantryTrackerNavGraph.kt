@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -25,23 +26,25 @@ fun PantryTrackerNavGraph(container: AppContainer) {
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {
-            val vm: HomeViewModel = viewModel(
-                factory = viewModelFactory {
+            val factory = remember(container) {
+                viewModelFactory {
                     initializer { HomeViewModel(container.productRepository) }
-                },
-            )
+                }
+            }
+            val vm: HomeViewModel = viewModel(factory = factory)
             HomeScreen(
                 viewModel = vm,
                 onScanAddClick = { navController.navigate(Routes.SCAN_ADD) },
-                onScanRemoveClick = { /* wired in M4 */ },
+                onScanRemoveClick = { /* TODO: wire to scan-remove flow */ },
             )
         }
         composable(Routes.SCAN_ADD) {
-            val vm: ScanViewModel = viewModel(
-                factory = viewModelFactory {
+            val factory = remember(container) {
+                viewModelFactory {
                     initializer { ScanViewModel(container.productRepository) }
-                },
-            )
+                }
+            }
+            val vm: ScanViewModel = viewModel(factory = factory)
             ScanScreen(
                 viewModel = vm,
                 onNavigateBack = { navController.popBackStack() },
