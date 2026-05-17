@@ -26,23 +26,29 @@ class DetailViewModel(
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            try {
-                repository.observeById(productId).collect { product ->
-                    _uiState.update { state ->
-                        when {
-                            product != null -> state.copy(product = product, everSeen = true)
-                            state.everSeen -> state.copy(product = null, shouldNavigateBack = true)
-                            else -> state // initial-load null, ignore
-                        }
+        viewModelScope.launch { collectProduct() }
+    }
+
+    // Extracted from init so the @Suppress for the broad catch is scoped to one
+    // function rather than the whole class (matches the pattern on rename /
+    // stepperDelta / confirmDelete).
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun collectProduct() {
+        try {
+            repository.observeById(productId).collect { product ->
+                _uiState.update { state ->
+                    when {
+                        product != null -> state.copy(product = product, everSeen = true)
+                        state.everSeen -> state.copy(product = null, shouldNavigateBack = true)
+                        else -> state // initial-load null, ignore
                     }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "observeById($productId) failed", e)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            @Suppress("SwallowedException")
+            logger.log(Level.WARNING, "observeById($productId) failed", e)
         }
     }
 

@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.detail
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,10 +40,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.common.RelativeTime
 import kotlinx.datetime.Clock
 
@@ -53,12 +56,15 @@ fun DetailScreen(
     onNavigateBack: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
 
-    // Auto-pop when the product is deleted (flag consumed once, then cleared).
+    // Auto-pop when the product is deleted or the nav arg is stale.
+    // Order matters: pop FIRST so an intervening recomposition can't observe
+    // the still-true flag and re-fire popBackStack on the next launch.
     LaunchedEffect(state.shouldNavigateBack) {
         if (state.shouldNavigateBack) {
-            viewModel.onNavigatedBack()
             onNavigateBack()
+            viewModel.onNavigatedBack()
         }
     }
 
@@ -73,7 +79,14 @@ fun DetailScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = viewModel::requestDelete,
+                        onClick = {
+                            // Force the inline-edit field to lose focus so its
+                            // commit-on-focus-loss callback fires before we
+                            // destroy the row. Without this, a name typed but
+                            // not committed would be lost on Delete.
+                            focusManager.clearFocus()
+                            viewModel.requestDelete()
+                        },
                         enabled = state.product != null,
                     ) {
                         Icon(Icons.Filled.Delete, contentDescription = "Delete product")
@@ -83,7 +96,6 @@ fun DetailScreen(
         },
     ) { padding ->
         val product = state.product
-
         if (product == null) {
             Box(
                 modifier = Modifier
@@ -94,120 +106,134 @@ fun DetailScreen(
                 CircularProgressIndicator()
             }
         } else {
-            // Local name state — resets if the product name changes externally.
-            var localName by remember(product.name) { mutableStateOf(product.name) }
-
-            fun commitName() {
-                if (localName.isNotBlank() && localName != product.name) {
-                    viewModel.rename(localName)
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Spacer(Modifier.height(4.dp))
-
-                // Product image (only if we have a URL).
-                product.imageUrl?.let { url ->
-                    AsyncImage(
-                        model = url,
-                        contentDescription = "Product photo",
-                        modifier = Modifier
-                            .size(160.dp)
-                            .align(Alignment.CenterHorizontally),
-                        contentScale = ContentScale.Fit,
-                    )
-                }
-
-                // Inline-editable name field.
-                OutlinedTextField(
-                    value = localName,
-                    onValueChange = { localName = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .onFocusChanged { focusState ->
-                            if (!focusState.isFocused) commitName()
-                        },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { commitName() }),
-                )
-
-                // Read-only brand.
-                product.brand?.let { brand ->
-                    Text(
-                        text = "Brand: $brand",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                // Read-only barcode.
-                product.barcode?.let { barcode ->
-                    Text(
-                        text = "Barcode: $barcode",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                // ±1 quantity stepper.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(
-                        onClick = { viewModel.stepperDelta(-1) },
-                        enabled = product.quantity > 0,
-                    ) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Decrease quantity")
-                    }
-                    Text(
-                        text = product.quantity.toString(),
-                        style = MaterialTheme.typography.headlineMedium,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                    )
-                    IconButton(onClick = { viewModel.stepperDelta(1) }) {
-                        Icon(Icons.Filled.Add, contentDescription = "Increase quantity")
-                    }
-                }
-
-                // Relative last-updated time.
-                Text(
-                    text = "Last updated ${RelativeTime.format(product.updatedAt, Clock.System.now())}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        // Delete confirmation dialog.
-        if (state.showDeleteConfirm) {
-            AlertDialog(
-                onDismissRequest = viewModel::cancelDelete,
-                title = { Text("Delete this product?") },
-                text = {
-                    Text("\"${product.name}\" will be removed from your inventory. This can't be undone.")
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = viewModel::confirmDelete,
-                        colors = ButtonDefaults.textButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                    ) {
-                        Text("Delete")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = viewModel::cancelDelete) { Text("Cancel") }
-                },
+            ProductBody(
+                product = product,
+                padding = padding,
+                onRename = viewModel::rename,
+                onStepperDelta = viewModel::stepperDelta,
             )
+            if (state.showDeleteConfirm) {
+                DeleteConfirmDialog(
+                    productName = product.name,
+                    onConfirm = viewModel::confirmDelete,
+                    onCancel = viewModel::cancelDelete,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun ProductBody(
+    product: Product,
+    padding: PaddingValues,
+    onRename: (String) -> Unit,
+    onStepperDelta: (Int) -> Unit,
+) {
+    // remember(product.name) resets the local edit state when the row is
+    // renamed externally (e.g. another scan, another window). Trade-off:
+    // an in-flight uncommitted edit is discarded in that case — acceptable
+    // because external renames are rare and the data-correctness win is
+    // worth more than preserving a half-typed string.
+    var localName by remember(product.name) { mutableStateOf(product.name) }
+
+    fun commitName() {
+        if (localName.isNotBlank() && localName != product.name) {
+            onRename(localName)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Spacer(Modifier.height(4.dp))
+        product.imageUrl?.let { url ->
+            AsyncImage(
+                model = url,
+                contentDescription = "Product photo",
+                modifier = Modifier
+                    .size(160.dp)
+                    .align(Alignment.CenterHorizontally),
+                contentScale = ContentScale.Fit,
+            )
+        }
+        OutlinedTextField(
+            value = localName,
+            onValueChange = { localName = it },
+            label = { Text("Name") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState ->
+                    if (!focusState.isFocused) commitName()
+                },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { commitName() }),
+        )
+        product.brand?.let { brand ->
+            Text(text = "Brand: $brand", style = MaterialTheme.typography.bodyMedium)
+        }
+        product.barcode?.let { barcode ->
+            Text(text = "Barcode: $barcode", style = MaterialTheme.typography.bodyMedium)
+        }
+        StepperRow(quantity = product.quantity, onDelta = onStepperDelta)
+        Text(
+            text = "Last updated ${RelativeTime.format(product.updatedAt, Clock.System.now())}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun StepperRow(quantity: Int, onDelta: (Int) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = { onDelta(-1) }, enabled = quantity > 0) {
+            Icon(Icons.Filled.Remove, contentDescription = "Decrease quantity")
+        }
+        Text(
+            text = quantity.toString(),
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
+        IconButton(onClick = { onDelta(1) }) {
+            Icon(Icons.Filled.Add, contentDescription = "Increase quantity")
+        }
+    }
+}
+
+@Composable
+private fun DeleteConfirmDialog(
+    productName: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Delete this product?") },
+        text = {
+            Text("\"$productName\" will be removed from your inventory. This can't be undone.")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
+    )
 }
