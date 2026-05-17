@@ -70,8 +70,11 @@ class ScanViewModel(
             when (mode) {
                 ScanMode.Add -> {
                     val resolved = repository.lookupForPreview(barcode)
-                    if (resolved != null) ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
-                    else ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
+                    if (resolved != null) {
+                        ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
+                    } else {
+                        ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
+                    }
                 }
                 ScanMode.Remove -> {
                     val local = repository.findLocalByBarcode(barcode)
@@ -113,7 +116,9 @@ class ScanViewModel(
                 is ScanUiState.Phase.Preview -> {
                     val max = if (state.mode == ScanMode.Remove) {
                         (phase.candidate as? ScanCandidate.Persisted)?.product?.quantity ?: Int.MAX_VALUE
-                    } else Int.MAX_VALUE
+                    } else {
+                        Int.MAX_VALUE
+                    }
                     val clamped = value.coerceIn(1, max.coerceAtLeast(1))
                     state.copy(phase = phase.copy(pendingQuantity = clamped))
                 }
