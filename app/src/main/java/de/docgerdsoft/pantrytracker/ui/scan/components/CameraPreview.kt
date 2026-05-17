@@ -31,10 +31,11 @@ import java.util.concurrent.Executors
 /**
  * CameraX preview with a ML Kit barcode analyzer. Calls [onBarcode] with the decoded
  * raw value (EAN-13/EAN-8/UPC-A/UPC-E only). Per-frame decode failures are logged at
- * WARN; permanent scanner failures (MlKitException MODULE_UNAVAILABLE /
- * MODEL_HASH_MISMATCH) and camera-bind failures are surfaced via [onCameraError] so
- * the caller can transition to an error UI state per spec §7. The caller is also
- * responsible for de-duplicating rapid repeat detections (see
+ * debug; the unambiguously-permanent MlKitException.MODEL_HASH_MISMATCH (corrupt model
+ * on disk) and camera-bind failures are surfaced via [onCameraError] so the caller can
+ * transition to an error UI state per spec §7. MlKitException.UNAVAILABLE is treated
+ * as transient because it also fires during first-launch model download. The caller is
+ * also responsible for de-duplicating rapid repeat detections (see
  * [de.docgerdsoft.pantrytracker.ui.scan.ScanViewModel.onBarcodeDecoded]).
  */
 @Composable
@@ -133,16 +134,15 @@ private fun analyzeFrame(
             barcodes.firstNotNullOfOrNull { it.rawValue }?.let(onBarcode)
         }
         .addOnFailureListener { e ->
-            if (e is MlKitException && (
-                    e.errorCode == MlKitException.MODULE_UNAVAILABLE ||
-                        e.errorCode == MlKitException.MODEL_HASH_MISMATCH
-                    )
-            ) {
-                // Permanent scanner failure — every frame will fail. Surface to caller.
+            if (e is MlKitException && e.errorCode == MlKitException.MODEL_HASH_MISMATCH) {
+                // Unambiguously permanent — the on-disk model is corrupt; every frame will fail. Surface to caller.
+                // We intentionally do NOT surface MlKitException.UNAVAILABLE / CODE_SCANNER_UNAVAILABLE here:
+                // both fire during the first-launch model download from Play Services and self-recover, so
+                // routing them to Phase.Error would flash an error sheet during normal cold start.
                 onCameraError(e)
             } else {
-                // Transient per-frame failure (blurry, no barcode, etc.). Log at debug
-                // to avoid logcat spam; this fires many times per second.
+                // Transient per-frame failure (blurry, no barcode, model still downloading, etc.). Log at
+                // debug to avoid logcat spam; this fires many times per second.
                 Log.d("CameraPreview", "ML Kit decode skipped: ${e.message}")
             }
         }
