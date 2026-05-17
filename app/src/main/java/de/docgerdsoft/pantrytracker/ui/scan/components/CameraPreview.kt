@@ -1,7 +1,6 @@
 package de.docgerdsoft.pantrytracker.ui.scan.components
 
 import android.annotation.SuppressLint
-import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.CameraUnavailableException
 import androidx.camera.core.ExperimentalGetImage
@@ -26,6 +25,13 @@ import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.logging.Level
+import java.util.logging.Logger
+
+// java.util.logging works in both Android (forwarded to logcat) and plain JVM
+// unit tests. Matches the project's logging convention (DetailViewModel,
+// ScanViewModel, OffApiClient).
+private val logger: Logger = Logger.getLogger("CameraPreview")
 
 /**
  * CameraX preview with a ML Kit barcode analyzer. Calls [onBarcode] with the decoded
@@ -94,17 +100,27 @@ fun CameraPreview(
                         )
                     } catch (e: IllegalArgumentException) {
                         // e.g. no back camera on this device (tablets, foldables, some emulators)
+                        @Suppress("SwallowedException")
+                        logger.log(Level.WARNING, "Camera bind failed: no compatible camera", e)
                         onCameraError(e)
                     } catch (e: IllegalStateException) {
                         // Camera already bound or in a wrong lifecycle state
+                        @Suppress("SwallowedException")
+                        logger.log(Level.WARNING, "Camera bind failed: bad lifecycle state", e)
                         onCameraError(e)
                     } catch (e: CameraUnavailableException) {
+                        @Suppress("SwallowedException")
+                        logger.log(Level.WARNING, "Camera bind failed: camera unavailable", e)
                         onCameraError(e)
                     }
                 } catch (e: ExecutionException) {
+                    @Suppress("SwallowedException")
+                    logger.log(Level.WARNING, "Camera provider future failed", e)
                     onCameraError(e.cause ?: e)
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
+                    @Suppress("SwallowedException")
+                    logger.log(Level.WARNING, "Camera provider future interrupted", e)
                     onCameraError(e)
                 }
             }, ContextCompat.getMainExecutor(ctx))
@@ -137,11 +153,13 @@ private fun analyzeFrame(
                 // We intentionally do NOT surface MlKitException.UNAVAILABLE / CODE_SCANNER_UNAVAILABLE here:
                 // both fire during the first-launch model download from Play Services and self-recover, so
                 // routing them to Phase.Error would flash an error sheet during normal cold start.
+                @Suppress("SwallowedException")
+                logger.log(Level.SEVERE, "ML Kit model hash mismatch — corrupt model on disk", e)
                 onCameraError(e)
             } else {
                 // Transient per-frame failure (blurry, no barcode, model still downloading, etc.). Log at
-                // debug to avoid logcat spam; this fires many times per second.
-                Log.d("CameraPreview", "ML Kit decode skipped: ${e.message}")
+                // FINE (≈ Log.d) to avoid logcat spam; this fires many times per second.
+                logger.log(Level.FINE, "ML Kit decode skipped: ${e.message}")
             }
         }
         .addOnCompleteListener { imageProxy.close() }

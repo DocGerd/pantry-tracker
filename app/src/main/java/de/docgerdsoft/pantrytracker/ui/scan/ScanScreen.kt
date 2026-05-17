@@ -19,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPermissionGate
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
 import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.LoadingSheet
@@ -64,15 +63,13 @@ fun ScanScreen(
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            CameraPermissionGate {
-                CameraPreview(
-                    onBarcode = viewModel::onBarcodeDecoded,
-                    onCameraError = { e ->
-                        viewModel.onCameraError(e.message ?: "Camera unavailable")
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+            CameraPreview(
+                onBarcode = viewModel::onBarcodeDecoded,
+                onCameraError = { e ->
+                    viewModel.onCameraError(e.message ?: "camera unavailable")
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
 
             when (val phase = state.phase) {
                 ScanUiState.Phase.Idle -> Unit

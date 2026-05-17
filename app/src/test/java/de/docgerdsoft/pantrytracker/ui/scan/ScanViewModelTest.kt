@@ -647,6 +647,39 @@ class ScanViewModelTest {
         assertEquals(0, repo.lookupCallCount)
     }
 
+    // ---- onCameraError: contract is "wrap reason with Couldn't open camera: prefix
+    //      and cancel any in-flight scan jobs". ----
+
+    @Test
+    fun onCameraError_wrapsReasonWithCouldntOpenCameraPrefix() = runTest {
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onCameraError("device busy")
+            val state = awaitItem()
+            val error = state.phase as ScanUiState.Phase.Error
+            assertEquals("Couldn't open camera: device busy", error.message)
+        }
+    }
+
+    @Test
+    fun onCameraError_cancelsInFlightLookupJob() = runTest {
+        fake.suspendOnLookup = true
+
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("12345")
+            awaitItem() // Loading (the lookup is now suspended in awaitCancellation)
+            vm.onCameraError("camera died")
+            val state = awaitItem()
+            assertTrue(state.phase is ScanUiState.Phase.Error)
+            assertEquals("Couldn't open camera: camera died",
+                (state.phase as ScanUiState.Phase.Error).message)
+        }
+        // FakeProductRepository.suspendOnLookup records every cancelled barcode.
+        assertTrue("expected in-flight lookup for 12345 to be cancelled by onCameraError",
+            "12345" in fake.cancelledLookups)
+    }
+
     private class FakeProductRepository : ProductRepository {
         private val byBarcode = mutableMapOf<String, Product>()
         var lastDelta: Pair<Long, Int>? = null

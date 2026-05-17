@@ -3,11 +3,13 @@ package de.docgerdsoft.pantrytracker.ui.home
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,18 +43,32 @@ class HomeScreenTest {
 
     @Test
     fun fab_opensAddSheet_thenConfirm_callsRepository() {
-        val repo = FakeRepository(MutableStateFlow(emptyList()))
+        // Seed a non-empty list so EmptyState (with its own "Add manually"
+        // OutlinedButton) does NOT render — otherwise the test would
+        // ambiguously match the EmptyState button instead of the FAB.
+        val now = Clock.System.now()
+        val repo = FakeRepository(
+            MutableStateFlow(
+                listOf(
+                    Product(id = 1, barcode = null, name = "Existing",
+                        quantity = 1, createdAt = now, updatedAt = now),
+                ),
+            ),
+        )
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
             PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}) } }
         }
 
-        composeRule.onNodeWithText("Add manually").performClick()
+        // Target the FAB explicitly via its contentDescription, not the
+        // EmptyState button's text content.
+        composeRule.onNodeWithContentDescription("Add manually").performClick()
         composeRule.onNodeWithText("Name").performTextInput("Coke")
         composeRule.onNodeWithText("Add").performClick()
 
-        assert(repo.lastAddName == "Coke")
+        // Use JUnit assertion — bare assert() is disabled on ART.
+        org.junit.Assert.assertEquals("Coke", repo.lastAddName)
     }
 
     private class FakeRepository(
@@ -62,7 +78,10 @@ class HomeScreenTest {
         override fun observeProducts(): Flow<List<Product>> = flow.asStateFlow()
         override fun search(query: String): Flow<List<Product>> = flow.asStateFlow()
         override suspend fun findById(id: Long): Product? = flow.value.firstOrNull { it.id == id }
+        override fun observeById(id: Long): Flow<Product?> =
+            MutableStateFlow(flow.value.firstOrNull { it.id == id }).asStateFlow()
         override suspend fun findLocalByBarcode(code: String): Product? = null
+        override suspend fun lookupForPreview(code: String): ScanCandidate? = null
         override suspend fun addNew(
             name: String,
             brand: String?,

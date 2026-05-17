@@ -16,6 +16,7 @@ import de.docgerdsoft.pantrytracker.ui.detail.DetailScreen
 import de.docgerdsoft.pantrytracker.ui.detail.DetailViewModel
 import de.docgerdsoft.pantrytracker.ui.home.HomeScreen
 import de.docgerdsoft.pantrytracker.ui.home.HomeViewModel
+import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionGate
 import de.docgerdsoft.pantrytracker.ui.scan.ScanMode
 import de.docgerdsoft.pantrytracker.ui.scan.ScanScreen
 import de.docgerdsoft.pantrytracker.ui.scan.ScanViewModel
@@ -56,10 +57,12 @@ fun PantryTrackerNavGraph(container: AppContainer) {
                 }
             }
             val vm: ScanViewModel = viewModel(factory = factory)
-            ScanScreen(
-                viewModel = vm,
-                onNavigateBack = { navController.popBackStack() },
-            )
+            CameraPermissionGate(onNavigateBack = { navController.popBackStack() }) {
+                ScanScreen(
+                    viewModel = vm,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
         }
         composable(Routes.SCAN_REMOVE) {
             val factory = remember(container) {
@@ -68,10 +71,12 @@ fun PantryTrackerNavGraph(container: AppContainer) {
                 }
             }
             val vm: ScanViewModel = viewModel(factory = factory)
-            ScanScreen(
-                viewModel = vm,
-                onNavigateBack = { navController.popBackStack() },
-            )
+            CameraPermissionGate(onNavigateBack = { navController.popBackStack() }) {
+                ScanScreen(
+                    viewModel = vm,
+                    onNavigateBack = { navController.popBackStack() },
+                )
+            }
         }
         composable(
             Routes.DETAIL,

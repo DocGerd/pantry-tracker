@@ -6,19 +6,8 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-private val LightColors = lightColorScheme(
-    primary = Md3Primary,
-    onPrimary = Md3OnPrimary,
-    surface = Md3Surface,
-    onSurface = Md3OnSurface,
-)
-
-private val DarkColors = darkColorScheme(
-    primary = Md3Primary,
-    onPrimary = Md3OnPrimary,
-    surface = Md3SurfaceDark,
-    onSurface = Md3OnSurfaceDark,
-)
+private val LightColors = lightColorScheme(primary = Fern)
+private val DarkColors = darkColorScheme(primary = Fern)
 
 @Composable
 fun PantryTrackerTheme(

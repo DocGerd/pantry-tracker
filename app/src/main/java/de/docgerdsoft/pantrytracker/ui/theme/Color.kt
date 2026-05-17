@@ -2,12 +2,16 @@ package de.docgerdsoft.pantrytracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val AddGreen = Color(0xFF2A6A2A)
-val RemoveRed = Color(0xFF8A2A2A)
+/** Pantry/produce-evocative primary colour. Only the `primary` slot is
+ *  overridden in [PantryTrackerTheme]; the rest of the scheme (secondary,
+ *  tertiary, surface, error, …) comes from M3's hardcoded Baseline palette,
+ *  not from this colour. True seed-derived tonal expansion would require
+ *  `dynamicLightColorScheme(context)` (Android 12+, user-wallpaper-driven)
+ *  or `material-color-utilities` — neither is wired up. */
+val Fern: Color = Color(0xFF4F7942)
 
-val Md3Primary = Color(0xFF3F6B3F)
-val Md3OnPrimary = Color(0xFFFFFFFF)
-val Md3Surface = Color(0xFFFAF9F6)
-val Md3OnSurface = Color(0xFF1B1B1B)
-val Md3SurfaceDark = Color(0xFF1B1B1B)
-val Md3OnSurfaceDark = Color(0xFFEDEDED)
+// Used by ScanButtonsRow in HomeScreen for the two big primary actions.
+// These are intentionally outside the M3-derived scheme so the "add" and
+// "remove" verbs stay distinguishable across light and dark.
+val AddGreen: Color = Color(0xFF2A6A2A)
+val RemoveRed: Color = Color(0xFF8A2A2A)
