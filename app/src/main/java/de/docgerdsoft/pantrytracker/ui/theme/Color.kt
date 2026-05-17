@@ -2,12 +2,12 @@ package de.docgerdsoft.pantrytracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val AddGreen = Color(0xFF2A6A2A)
-val RemoveRed = Color(0xFF8A2A2A)
+/** Pantry/produce-evocative seed colour. Material 3 derives the rest of the
+ *  scheme (secondary, tertiary, surface, error, …) from this one anchor. */
+val Fern: Color = Color(0xFF4F7942)
 
-val Md3Primary = Color(0xFF3F6B3F)
-val Md3OnPrimary = Color(0xFFFFFFFF)
-val Md3Surface = Color(0xFFFAF9F6)
-val Md3OnSurface = Color(0xFF1B1B1B)
-val Md3SurfaceDark = Color(0xFF1B1B1B)
-val Md3OnSurfaceDark = Color(0xFFEDEDED)
+// Used by ScanButtonsRow in HomeScreen for the two big primary actions.
+// These are intentionally outside the M3-derived scheme so the "add" and
+// "remove" verbs stay distinguishable across light and dark.
+val AddGreen: Color = Color(0xFF2A6A2A)
+val RemoveRed: Color = Color(0xFF8A2A2A)
