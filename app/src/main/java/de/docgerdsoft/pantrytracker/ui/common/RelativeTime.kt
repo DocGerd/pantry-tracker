@@ -9,10 +9,15 @@ import kotlin.time.Duration.Companion.seconds
 private const val DAYS_PER_WEEK = 7L
 private const val DAYS_PER_MONTH_ROUGH = 30L
 
-/** Bucketed human-readable relative time. Negative deltas (clock drift) and
- *  small positives both fall into the "just now" branch because they compare
- *  `< 60.seconds` — the negativeDelta_returnsJustNow test pins this. Coarser
- *  buckets follow up to "N months ago" using a ~30-day month. Pure function —
+/** Bucketed human-readable relative time.
+ *
+ *  Contract: a negative delta (clock drift, or a row whose `updatedAt` is briefly
+ *  in the future because of an unsynced device clock) is treated as "just now"
+ *  rather than something nonsensical like "in 3 hours". This is a deliberate
+ *  guarantee, not an artifact of how the buckets cascade; the
+ *  negativeDelta_returnsJustNow test pins it.
+ *
+ *  Buckets cascade up to "N months ago" using a ~30-day month. Pure function —
  *  no Android dependencies; fully testable. */
 object RelativeTime {
     fun format(then: Instant, now: Instant): String {
