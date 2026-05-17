@@ -243,11 +243,15 @@ class ScanViewModel(
         _uiState.update { it.copy(phase = ScanUiState.Phase.Idle) }
     }
 
-    /** Called by CameraPreview when the camera or scanner permanently fails. */
-    fun onCameraError(message: String) {
+    /** Called by CameraPreview when the camera or scanner permanently fails.
+     *  [reason] is the bare exception message (no verb prefix) — this method
+     *  wraps it in the spec §2.5 "Couldn't <verb>: <reason>" tone. */
+    fun onCameraError(reason: String) {
         lookupJob?.cancel()
         confirmJob?.cancel()
         manualEntryJob?.cancel()
-        _uiState.update { it.copy(phase = ScanUiState.Phase.Error(message)) }
+        _uiState.update {
+            it.copy(phase = ScanUiState.Phase.Error("Couldn't open camera: $reason"))
+        }
     }
 }

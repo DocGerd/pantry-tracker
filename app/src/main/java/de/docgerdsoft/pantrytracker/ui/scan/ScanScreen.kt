@@ -66,7 +66,7 @@ fun ScanScreen(
             CameraPreview(
                 onBarcode = viewModel::onBarcodeDecoded,
                 onCameraError = { e ->
-                    viewModel.onCameraError(e.message ?: "Camera unavailable")
+                    viewModel.onCameraError(e.message ?: "camera unavailable")
                 },
                 modifier = Modifier.fillMaxSize(),
             )
