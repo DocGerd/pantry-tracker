@@ -16,10 +16,31 @@ android {
         applicationId = "de.docgerdsoft.pantrytracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    // Release signing config. Keystore lives OUTSIDE the repo; the four
+    // PANTRY_TRACKER_RELEASE_* values are read from ~/.gradle/gradle.properties
+    // (or env vars in CI). If any of them is absent — typical on a dev machine
+    // that has only ever built debug APKs — the signingConfig is left unconfigured,
+    // so `./gradlew :app:assembleDebug` still works; only `assembleRelease`
+    // produces an unsigned (and therefore un-installable) APK in that case.
+    //
+    // Full setup (one-time keystore + populating gradle.properties) is documented
+    // in docs/release/SHIPPING.md §B.
+    signingConfigs {
+        create("release") {
+            val storeFilePath = providers.gradleProperty("PANTRY_TRACKER_RELEASE_STORE_FILE")
+            if (storeFilePath.isPresent) {
+                storeFile = file(storeFilePath.get())
+                storePassword = providers.gradleProperty("PANTRY_TRACKER_RELEASE_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("PANTRY_TRACKER_RELEASE_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("PANTRY_TRACKER_RELEASE_KEY_PASSWORD").get()
+            }
+        }
     }
 
     buildTypes {
@@ -29,6 +50,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
