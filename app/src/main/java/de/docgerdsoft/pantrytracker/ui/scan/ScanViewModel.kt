@@ -14,9 +14,10 @@ import kotlinx.coroutines.launch
 
 class ScanViewModel(
     private val repository: ProductRepository,
+    initialMode: ScanMode = ScanMode.Add,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ScanUiState())
+    private val _uiState = MutableStateFlow(ScanUiState(mode = initialMode))
     val uiState: StateFlow<ScanUiState> = _uiState.asStateFlow()
 
     private var lookupJob: Job? = null
@@ -45,6 +46,7 @@ class ScanViewModel(
             is ScanUiState.Phase.Loading -> current.barcode == barcode
             is ScanUiState.Phase.Preview -> current.candidate.barcode == barcode
             is ScanUiState.Phase.ManualEntry -> current.barcode == barcode
+            is ScanUiState.Phase.NotInInventory -> current.barcode == barcode
             ScanUiState.Phase.Idle, is ScanUiState.Phase.Error -> false
         }
 
@@ -53,28 +55,30 @@ class ScanViewModel(
     // the camera screen; surfacing as Phase.Error matches spec §7 "user-facing → inline".
     @Suppress("TooGenericExceptionCaught")
     private suspend fun resolveBarcode(barcode: String) {
-        val resolved = try {
-            repository.lookupForPreview(barcode)
+        val mode = _uiState.value.mode
+        val newPhase: ScanUiState.Phase = try {
+            when (mode) {
+                ScanMode.Add -> {
+                    val resolved = repository.lookupForPreview(barcode)
+                    if (resolved != null) ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
+                    else ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
+                }
+                ScanMode.Remove -> {
+                    val local = repository.findLocalByBarcode(barcode)
+                    if (local != null) {
+                        ScanUiState.Phase.Preview(
+                            ScanCandidate.Persisted(local),
+                            pendingQuantity = 1,
+                        )
+                    } else {
+                        ScanUiState.Phase.NotInInventory(barcode)
+                    }
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            val errorPhase = ScanUiState.Phase.Error(
-                "Couldn't read inventory: ${e.message ?: "unknown error"}",
-            )
-            _uiState.update { state ->
-                val owns = (state.phase as? ScanUiState.Phase.Loading)?.barcode == barcode
-                if (owns) {
-                    state.copy(phase = errorPhase)
-                } else {
-                    state
-                }
-            }
-            return
-        }
-        val newPhase = if (resolved != null) {
-            ScanUiState.Phase.Preview(resolved, pendingQuantity = 1)
-        } else {
-            ScanUiState.Phase.ManualEntry(barcode, pendingQuantity = 1)
+            ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
         }
         _uiState.update { state ->
             val owns = (state.phase as? ScanUiState.Phase.Loading)?.barcode == barcode
@@ -84,16 +88,20 @@ class ScanViewModel(
 
     /** Used by both the Preview stepper and the ManualEntry quantity input. */
     fun setQuantity(value: Int) {
-        val clamped = value.coerceAtLeast(1)
         // StateFlow.update + equals already short-circuits emission when the new
         // state equals the old one, so we don't need a manual pendingQuantity-equals
         // guard. The when only routes Preview/ManualEntry through their copy methods.
         _uiState.update { state ->
             when (val phase = state.phase) {
-                is ScanUiState.Phase.Preview ->
+                is ScanUiState.Phase.Preview -> {
+                    val max = if (state.mode == ScanMode.Remove) {
+                        (phase.candidate as? ScanCandidate.Persisted)?.product?.quantity ?: Int.MAX_VALUE
+                    } else Int.MAX_VALUE
+                    val clamped = value.coerceIn(1, max.coerceAtLeast(1))
                     state.copy(phase = phase.copy(pendingQuantity = clamped))
+                }
                 is ScanUiState.Phase.ManualEntry ->
-                    state.copy(phase = phase.copy(pendingQuantity = clamped))
+                    state.copy(phase = phase.copy(pendingQuantity = value.coerceAtLeast(1)))
                 else -> state
             }
         }
@@ -103,20 +111,27 @@ class ScanViewModel(
     // (disk full, DB corruption, constraint violation) must surface as Phase.Error per
     // spec §7 rather than propagate to the camera screen.
     @Suppress("TooGenericExceptionCaught")
-    fun confirmAdd() {
-        val phase = _uiState.value.phase as? ScanUiState.Phase.Preview ?: return
+    fun confirm() {
+        val state = _uiState.value
+        val phase = state.phase as? ScanUiState.Phase.Preview ?: return
         confirmJob?.cancel()
         confirmJob = viewModelScope.launch {
             val newPhase: ScanUiState.Phase = try {
-                when (val c = phase.candidate) {
-                    is ScanCandidate.Persisted -> repository.applyDelta(c.product.id, phase.pendingQuantity)
-                    is ScanCandidate.FromOff -> repository.addNew(
-                        name = c.name,
-                        brand = c.brand,
-                        barcode = c.barcode,
-                        imageUrl = c.imageUrl,
-                        initialQuantity = phase.pendingQuantity,
-                    )
+                when (state.mode) {
+                    ScanMode.Add -> when (val c = phase.candidate) {
+                        is ScanCandidate.Persisted -> repository.applyDelta(c.product.id, phase.pendingQuantity)
+                        is ScanCandidate.FromOff -> repository.addNew(
+                            name = c.name,
+                            brand = c.brand,
+                            barcode = c.barcode,
+                            imageUrl = c.imageUrl,
+                            initialQuantity = phase.pendingQuantity,
+                        )
+                    }
+                    ScanMode.Remove -> {
+                        val persisted = phase.candidate as? ScanCandidate.Persisted ?: return@launch
+                        repository.applyDelta(persisted.product.id, -phase.pendingQuantity)
+                    }
                 }
                 ScanUiState.Phase.Idle
             } catch (e: CancellationException) {
@@ -124,12 +139,19 @@ class ScanViewModel(
             } catch (e: Exception) {
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
-            _uiState.update { state ->
+            _uiState.update { s ->
                 // Phase-ownership guard: don't clobber a fresh phase that arrived
                 // while this confirm was in-flight (e.g. another scan started).
-                if (state.phase === phase) state.copy(phase = newPhase) else state
+                if (s.phase === phase) s.copy(phase = newPhase) else s
             }
         }
+    }
+
+    /** From the NotInInventory phase: flip mode to Add and re-resolve the captured barcode. */
+    fun onSwitchToAdd() {
+        val phase = _uiState.value.phase as? ScanUiState.Phase.NotInInventory ?: return
+        _uiState.update { it.copy(mode = ScanMode.Add) }
+        onBarcodeDecoded(phase.barcode)
     }
 
     /**
