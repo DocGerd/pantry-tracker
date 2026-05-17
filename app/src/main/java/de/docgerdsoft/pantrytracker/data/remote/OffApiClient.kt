@@ -1,5 +1,6 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
+import de.docgerdsoft.pantrytracker.BuildConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -76,8 +77,12 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     }
 
     companion object {
-        private const val USER_AGENT =
-            "PantryTracker/0.1 (https://github.com/DocGerd/pantry-tracker)"
+        // Derive from BuildConfig so a version bump in app/build.gradle.kts
+        // automatically updates what OFF sees in its server-side analytics.
+        // Avoids the trap where the app ships v1.0 but identifies itself as
+        // v0.1 forever because the constant was forgotten.
+        private val USER_AGENT: String =
+            "PantryTracker/${BuildConfig.VERSION_NAME} (https://github.com/DocGerd/pantry-tracker)"
         private const val TIMEOUT_MILLIS = 8_000L
 
         private fun defaultClient(): HttpClient = HttpClient(OkHttp) {

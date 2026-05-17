@@ -16,10 +16,74 @@ android {
         applicationId = "de.docgerdsoft.pantrytracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+    }
+
+    // Release signing config. Keystore lives OUTSIDE the repo; the four
+    // PANTRY_TRACKER_RELEASE_* values are read from ~/.gradle/gradle.properties
+    // (or env vars in CI). Three discrete configurations are supported:
+    //
+    //   * All four properties present → release signing wired; assembleRelease
+    //     produces a signed app-release.apk that installs on a device.
+    //   * None of the four present → release signing left unconfigured;
+    //     assembleDebug works normally; assembleRelease produces
+    //     app-release-UNSIGNED.apk (note the suffix — that file cannot be
+    //     installed; useful only for build-size checks).
+    //   * Some-but-not-all present → fail fast at configuration time with the
+    //     specific missing-property names, so a typo in one property doesn't
+    //     surface as a generic Gradle MissingValueException that breaks even
+    //     assembleDebug.
+    //
+    // Paths must be ABSOLUTE — Gradle's file() resolves relative to the :app
+    // module dir (not project root), and does NOT expand ~. The path is also
+    // checked for existence at configuration time so a typo'd path fails with
+    // a clear message instead of surfacing late during validateSigningRelease.
+    //
+    // Full setup (one-time keystore + populating gradle.properties) is
+    // documented in docs/release/SHIPPING.md §B.
+    signingConfigs {
+        create("release") {
+            val propNames = listOf(
+                "PANTRY_TRACKER_RELEASE_STORE_FILE",
+                "PANTRY_TRACKER_RELEASE_STORE_PASSWORD",
+                "PANTRY_TRACKER_RELEASE_KEY_ALIAS",
+                "PANTRY_TRACKER_RELEASE_KEY_PASSWORD",
+            )
+            val present = propNames.filter { providers.gradleProperty(it).isPresent }
+            when (present.size) {
+                0 -> Unit // dev-default: leave signingConfig empty
+                propNames.size -> {
+                    val storeFilePath = providers.gradleProperty(propNames[0]).get()
+                    require(!storeFilePath.startsWith("~")) {
+                        "PANTRY_TRACKER_RELEASE_STORE_FILE must be an absolute path " +
+                            "(no ~ expansion — Gradle's file() does not expand it). " +
+                            "Got: $storeFilePath"
+                    }
+                    val resolved = file(storeFilePath)
+                    require(resolved.exists()) {
+                        "PANTRY_TRACKER_RELEASE_STORE_FILE points at $resolved which does " +
+                            "not exist. Check the path in ~/.gradle/gradle.properties."
+                    }
+                    storeFile = resolved
+                    storePassword = providers.gradleProperty(propNames[1]).get()
+                    keyAlias = providers.gradleProperty(propNames[2]).get()
+                    keyPassword = providers.gradleProperty(propNames[3]).get()
+                }
+                else -> {
+                    val missing = propNames - present.toSet()
+                    throw GradleException(
+                        "Incomplete release-signing config. Missing: " +
+                            "${missing.joinToString()}. Either set all four properties in " +
+                            "~/.gradle/gradle.properties (see docs/release/SHIPPING.md §B), " +
+                            "or unset PANTRY_TRACKER_RELEASE_STORE_FILE to fall back to " +
+                            "unsigned release builds.",
+                    )
+                }
+            }
+        }
     }
 
     buildTypes {
@@ -29,6 +93,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Only wire the release signingConfig when storeFile was actually
+            // populated above. Unconditional `signingConfig = ...` would make
+            // assembleRelease throw NPE at packageRelease ("SigningConfig
+            // 'release' is missing required property 'storeFile'") when the
+            // dev hasn't set up the keystore yet — the unsigned-fallback path
+            // would never produce an APK. Leaving signingConfig null is what
+            // makes AGP emit app-release-unsigned.apk for build-size checks.
+            signingConfigs.findByName("release")
+                ?.takeIf { it.storeFile != null }
+                ?.let { signingConfig = it }
         }
     }
 
@@ -39,6 +113,10 @@ android {
 
     buildFeatures {
         compose = true
+        // BuildConfig is enabled so OffApiClient can derive its User-Agent
+        // from BuildConfig.VERSION_NAME, keeping the OFF-side identifier
+        // in lockstep with future version bumps.
+        buildConfig = true
     }
 
     packaging {
