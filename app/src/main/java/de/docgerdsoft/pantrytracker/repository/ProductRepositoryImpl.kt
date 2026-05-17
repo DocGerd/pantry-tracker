@@ -1,13 +1,17 @@
 package de.docgerdsoft.pantrytracker.repository
 
-import android.util.Log
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.local.ProductDao
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import kotlinx.coroutines.flow.Flow
+import java.util.logging.Level
+import java.util.logging.Logger
 import kotlin.time.Clock
 
-private const val TAG = "ProductRepositoryImpl"
+// java.util.logging works in both Android (forwarded to logcat) and plain JVM
+// unit tests. Matches the project's logging convention (DetailViewModel,
+// ScanViewModel, OffApiClient, CameraPreview).
+private val logger: Logger = Logger.getLogger("ProductRepositoryImpl")
 
 class ProductRepositoryImpl(
     private val dao: ProductDao,
@@ -72,7 +76,7 @@ class ProductRepositoryImpl(
             // C6: OFF returned a status=1 envelope but product_name was blank/absent.
             // We can't preview without a name — drop to manual entry. Log at INFO so
             // the brand/image loss is auditable without being logcat-noisy.
-            Log.i(TAG, "OFF hit for $code discarded — name blank, brand=${off.brands}")
+            logger.log(Level.INFO, "OFF hit for $code discarded — name blank, brand=${off.brands}")
             return null
         }
         return ScanCandidate.FromOff(
