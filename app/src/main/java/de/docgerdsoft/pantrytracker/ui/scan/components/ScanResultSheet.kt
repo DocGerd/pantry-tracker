@@ -92,7 +92,8 @@ fun UnknownBarcodeSheet(
         ) {
             Text("Not in your inventory yet", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Barcode: $barcode\n\nThis barcode isn't seeded yet. Open Food Facts lookup arrives in the next milestone.",
+                "Barcode: $barcode\n\nThis barcode isn't seeded yet. Open Food Facts lookup " +
+                    "arrives in the next milestone.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Row(

@@ -56,6 +56,7 @@ detekt {
     allRules = false
     autoCorrect = false
     ignoreFailures = false
+    config.setFrom(files("$rootDir/detekt-config.yml"))
 }
 
 ksp {

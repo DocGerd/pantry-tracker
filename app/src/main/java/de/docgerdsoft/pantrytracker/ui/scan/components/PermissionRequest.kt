@@ -103,7 +103,8 @@ fun CameraPermissionGate(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Pantry Tracker uses the camera to scan barcodes on products you add or remove. The camera image is processed entirely on-device — nothing is uploaded.",
+                text = "Pantry Tracker uses the camera to scan barcodes on products you add or " +
+                    "remove. The camera image is processed entirely on-device — nothing is uploaded.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(16.dp))
