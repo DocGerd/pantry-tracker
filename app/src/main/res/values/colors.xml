@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive-icon background. Matches Fern (0xFF4F7942) from Color.kt. -->
+    <color name="ic_launcher_background">#4F7942</color>
+</resources>

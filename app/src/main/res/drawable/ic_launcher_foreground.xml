@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Shelf line: y=66, spans x=26..82 (safe-zone aware). -->
+    <path
+        android:pathData="M26,66 L82,66"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"/>
+
+    <!-- Jar 1 (left): body 30..42 x 46..64, cap 32..40 x 42..46 -->
+    <path
+        android:pathData="M30,46 L30,64 L42,64 L42,46 Z M32,42 L40,42 L40,46 L32,46 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Jar 2 (center): body 48..60 x 46..64, cap 50..58 x 42..46 -->
+    <path
+        android:pathData="M48,46 L48,64 L60,64 L60,46 Z M50,42 L58,42 L58,46 L50,46 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Jar 3 (right): body 66..78 x 46..64, cap 68..76 x 42..46 -->
+    <path
+        android:pathData="M66,46 L66,64 L78,64 L78,46 Z M68,42 L76,42 L76,46 L68,46 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>
