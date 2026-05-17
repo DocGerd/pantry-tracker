@@ -27,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -85,10 +86,14 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(12.dp))
-            if (state.products.isEmpty()) {
-                EmptyState(modifier = Modifier.fillMaxSize())
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            when {
+                state.products.isEmpty() && state.query.isBlank() -> EmptyState(
+                    modifier = Modifier.fillMaxSize(),
+                    onScanAdd = onScanAddClick,
+                    onAddManual = viewModel::openAddSheet,
+                )
+                state.products.isEmpty() -> NoMatchesHint(query = state.query)
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(state.products, key = { it.id }) { product ->
                         ProductRow(
                             product = product,
@@ -181,15 +186,44 @@ private fun ProductRow(
 }
 
 @Composable
-private fun EmptyState(modifier: Modifier = Modifier) {
+private fun EmptyState(
+    modifier: Modifier = Modifier,
+    onScanAdd: () -> Unit,
+    onAddManual: () -> Unit,
+) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Your pantry is empty", style = MaterialTheme.typography.titleMedium)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Your pantry is empty", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Tap the + button to add an item manually.",
+                "Tap Scan to Add or + to start tracking",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onScanAdd) { Text("Scan to Add") }
+                OutlinedButton(onClick = onAddManual) { Text("Add manually") }
+            }
         }
+    }
+}
+
+@Composable
+private fun NoMatchesHint(query: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "No matches for \"$query\"",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
