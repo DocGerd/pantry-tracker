@@ -93,7 +93,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Only wire the release signingConfig when storeFile was actually
+            // populated above. Unconditional `signingConfig = ...` would make
+            // assembleRelease throw NPE at packageRelease ("SigningConfig
+            // 'release' is missing required property 'storeFile'") when the
+            // dev hasn't set up the keystore yet — the unsigned-fallback path
+            // would never produce an APK. Leaving signingConfig null is what
+            // makes AGP emit app-release-unsigned.apk for build-size checks.
+            signingConfigs.findByName("release")
+                ?.takeIf { it.storeFile != null }
+                ?.let { signingConfig = it }
         }
     }
 
