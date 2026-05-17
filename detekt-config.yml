@@ -36,12 +36,6 @@ style:
         value: 'FIXME:'
       - reason: 'STOPSHIP marker must be resolved before release'
         value: 'STOPSHIP:'
-  MatchingDeclarationName:
-    # Files that intentionally group several top-level declarations (a nav
-    # graph + its Routes table, a screen + its small private composables)
-    # don't match the rule's "one filename = one declaration" expectation.
-    excludes:
-      - '**/*NavGraph.kt'
 
 naming:
   FunctionNaming:
@@ -51,6 +45,12 @@ naming:
     ignoreAnnotated:
       - 'Composable'
       - 'Preview'
+  MatchingDeclarationName:
+    # Files that intentionally group several top-level declarations (a nav
+    # graph + its Routes table) don't match the rule's "one filename = one
+    # declaration" expectation. (Rule lives under `naming`, not `style`.)
+    excludes:
+      - '**/*NavGraph.kt'
 
 complexity:
   LongMethod:
