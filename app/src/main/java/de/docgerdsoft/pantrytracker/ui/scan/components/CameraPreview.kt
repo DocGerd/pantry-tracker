@@ -1,5 +1,6 @@
 package de.docgerdsoft.pantrytracker.ui.scan.components
 
+import android.annotation.SuppressLint
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors
  * by ignoring decodes while the phase is anything other than Idle.
  */
 @OptIn(ExperimentalGetImage::class)
+@SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun CameraPreview(
     onBarcode: (String) -> Unit,
