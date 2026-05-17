@@ -1,6 +1,6 @@
 ---
 name: kotlin-coroutines-reviewer
-description: Use this agent proactively after writing or modifying code that involves viewModelScope.launch, suspend functions, runCatching in coroutine context, ViewModel lifecycle, or any Kotlin coroutine error handling. Catches the specific bug classes this codebase has already hit twice (runCatching swallowing CancellationException, fire-and-forget launch with sync UI mutation, missing job cancellation in dismiss/onCleared).
+description: Use this agent proactively after writing or modifying code that involves viewModelScope.launch, suspend functions, runCatching in coroutine context, ViewModel lifecycle, or any Kotlin coroutine error handling. Catches the bug classes that surfaced in past M2/M3 PR reviews (runCatching swallowing CancellationException, fire-and-forget launch with sync UI mutation, missing job cancellation in dismiss/onCleared).
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -32,7 +32,7 @@ try {
 
 ### 2. Fire-and-forget launch with sync UI mutation
 
-Pattern that has burned this repo before:
+Pattern that has burned this repo before (see M2 PR #10 + M3 PR #18 round 1):
 ```kotlin
 viewModelScope.launch {
     repository.write()      // can throw

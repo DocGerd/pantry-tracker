@@ -30,7 +30,7 @@ Flag this with a clear rec on which path is right for the given file.
 
 ### 2. Robolectric SDK version mismatch
 
-`@Config(sdk = [33])` while `app/build.gradle.kts` has `compileSdk = 36`. Robolectric needs to match a supported SDK level. Check:
+A `@Config(sdk = [N])` value markedly lower than `app/build.gradle.kts`'s current `compileSdk` (or higher than the latest SDK Robolectric supports). Both edges matter: too-low SDK exercises old framework behavior; too-high SDK isn't shipped in any Robolectric jar yet. Check:
 
 ```bash
 grep -E 'compileSdk|targetSdk' app/build.gradle.kts
