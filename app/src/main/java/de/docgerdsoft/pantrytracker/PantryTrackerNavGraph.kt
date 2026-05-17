@@ -24,7 +24,8 @@ object Routes {
     const val HOME = "home"
     const val SCAN_ADD = "scan/add"
     const val SCAN_REMOVE = "scan/remove"
-    const val DETAIL = "detail/{productId}"
+    const val DETAIL_ARG_PRODUCT_ID = "productId"
+    const val DETAIL = "detail/{$DETAIL_ARG_PRODUCT_ID}"
 
     fun detail(id: Long) = "detail/$id"
 }
@@ -74,9 +75,9 @@ fun PantryTrackerNavGraph(container: AppContainer) {
         }
         composable(
             Routes.DETAIL,
-            arguments = listOf(navArgument("productId") { type = NavType.LongType }),
+            arguments = listOf(navArgument(Routes.DETAIL_ARG_PRODUCT_ID) { type = NavType.LongType }),
         ) { backStackEntry ->
-            val productId = backStackEntry.arguments?.getLong("productId") ?: return@composable
+            val productId = backStackEntry.arguments?.getLong(Routes.DETAIL_ARG_PRODUCT_ID) ?: return@composable
             val factory = remember(container, productId) {
                 viewModelFactory {
                     initializer { DetailViewModel(container.productRepository, productId) }
