@@ -8,6 +8,15 @@ data class ScanUiState(
     val mode: ScanMode = ScanMode.Add,
     val phase: Phase = Phase.Idle,
 ) {
+    init {
+        // NotInInventory is a Remove-mode-only phase per spec D4. Producer-side
+        // discipline (resolveBarcode) is the primary enforcement; this require()
+        // catches any future contributor who accidentally emits it from Add mode.
+        require(phase !is Phase.NotInInventory || mode == ScanMode.Remove) {
+            "NotInInventory phase is Remove-mode only (was mode=$mode)"
+        }
+    }
+
     sealed interface Phase {
         /** Camera is open, waiting for a barcode. */
         data object Idle : Phase
@@ -33,8 +42,10 @@ data class ScanUiState(
             val pendingQuantity: Int,
         ) : Phase
 
-        /** In Remove mode, a scanned barcode was not found in the inventory. The UI
-         *  shows the barcode and prompts the user to confirm removal or dismiss. */
+        /** In Remove mode: the scanned barcode either has no row in the local
+         *  inventory OR has a row whose quantity is already 0 (depleted). Either way
+         *  there's nothing to remove, so the UI surfaces a one-tap Switch-to-Add path
+         *  (re-resolves the same barcode through the Add flow) or dismiss to Idle. */
         data class NotInInventory(val barcode: String) : Phase
 
         /** A scan/confirm operation failed (DB write, camera bind, etc.). The UI

@@ -65,7 +65,12 @@ class ScanViewModel(
                 }
                 ScanMode.Remove -> {
                     val local = repository.findLocalByBarcode(barcode)
-                    if (local != null) {
+                    // A row at quantity 0 routes to NotInInventory too: there's nothing to
+                    // remove, and the Switch-to-Add affordance is exactly the right next-step.
+                    // Skipping this check would let setQuantity clamp to 1, confirm dispatch
+                    // applyDelta(-1), and the repo's clamp-at-0 short-circuit return without
+                    // writing — a silent no-op the user reads as a successful removal.
+                    if (local != null && local.quantity > 0) {
                         ScanUiState.Phase.Preview(
                             ScanCandidate.Persisted(local),
                             pendingQuantity = 1,
