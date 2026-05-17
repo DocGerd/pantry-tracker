@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.home
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -42,18 +43,32 @@ class HomeScreenTest {
 
     @Test
     fun fab_opensAddSheet_thenConfirm_callsRepository() {
-        val repo = FakeRepository(MutableStateFlow(emptyList()))
+        // Seed a non-empty list so EmptyState (with its own "Add manually"
+        // OutlinedButton) does NOT render — otherwise the test would
+        // ambiguously match the EmptyState button instead of the FAB.
+        val now = Clock.System.now()
+        val repo = FakeRepository(
+            MutableStateFlow(
+                listOf(
+                    Product(id = 1, barcode = null, name = "Existing",
+                        quantity = 1, createdAt = now, updatedAt = now),
+                ),
+            ),
+        )
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
             PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}) } }
         }
 
-        composeRule.onNodeWithText("Add manually").performClick()
+        // Target the FAB explicitly via its contentDescription, not the
+        // EmptyState button's text content.
+        composeRule.onNodeWithContentDescription("Add manually").performClick()
         composeRule.onNodeWithText("Name").performTextInput("Coke")
         composeRule.onNodeWithText("Add").performClick()
 
-        assert(repo.lastAddName == "Coke")
+        // Use JUnit assertion — bare assert() is disabled on ART.
+        org.junit.Assert.assertEquals("Coke", repo.lastAddName)
     }
 
     private class FakeRepository(

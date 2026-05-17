@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.home
 
 import androidx.compose.material3.Surface
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -58,6 +59,9 @@ class HomeScreenEmptyStateTest {
         composeRule.onNodeWithText("Search").performClick()
         composeRule.onNodeWithText("Search").performTextInput("zzz")
         composeRule.onNodeWithText("No matches for \"zzz\"").assertIsDisplayed()
+        // Lock in branch exclusivity — the empty-pantry CTAs must not also render.
+        composeRule.onNodeWithText("Your pantry is empty").assertDoesNotExist()
+        composeRule.onNodeWithText("Scan to Add").assertDoesNotExist()
     }
 
     @Test
