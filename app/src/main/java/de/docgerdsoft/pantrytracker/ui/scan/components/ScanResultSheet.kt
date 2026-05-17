@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.ui.common.sanitizeQuantityInput
+import de.docgerdsoft.pantrytracker.ui.scan.ScanMode
+import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
+import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +64,7 @@ fun LoadingSheet(barcode: String, onCancel: () -> Unit) {
 fun ScanPreviewSheet(
     candidate: ScanCandidate,
     pendingQuantity: Int,
+    mode: ScanMode,
     onQuantityChange: (Int) -> Unit,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -106,7 +112,14 @@ fun ScanPreviewSheet(
             ) {
                 TextButton(onClick = onDismiss) { Text("Cancel") }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = onConfirm) { Text("Confirm Add") }
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (mode == ScanMode.Add) AddGreen else RemoveRed,
+                    ),
+                ) {
+                    Text(if (mode == ScanMode.Add) "Confirm Add" else "Confirm Remove")
+                }
             }
         }
     }
@@ -168,6 +181,44 @@ fun ManualEntrySheet(
                     },
                     enabled = name.isNotBlank() && (quantityText.toIntOrNull() ?: 0) > 0,
                 ) { Text("Add to inventory") }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotInInventorySheet(
+    barcode: String,
+    onSwitchToAdd: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+        ) {
+            Text(
+                "Not in your inventory yet",
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Barcode $barcode isn't tracked yet. Add it instead?",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = onSwitchToAdd,
+                colors = ButtonDefaults.buttonColors(containerColor = AddGreen),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Switch to Add")
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Cancel")
             }
         }
     }
