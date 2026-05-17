@@ -6,7 +6,6 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
-import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant

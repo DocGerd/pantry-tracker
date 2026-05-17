@@ -1,6 +1,5 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
-import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -17,8 +16,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import java.io.IOException
+import java.util.logging.Level
+import java.util.logging.Logger
 
-private const val TAG = "OffApiClient"
+// java.util.logging works in both Android (forwarded to logcat at debuggable) and
+// plain JVM unit tests (writes to System.err). Avoids android.util.Log throwing
+// "Method w in android.util.Log not mocked" in non-Robolectric tests.
+private val logger: Logger = Logger.getLogger("OffApiClient")
 
 /**
  * Open Food Facts v2 product lookup. Returns null on miss, 4xx/5xx, blank barcode,
@@ -58,15 +62,15 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             // Covers network down, DNS failures, connect/socket timeouts (OkHttp
             // surfaces timeout as SocketTimeoutException which is an IOException).
             @Suppress("SwallowedException")
-            Log.w(TAG, "OFF lookup network error for $barcode", e)
+            logger.log(Level.WARNING, "OFF lookup network error for $barcode", e)
             null
         } catch (e: JsonConvertException) {
             @Suppress("SwallowedException")
-            Log.w(TAG, "OFF lookup JSON conversion error for $barcode", e)
+            logger.log(Level.WARNING, "OFF lookup JSON conversion error for $barcode", e)
             null
         } catch (e: SerializationException) {
             @Suppress("SwallowedException")
-            Log.w(TAG, "OFF lookup serialization error for $barcode", e)
+            logger.log(Level.WARNING, "OFF lookup serialization error for $barcode", e)
             null
         }
     }

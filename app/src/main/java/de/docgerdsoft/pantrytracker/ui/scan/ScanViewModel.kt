@@ -58,13 +58,16 @@ class ScanViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            val errorPhase = ScanUiState.Phase.Error(
+                "Couldn't read inventory: ${e.message ?: "unknown error"}",
+            )
             _uiState.update { state ->
                 val owns = (state.phase as? ScanUiState.Phase.Loading)?.barcode == barcode
-                if (owns) state.copy(
-                    phase = ScanUiState.Phase.Error(
-                        "Couldn't read inventory: ${e.message ?: "unknown error"}",
-                    ),
-                ) else state
+                if (owns) {
+                    state.copy(phase = errorPhase)
+                } else {
+                    state
+                }
             }
             return
         }
