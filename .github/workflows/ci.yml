@@ -43,3 +43,7 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+
+      - name: Detekt (Kotlin static analysis)
+        if: steps.gate.outputs.ready == 'true'
+        run: ./gradlew --no-daemon detektDebug
