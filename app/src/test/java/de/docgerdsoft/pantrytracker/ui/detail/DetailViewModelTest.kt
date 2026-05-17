@@ -152,6 +152,63 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun rename_repoThrows_setsErrorMessage() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product())
+        repo.renameError = RuntimeException("disk full")
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+
+        vm.rename("New Name")
+        advanceUntilIdle()
+        assertEquals("Couldn't rename: disk full", vm.uiState.value.error)
+    }
+
+    @Test
+    fun stepperDelta_repoThrows_setsErrorMessage() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product())
+        repo.deltaError = RuntimeException("constraint")
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+
+        vm.stepperDelta(+1)
+        advanceUntilIdle()
+        assertEquals("Couldn't update quantity: constraint", vm.uiState.value.error)
+    }
+
+    @Test
+    fun confirmDelete_repoThrows_setsErrorMessage_andClearsDialog() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product())
+        repo.deleteError = RuntimeException("locked")
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+
+        vm.requestDelete()
+        vm.confirmDelete()
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.showDeleteConfirm) // dialog closes regardless
+        assertEquals("Couldn't delete: locked", vm.uiState.value.error)
+        assertFalse(vm.uiState.value.shouldNavigateBack) // delete failed → stay
+    }
+
+    @Test
+    fun dismissError_clearsErrorField() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product())
+        repo.renameError = RuntimeException("x")
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.rename("Y")
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.error != null)
+
+        vm.dismissError()
+        assertNull(vm.uiState.value.error)
+    }
+
+    @Test
     fun onNavigatedBack_clearsShouldNavigateBack() = runTest {
         val repo = FakeRepo() // no seed → init detects stale id → flag is true
         val vm = DetailViewModel(repo, productId = 1L)
@@ -167,6 +224,11 @@ class DetailViewModelTest {
         val renameCalls = mutableListOf<Pair<Long, String>>()
         val deltaCalls = mutableListOf<Pair<Long, Int>>()
         val deleteCalls = mutableListOf<Long>()
+
+        // Error-injection knobs for testing repository-failure paths.
+        var renameError: Throwable? = null
+        var deltaError: Throwable? = null
+        var deleteError: Throwable? = null
 
         fun emit(product: Product?) {
             flow.value = product
@@ -187,12 +249,15 @@ class DetailViewModelTest {
             initialQuantity: Int,
         ): Long = 0L
         override suspend fun applyDelta(productId: Long, delta: Int) {
+            deltaError?.let { throw it }
             deltaCalls += (productId to delta)
         }
         override suspend fun rename(productId: Long, newName: String) {
+            renameError?.let { throw it }
             renameCalls += (productId to newName)
         }
         override suspend fun delete(productId: Long) {
+            deleteError?.let { throw it }
             deleteCalls += productId
         }
     }

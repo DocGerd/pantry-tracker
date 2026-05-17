@@ -11,6 +11,12 @@ data class DetailUiState(
     val shouldNavigateBack: Boolean = false,
     /** True while the trash-confirm dialog is open. */
     val showDeleteConfirm: Boolean = false,
+    /** A user-facing error message from the last failed repository operation
+     *  (observe, rename, stepperDelta, confirmDelete). Rendered as a Snackbar;
+     *  consumed once via [DetailViewModel.dismissError]. null when no error
+     *  is pending. Mirrors ScanViewModel's Phase.Error per spec §7 "user-
+     *  facing → inline". */
+    val error: String? = null,
 ) {
     init {
         // Lift the producer-side invariant to runtime. If the row is gone

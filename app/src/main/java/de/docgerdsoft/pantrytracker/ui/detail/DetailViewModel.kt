@@ -69,14 +69,27 @@ class DetailViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "observeById($productId) failed", e)
+            surfaceError("read inventory", e)
         }
     }
 
     /** Called when the screen has navigated away (Compose consumed the signal). */
     fun onNavigatedBack() {
         _uiState.update { it.copy(shouldNavigateBack = false) }
+    }
+
+    /** Called by the screen's Snackbar after the user has seen the error. */
+    fun dismissError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    // Surfaces a repository-operation failure as a user-visible message. Per spec §7
+    // "user-facing → inline" — silent logging is not enough. Mirrors ScanViewModel's
+    // Phase.Error transition; the screen renders this as a Snackbar.
+    private fun surfaceError(operation: String, e: Exception) {
+        @Suppress("SwallowedException")
+        logger.log(Level.WARNING, "$operation failed", e)
+        _uiState.update { it.copy(error = "Couldn't $operation: ${e.message ?: "unknown error"}") }
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -89,8 +102,7 @@ class DetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "rename($productId) failed", e)
+                surfaceError("rename", e)
             }
         }
     }
@@ -104,8 +116,7 @@ class DetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "applyDelta($productId, $delta) failed", e)
+                surfaceError("update quantity", e)
             }
         }
     }
@@ -124,12 +135,11 @@ class DetailViewModel(
         viewModelScope.launch {
             try {
                 repository.delete(productId)
-                // observeById emits null → state.everSeen is true → shouldNavigateBack = true.
+                // observeById emits null → collectProduct sets shouldNavigateBack = true → auto-pop.
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "delete($productId) failed", e)
+                surfaceError("delete", e)
             }
         }
     }
