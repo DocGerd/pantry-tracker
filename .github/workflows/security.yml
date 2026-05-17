@@ -16,28 +16,21 @@ concurrency:
 jobs:
   osv-scan:
     name: OSV-Scanner (Gradle deps)
-    runs-on: ubuntu-latest
+    # OSV-Scanner is distributed as a REUSABLE WORKFLOW (not a step-level action).
+    # The reusable workflow handles checkout, scan, and optional SARIF upload.
+    # SARIF upload to GitHub Code Scanning requires GitHub Advanced Security on
+    # private repos — we don't have GHAS, so upload-sarif is disabled. Findings
+    # show up in the workflow run logs instead.
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run OSV-Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@v2.2.0
-        with:
-          scan-args: |-
-            --recursive
-            --skip-git
-            ./
-          fail-on-vuln: true
-        env:
-          OSV_SCANNER_FAIL_ON_SEVERITY: HIGH
-      - name: Upload SARIF artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: osv-scanner-results
-          path: results.sarif
-          if-no-files-found: ignore
+    with:
+      scan-args: |-
+        --recursive
+        --skip-git
+        ./
+      upload-sarif: false
+      fail-on-vuln: true
 
   gitleaks:
     name: Gitleaks (secret scan)
@@ -48,8 +41,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Gitleaks needs full history to scan the PR diff against the base.
           fetch-depth: 0
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2.3.7
+        uses: gitleaks/gitleaks-action@v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE not required for personal accounts.
