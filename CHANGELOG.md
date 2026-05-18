@@ -78,6 +78,7 @@ First public-ready release. Single-user, sideloaded — no Play Store presence.
 - Crash reporter (Sentry / Firebase Crashlytics).
 - Background work of any kind (no `WorkManager`, no foreground service).
 - Pantry sync / multi-device support — would require an account system that contradicts the privacy goal.
+- Non-food product auto-resolution — v1.0 queries [Open Food Facts](https://world.openfoodfacts.org) only; non-food items (cleaning supplies, beauty, pet food) typically OFF-miss and fall through to the manual-entry sheet with the barcode pre-filled. Querying the sister Open Products Facts / Open Beauty Facts / Open Pet Food Facts endpoints would close the gap.
 - Expiry-date tracking on `Product`.
 - CSV / JSON export for pantry backup (paired with `allowBackup = false`).
 - Batch-scan mode for unloading a full grocery bag in one camera session.
