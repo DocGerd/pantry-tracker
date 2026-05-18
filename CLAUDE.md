@@ -14,7 +14,7 @@ high-signal — pointers, not duplication of the source-of-truth docs.
 ./gradlew :app:test                   # JVM unit tests (JUnit 4, Robolectric, Turbine)
 ./gradlew :app:detekt                 # static analysis; CI gates on this
 ./gradlew :app:lint                   # AGP Lint
-./gradlew :app:dependencies --write-locks   # regenerate gradle.lockfile (gitignored except at release tags)
+./gradlew :app:dependencies --write-locks   # regenerate gradle.lockfile (see .gitignore for day-to-day exclusion; SHIPPING.md for the release-tag exception)
 ```
 
 ## Working conventions
@@ -22,13 +22,24 @@ high-signal — pointers, not duplication of the source-of-truth docs.
 ### PR review
 
 **Every PR opened in this repo goes through the multi-agent review cycle.**
-Workflow is:
+
+- **Issue tracker:** <https://github.com/DocGerd/pantry-tracker/issues>
+- **Branch naming:** `<type>/<tracker-id>-<slug>` — e.g.
+  `chore/sr-26-claude-md`, `security/v1-final-hardening`. Types in use:
+  `chore`, `docs`, `feat`, `fix`, `security`.
+
+Workflow:
 
 1. Open the PR with `Closes #N` or `Refs #N` in the body — no PR ships without
    a linked issue. If none exists, `gh issue create` first.
-2. Run the multi-agent review (e.g. `/ultrareview` or `/review`).
+2. Run the multi-agent review. The canonical entry point is **user-triggered
+   `/ultrareview`** (cloud, billed — Claude cannot launch it itself). The
+   Claude-invokable local equivalent is the `pr-review-toolkit:review-pr`
+   skill, or dispatch individual `pr-review-toolkit:*` subagents in parallel.
 3. Post each finding as an **inline review thread** on the diff (not a single
-   summary comment) so each one can be resolved independently.
+   summary comment) so each one can be resolved independently. The
+   `post-finding` skill at `.claude/skills/post-finding/` encodes the
+   `gh api -X POST .../pulls/<n>/comments` recipe.
 4. Fix all findings on the same branch.
 5. After each fix lands, **resolve the corresponding inline thread** via the
    GraphQL `resolveReviewThread` mutation. (`gh api graphql` mangles `!` in
@@ -36,13 +47,19 @@ Workflow is:
    `subprocess` instead.)
 6. Only then declare ready-to-merge.
 
-### Hooks, signing, force
+### Hooks (repo-specific notes)
 
-- **Never `--no-verify`, `--no-gpg-sign`, `--force`, `--force-with-lease`**
-  unless the user explicitly asks. If a pre-commit / pre-push hook fails,
-  fix the underlying issue — the hook is load-bearing (detekt + secret
-  scanning gate every commit).
-- Force-pushing to `main` is never appropriate; warn if asked.
+The global `~/.claude/CLAUDE.md` already forbids skipping hooks and
+force-pushing — those rules are not restated here. Repo-specific:
+
+- The pre-commit / pre-push hooks gate on **detekt + secret scanning**; a
+  hook failure means real signal, fix the underlying issue.
+- `.claude/hooks/block-dangerous-bash.sh` **pattern-matches the full
+  command-line text**, not just argv. Consequence: a forbidden flag name
+  appearing inside a `git commit -m "..."` body (even as documentation) is
+  also blocked. If you need to mention one of the forbidden flags in commit
+  copy, rephrase ("skip hooks", "force-push") instead of using the literal
+  flag.
 
 ### detekt config: list keys REPLACE, not merge
 
@@ -104,9 +121,11 @@ app/                            # the single :app module
   src/main/java/de/docgerdsoft/pantrytracker/
     data/local/                 # Room entities, DAOs, AppDatabase
     data/remote/                # Ktor client for Open Food Facts (OffApiClient)
+    di/                         # AppContainer — manual constructor wiring (no Hilt in v1)
     repository/                 # ProductRepository — wraps DAO + OFF fallback
     ui/                         # Compose screens (home, scan, detail) + theme
-    model/                      # domain types
+    util/                       # small cross-cutting helpers
+    MainActivity.kt, PantryTrackerApp.kt, PantryTrackerNavGraph.kt
 docs/
   architecture/                 # arc42 — load-bearing for design-decision context
   release/SHIPPING.md           # release procedure + gotchas
@@ -125,6 +144,10 @@ GitHub issues (search label `security`). Dated security-review documents land
 under `docs/security/`.
 
 ## Things that have bitten past sessions
+
+*Eviction criterion: remove an entry when the underlying library version
+that caused it is no longer in `app/gradle.lockfile`, or when the
+convention has been encoded as a detekt / lint rule.*
 
 - **`runCatching` swallows `CancellationException`**. In `suspend` code use a
   plain `try/catch` and rethrow `CancellationException` explicitly — otherwise
