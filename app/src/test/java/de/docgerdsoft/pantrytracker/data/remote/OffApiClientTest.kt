@@ -204,6 +204,30 @@ class OffApiClientTest {
         assertNull(sut.lookup("5449000000996"))
     }
 
+    // -- #30 / SR-2 telemetry: malformed-input rejections still leave a trace --
+
+    @Test
+    fun lookup_rejectedFormat_logsFineWithHint() = runTest {
+        JulLogCapture("OffApiClient").use { capture ->
+            val sut = OffApiClient(
+                HttpClient(MockEngine { error("rejected input must not reach the engine") }) {
+                    install(ContentNegotiation) { json() }
+                },
+            )
+            assertNull(sut.lookup("123?token=bar"))
+
+            // FINE-level so a hostile-input burst is reproducible via
+            // `adb shell setprop log.tag.OffApiClient VERBOSE` without polluting
+            // default logcat output. Hint must be present, raw payload absent.
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected hint in: $joined", joined.contains("123?…ar") || joined.contains("<short>"))
+            assertFalse(
+                "full hostile input '123?token=bar' leaked: $joined",
+                joined.contains("123?token=bar"),
+            )
+        }
+    }
+
     // -- #31 / SR-10: barcode redacted to hint in WARNING log lines --
 
     @Test

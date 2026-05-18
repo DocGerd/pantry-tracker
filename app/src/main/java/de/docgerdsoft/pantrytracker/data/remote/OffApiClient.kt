@@ -11,6 +11,8 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpHeaders
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
 import io.ktor.http.appendPathSegments
 import io.ktor.http.isSuccess
 import io.ktor.http.takeFrom
@@ -51,23 +53,28 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     // visible signal is the manual-entry sheet, not a toast or error dialog.
     override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
-        // Per #30 / SR-2: validate format before any URL construction. Returning
-        // null (not throwing) matches the "OFF miss == drop to manual entry"
-        // contract — the caller can't distinguish a bad-format reject from a 404,
-        // which is exactly the user-visible behavior we want. No log: a malformed
-        // barcode is a known input, not an exceptional event.
-        if (!BARCODE_PATTERN.matches(barcode)) return null
+        // Format gate (SR-2). Returning null (not throwing) matches the "OFF
+        // miss == drop to manual entry" contract — the caller can't distinguish
+        // a bad-format reject from a 404, which is the user-visible behaviour
+        // we want. Logged at FINE so the (silent-to-the-user) rejection still
+        // leaves a trace operators can surface via
+        // `adb shell setprop log.tag.OffApiClient VERBOSE` when investigating
+        // a hostile-input report.
+        if (!BARCODE_PATTERN.matches(barcode)) {
+            logger.log(Level.FINE, "OFF lookup rejected malformed input ${barcode.barcodeHint()}")
+            return null
+        }
+        // Component URL builder so each path segment is percent-encoded
+        // explicitly (SR-2). Built outside the `try` so any IAE here is a
+        // programmer error (e.g. malformed OFF_BASE_URL constant) and surfaces
+        // in dev rather than silently degrading prod to manual-entry-forever.
+        val url: Url = URLBuilder().apply {
+            takeFrom(OFF_BASE_URL)
+            appendPathSegments("api", "v2", "product", "$barcode.json")
+            parameters.append("fields", OFF_FIELDS)
+        }.build()
         return try {
-            val response: HttpResponse = httpClient.get {
-                // Component URL builder so each path segment is percent-encoded
-                // explicitly; the prior string-interpolation form trusted the
-                // caller's barcode to be URL-safe (see SR-2).
-                url {
-                    takeFrom(OFF_BASE_URL)
-                    appendPathSegments("api", "v2", "product", "$barcode.json")
-                    parameters.append("fields", OFF_FIELDS)
-                }
-            }
+            val response: HttpResponse = httpClient.get(url)
             if (!response.status.isSuccess()) return null
             val envelope = response.body<OffApiEnvelope>()
             if (envelope.status != 1) null else envelope.product
@@ -88,11 +95,12 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             logger.log(Level.WARNING, "OFF lookup serialization error for ${barcode.barcodeHint()}", e)
             null
         } catch (e: IllegalArgumentException) {
-            // Belt-and-suspenders: a URL-parser surprise the regex didn't catch
-            // (or one the engine surfaces after construction) maps to a miss
-            // instead of escaping to the camera screen as Phase.Error.
+            // Engine-runtime IAE only (URL building is outside the try and a
+            // regex-validated 6-14-digit barcode produces only safe path
+            // segments). Logged at SEVERE so an exotic engine failure is noisy
+            // in crash-report aggregators despite the null return.
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup URL/argument error for ${barcode.barcodeHint()}", e)
+            logger.log(Level.SEVERE, "OFF lookup engine-runtime IAE for ${barcode.barcodeHint()}", e)
             null
         }
     }

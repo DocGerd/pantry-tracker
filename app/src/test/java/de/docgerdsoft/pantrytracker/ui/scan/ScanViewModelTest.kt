@@ -727,6 +727,43 @@ class ScanViewModelTest {
         assertEquals(0, fake.lookupCallCount)
     }
 
+    @Test
+    fun onBarcodeDecoded_nonBlankCollapsedToBlank_logsInfoWithLengthOnly() = runTest {
+        // A non-blank input that sanitize collapses to empty is anomalous —
+        // ML Kit shouldn't emit C0/C1/RTL for the EAN/UPC formats. We want
+        // *one* INFO record so the case is auditable, but the log carries the
+        // input length only (no content — by definition hostile or corrupt).
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem()
+                vm.onBarcodeDecoded("\u0000\u0007‮\n\r\u007f")
+                expectNoEvents()
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected fully-stripped INFO record: $joined", joined.contains("fully stripped"))
+            assertTrue("expected len=6 marker: $joined", joined.contains("len=6"))
+            assertFalse("RLO leaked into log: $joined", joined.contains("\u202e"))
+        }
+    }
+
+    @Test
+    fun onBarcodeDecoded_blankInput_doesNotLog() = runTest {
+        // The pre-existing low-confidence-frame case must stay silent —
+        // emitting an INFO at the camera frame rate would spam logcat.
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem()
+                vm.onBarcodeDecoded("")
+                vm.onBarcodeDecoded("   ")
+                expectNoEvents()
+            }
+            assertTrue(
+                "expected zero log records, got: ${capture.messages()}",
+                capture.messages().isEmpty(),
+            )
+        }
+    }
+
     // --- #31 / SR-3,4,11: log redaction ---
 
     @Test

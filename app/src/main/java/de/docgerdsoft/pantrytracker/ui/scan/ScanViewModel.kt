@@ -52,7 +52,21 @@ class ScanViewModel(
         // before the blank guard so an input of only control chars is dropped
         // the same way as a blank decode from a low-confidence ML Kit frame.
         val clean = barcode.sanitizeBarcode()
-        if (clean.isBlank()) return
+        if (clean.isBlank()) {
+            // A non-blank input that sanitize collapsed to empty is anomalous —
+            // ML Kit's rawValue for the EAN/UPC formats we enable is digits-only,
+            // so this only fires if the format filter widens, a corrupt symbology
+            // is decoded, or an adversarial sticker is presented. Log INFO with
+            // the input length only (no content — by definition hostile or
+            // corrupt) so the case is auditable without per-frame noise.
+            if (barcode.isNotBlank()) {
+                logger.log(
+                    Level.INFO,
+                    "scan decode fully stripped by sanitize (len=${barcode.length})",
+                )
+            }
+            return
+        }
         if (isAlreadyShowing(clean)) return
         lookupJob?.cancel()
         _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(clean)) }
@@ -173,9 +187,8 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // SR-3: previously `phase=$phase` serialised the full ScanCandidate
-                // via data-class toString (barcode + name + brand + imageUrl).
-                // Phase type alone is enough to disambiguate which arm failed.
+                // Logs only mode + phase-type; the full ScanCandidate
+                // (barcode/name/brand/imageUrl) is sensitive — SR-3.
                 @Suppress("SwallowedException")
                 logger.log(
                     Level.WARNING,
@@ -239,8 +252,8 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // SR-4: drop `name=$trimmed` — user-typed product names are
-                // often household-specific and leak into logcat via JUL→Log.w.
+                // Intentionally excludes `name`: user-typed product names are
+                // household-specific (SR-4).
                 @Suppress("SwallowedException")
                 logger.log(Level.WARNING, "submitManualEntry(qty=$initialQuantity) failed", e)
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
