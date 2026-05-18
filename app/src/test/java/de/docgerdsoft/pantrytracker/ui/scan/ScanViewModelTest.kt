@@ -682,6 +682,45 @@ class ScanViewModelTest {
             "12345" in fake.cancelledLookups)
     }
 
+    // --- #30 / SR-13: input sanitization at the scan boundary ---
+
+    @Test
+    fun onBarcodeDecoded_rtlOverridePrefix_sanitizesBeforeDispatch() = runTest {
+        // ML Kit decode of a barcode behind an RTL-override codepoint must not
+        // forward the override to the repository (where it would mis-render in
+        // Compose Text(barcode) and pollute the URL path / Room column).
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("‮5449000000996")
+            awaitItem() // Loading
+            awaitItem() // ManualEntry (no seed → local miss + OFF miss)
+        }
+        assertEquals(listOf("5449000000996"), fake.completedLookups)
+    }
+
+    @Test
+    fun onBarcodeDecoded_newlineInjection_sanitizesBeforeDispatch() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("5449\n000000996")
+            awaitItem() // Loading
+            awaitItem() // ManualEntry
+        }
+        assertEquals(listOf("5449000000996"), fake.completedLookups)
+    }
+
+    @Test
+    fun onBarcodeDecoded_onlyControlChars_isIgnoredWithoutDispatch() = runTest {
+        // Sanitize collapses to empty, which the blank-guard treats as a no-op
+        // — same as a low-confidence ML Kit frame producing a blank decode.
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("\u0000\u0007‮\n\r\u007f")
+            expectNoEvents()
+        }
+        assertEquals(0, fake.lookupCallCount)
+    }
+
     // --- #31 / SR-3,4,11: log redaction ---
 
     @Test

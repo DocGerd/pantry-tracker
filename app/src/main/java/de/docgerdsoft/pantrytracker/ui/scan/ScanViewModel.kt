@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.util.barcodeHint
+import de.docgerdsoft.pantrytracker.util.sanitizeBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,11 +46,17 @@ class ScanViewModel(
      *   qty 0 → NotInInventory. OFF is skipped entirely.
      */
     fun onBarcodeDecoded(barcode: String) {
-        if (barcode.isBlank()) return
-        if (isAlreadyShowing(barcode)) return
+        // SR-13: sanitize at the scan boundary so the rest of the flow (URL
+        // path, Room column, Compose Text) sees a barcode with no C0/C1
+        // control chars and no bidirectional override codepoints. Sanitize
+        // before the blank guard so an input of only control chars is dropped
+        // the same way as a blank decode from a low-confidence ML Kit frame.
+        val clean = barcode.sanitizeBarcode()
+        if (clean.isBlank()) return
+        if (isAlreadyShowing(clean)) return
         lookupJob?.cancel()
-        _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(barcode)) }
-        lookupJob = viewModelScope.launch { resolveBarcode(barcode) }
+        _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(clean)) }
+        lookupJob = viewModelScope.launch { resolveBarcode(clean) }
     }
 
     private fun isAlreadyShowing(barcode: String): Boolean =
