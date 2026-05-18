@@ -1,3 +1,4 @@
+import com.android.build.api.artifact.SingleArtifact
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -132,6 +133,55 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// SR-22: assert the merged release manifest does not declare
+// android:debuggable="true". buildTypes.release.isDebuggable=false above
+// only controls AGP's *own* emission of the attribute — if a developer
+// hardcodes android:debuggable="true" in app/src/main/AndroidManifest.xml
+// (e.g. to flip a transient flag for debugging and forgets to remove it),
+// the manifest-merge precedence for explicit attributes can leave the
+// hardcoded value in the final APK manifest. This task reads the merged
+// manifest after processReleaseManifest and fails the release build if
+// debuggable=true survives anywhere in it.
+androidComponents {
+    onVariants(selector().withName("release")) { variant ->
+        val verifyTask = project.tasks.register(
+            "verify${variant.name.replaceFirstChar { it.uppercase() }}ManifestNotDebuggable",
+        ) {
+            val manifest = variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)
+            inputs.file(manifest)
+            // No artifact is produced — declare always-out-of-date so the
+            // guard re-runs every assembleRelease / bundleRelease. The cost
+            // is one file read + one regex match, which beats relying on
+            // Gradle's implicit "no outputs = always rerun" semantics.
+            outputs.upToDateWhen { false }
+            doLast {
+                val text = manifest.get().asFile.readText()
+                val hasDebuggableTrue = Regex("""android:debuggable\s*=\s*"true"""")
+                    .containsMatchIn(text)
+                if (hasDebuggableTrue) {
+                    throw GradleException(
+                        "SR-22: merged release manifest declares android:debuggable=\"true\". " +
+                            "Remove the hardcoded attribute from a source AndroidManifest.xml " +
+                            "(this app's or a library's) before shipping a release build.",
+                    )
+                }
+            }
+        }
+        // Lazy hook: tasks.named("assembleRelease") evaluates eagerly during
+        // onVariants and throws because AGP registers per-variant assemble
+        // tasks later in its own lifecycle. tasks.matching { ... }.configureEach
+        // wires the dependency only when the task actually exists.
+        //
+        // Cover both assemble* (APK) and bundle* (AAB) — the Play Store path
+        // documented in SHIPPING.md §C ships via bundleRelease, and the guard
+        // claim is about *shipping*, not *assembling*.
+        val capitalizedVariant = variant.name.replaceFirstChar { it.uppercase() }
+        project.tasks.matching {
+            it.name == "assemble$capitalizedVariant" || it.name == "bundle$capitalizedVariant"
+        }.configureEach { dependsOn(verifyTask) }
     }
 }
 

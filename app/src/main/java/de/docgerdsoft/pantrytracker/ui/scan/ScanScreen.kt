@@ -1,5 +1,6 @@
 package de.docgerdsoft.pantrytracker.ui.scan
 
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,11 +42,19 @@ fun ScanScreen(
     val topBarTitle = if (state.mode == ScanMode.Add) "Scan to Add" else "Scan to Remove"
 
     // Haptic on transition into Preview/ManualEntry (i.e. each successful decode).
+    // CONFIRM was added in API 30 (Android 11); fall back to KEYBOARD_TAP on
+    // older devices (minSdk=26 → API 26-29 coverage). Avoids Lint InlinedApi
+    // and silently-undefined-behaviour on pre-R devices.
     LaunchedEffect(state.phase) {
         if (state.phase is ScanUiState.Phase.Preview ||
             state.phase is ScanUiState.Phase.ManualEntry
         ) {
-            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            val constant = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                HapticFeedbackConstants.CONFIRM
+            } else {
+                HapticFeedbackConstants.KEYBOARD_TAP
+            }
+            view.performHapticFeedback(constant)
         }
     }
 
