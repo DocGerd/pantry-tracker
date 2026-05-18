@@ -152,6 +152,11 @@ androidComponents {
         ) {
             val manifest = variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)
             inputs.file(manifest)
+            // No artifact is produced — declare always-out-of-date so the
+            // guard re-runs every assembleRelease / bundleRelease. The cost
+            // is one file read + one regex match, which beats relying on
+            // Gradle's implicit "no outputs = always rerun" semantics.
+            outputs.upToDateWhen { false }
             doLast {
                 val text = manifest.get().asFile.readText()
                 val hasDebuggableTrue = Regex("""android:debuggable\s*=\s*"true"""")
@@ -169,8 +174,14 @@ androidComponents {
         // onVariants and throws because AGP registers per-variant assemble
         // tasks later in its own lifecycle. tasks.matching { ... }.configureEach
         // wires the dependency only when the task actually exists.
-        project.tasks.matching { it.name == "assemble${variant.name.replaceFirstChar { it.uppercase() }}" }
-            .configureEach { dependsOn(verifyTask) }
+        //
+        // Cover both assemble* (APK) and bundle* (AAB) — the Play Store path
+        // documented in SHIPPING.md §C ships via bundleRelease, and the guard
+        // claim is about *shipping*, not *assembling*.
+        val capitalizedVariant = variant.name.replaceFirstChar { it.uppercase() }
+        project.tasks.matching {
+            it.name == "assemble$capitalizedVariant" || it.name == "bundle$capitalizedVariant"
+        }.configureEach { dependsOn(verifyTask) }
     }
 }
 
