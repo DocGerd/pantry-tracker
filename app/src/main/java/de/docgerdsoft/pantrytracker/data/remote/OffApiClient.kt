@@ -65,6 +65,13 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     // visible signal is the manual-entry sheet, not a toast or error dialog.
     override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
+        // Format gate (SR-2). Returning null (not throwing) matches the "OFF
+        // miss == drop to manual entry" contract — the caller can't distinguish
+        // a bad-format reject from a 404, which is the user-visible behaviour
+        // we want. Logged at FINE so the (silent-to-the-user) rejection still
+        // leaves a trace operators can surface via
+        // `adb shell setprop log.tag.OffApiClient VERBOSE` when investigating
+        // a hostile-input report.
         if (!BARCODE_PATTERN.matches(barcode)) {
             logger.log(Level.FINE, "OFF lookup rejected malformed input ${barcode.barcodeHint()}")
             return null
@@ -82,7 +89,31 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         data object Error : HostResult
     }
 
+    /**
+     * Performs a single-host OFF v2 product lookup against [baseUrl]. Caller
+     * dispatches into this function from [lookup]; after Task 1.2 the public
+     * [lookup] iterates over multiple hosts on `NotFound`.
+     *
+     * Catch-arm contract:
+     * - **CancellationException** rethrown for structured concurrency, so a
+     *   caller cancelling our job actually cancels us.
+     * - **IOException** covers network down, DNS failures, and connect/socket
+     *   timeouts — OkHttp surfaces `HttpTimeout` failures as
+     *   `SocketTimeoutException` (an `IOException`), so a separate
+     *   `HttpRequestTimeoutException` catch is intentionally absent.
+     * - **JsonConvertException / SerializationException** at WARNING — parse
+     *   failures suggest a server-side surprise; logged but not user-visible.
+     * - **IllegalArgumentException** at SEVERE — engine-runtime only (URL
+     *   building is outside the `try`, and a regex-validated 6-14-digit
+     *   barcode produces only safe path segments). The SEVERE level is
+     *   deliberate: an exotic engine failure should be loud in crash-report
+     *   aggregators despite the null return.
+     */
     private suspend fun lookupOnce(baseUrl: String, barcode: String): HostResult {
+        // Component URL builder so each path segment is percent-encoded
+        // explicitly (SR-2). Built outside the `try` so any IAE is a
+        // programmer error (e.g. malformed baseUrl constant) and surfaces
+        // in dev rather than silently degrading prod to manual-entry-forever.
         val url: Url = URLBuilder().apply {
             takeFrom(baseUrl)
             appendPathSegments("api", "v2", "product", "$barcode.json")
