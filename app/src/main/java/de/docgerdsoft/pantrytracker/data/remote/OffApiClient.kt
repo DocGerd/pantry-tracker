@@ -25,9 +25,21 @@ import java.io.IOException
 import java.util.logging.Level
 import java.util.logging.Logger
 
-// java.util.logging works in both Android (forwarded to logcat at debuggable) and
-// plain JVM unit tests (writes to System.err). Avoids android.util.Log throwing
-// "Method w in android.util.Log not mocked" in non-Robolectric tests.
+// JUL logger — works in both Android (the default JUL handler forwards records
+// to logcat) and plain JVM unit tests (writes to System.err). Avoids
+// android.util.Log throwing "Method w in android.util.Log not mocked" in
+// non-Robolectric tests.
+//
+// JUL → logcat level mapping on Android (also applies at the other five
+// Logger.getLogger(...) call sites in this codebase — see DetailViewModel,
+// ScanViewModel, CameraPermissionGate, CameraPreview, ProductRepositoryImpl):
+//   SEVERE  → Log.e        WARNING → Log.w        INFO    → Log.i
+//   CONFIG  → Log.i        FINE    → Log.d        FINER   → Log.d
+//   FINEST  → Log.v
+// JUL's default Logger level is INFO, so FINE/FINER/FINEST drop at the JUL
+// layer unless explicitly raised; Log.d / Log.v are also filtered out of
+// default logcat output, so effectively only WARNING+ is user-visible in
+// release builds.
 private val logger: Logger = Logger.getLogger("OffApiClient")
 
 /**
