@@ -54,25 +54,6 @@ class OffApiClientTest {
         assertNull(result?.imageUrl)
     }
 
-    @Test
-    fun lookup_offStatusZero_returnsNull() = runTest {
-        val fixture = loadFixture("off/not_found.json")
-        val sut = OffApiClient(clientReturning(fixture, HttpStatusCode.OK))
-
-        val result = sut.lookup("0000000000000")
-
-        assertNull(result)
-    }
-
-    @Test
-    fun lookup_http404_returnsNull() = runTest {
-        val sut = OffApiClient(clientReturning("", HttpStatusCode.NotFound))
-
-        val result = sut.lookup("0000000000000")
-
-        assertNull(result)
-    }
-
     // -- I5: parameterized IOException subclasses --
 
     @Test
@@ -304,6 +285,32 @@ class OffApiClientTest {
     }
 
     @Test
+    fun lookup_offMissBeautyMissPetFoodMiss_productsHit_returnsProductsProduct() = runTest {
+        // Pins position-4 (Products) as an independent hit path. Without this
+        // test, a typo or refactor that swaps OFF_HOSTS[2] and OFF_HOSTS[3]
+        // (PetFood ↔ Products) would still pass 7 of the 8 chain tests; only
+        // lookup_allFourMiss_returnsNull_walksAllFour would catch it.
+        val productsBody = loadFixture("off/coke_330ml.json")
+        val (client, captured) = clientByHost(
+            mapOf("world.openproductsfacts.org" to productsBody),
+        )
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(
+            listOf(
+                "world.openfoodfacts.org",
+                "world.openbeautyfacts.org",
+                "world.openpetfoodfacts.org",
+                "world.openproductsfacts.org",
+            ),
+            captured.map { it.url.host },
+        )
+    }
+
+    @Test
     fun lookup_allFourMiss_returnsNull_walksAllFour() = runTest {
         val (client, captured) = clientByHost(emptyMap()) // everything 404
         val sut = OffApiClient(client)
@@ -344,6 +351,32 @@ class OffApiClientTest {
 
         assertNull(result)
         assertEquals(1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
+    fun lookup_status1WithNullProduct_returnsNull_doesNotWalk() = runTest {
+        // Pin the OFF-contract-violation policy: a 200 with `status=1` but no
+        // `product` object is treated as "sick host" — fail-fast, do NOT walk
+        // to sister projects. The chain walks for genuine misses (status=0 /
+        // 404), not for upstream protocol bugs the sister hosts can't help with.
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel("{\"status\":1}"),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        assertEquals("contract violation must not walk past OFF", 1, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
 
@@ -415,6 +448,34 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException to propagate")
+        } catch (e: CancellationException) {
+            // expected
+        }
+    }
+
+    @Test
+    fun lookup_cancellation_fromSecondHost_propagates() = runTest {
+        // Defense-in-depth: pin that CE propagates from a non-first host too.
+        // The first-host test above passes even if lookup()'s for-loop is
+        // accidentally wrapped in `runCatching { }` (a known footgun in this
+        // repo), because lookupOnce rethrows CE before reaching that
+        // hypothetical wrapper. This test exercises the loop's second iteration.
+        val client = HttpClient(MockEngine { request ->
+            when (request.url.host) {
+                "world.openfoodfacts.org" -> respond(
+                    content = ByteReadChannel(""),
+                    status = HttpStatusCode.NotFound,
+                )
+                else -> throw CancellationException("cancelled mid-chain")
+            }
+        }) {
+            install(ContentNegotiation) { json() }
+        }
+        val sut = OffApiClient(client)
+
+        try {
+            sut.lookup("5449000000996")
+            org.junit.Assert.fail("expected CancellationException from host 2")
         } catch (e: CancellationException) {
             // expected
         }
