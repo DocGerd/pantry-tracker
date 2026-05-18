@@ -175,6 +175,37 @@ class OffApiClientTest {
         assertRejectedWithoutNetwork("‮123456789012")
     }
 
+    @Test
+    fun lookup_backslashPathTraversal_returnsNull_withoutHittingNetwork() = runTest {
+        // Windows-flavoured variant of pathInjection — backslash is not a path
+        // separator on Linux but a server framework that normalises both could
+        // still mis-route, so the regex must reject either way.
+        assertRejectedWithoutNetwork("123\\..\\admin")
+    }
+
+    @Test
+    fun lookup_percentEncodedNul_returnsNull_withoutHittingNetwork() = runTest {
+        // Pure printable ASCII — sanitize won't strip it; the regex is the only
+        // gate. If the regex ever loosened beyond `[0-9]` this would slip through
+        // and a downstream sink that percent-decodes the path could see a NUL.
+        assertRejectedWithoutNetwork("123%00")
+    }
+
+    @Test
+    fun lookup_percentEncodedCrlf_returnsNull_withoutHittingNetwork() = runTest {
+        // Classic HTTP-request-splitting shape if a downstream proxy
+        // percent-decodes the path. Same reasoning as %00.
+        assertRejectedWithoutNetwork("123%0d%0a")
+    }
+
+    @Test
+    fun lookup_leadingWhitespace_returnsNull_withoutHittingNetwork() = runTest {
+        // U+0020 is printable, so sanitize keeps it (see BarcodeTextTest.
+        // sanitize_keepsRegularSpace) — the regex is the only defense against a
+        // space-prefixed barcode reaching the URL builder.
+        assertRejectedWithoutNetwork(" 5449000000996")
+    }
+
     // -- #30 / SR-2: valid input still hits OFF, via the component URL builder --
 
     @Test
@@ -186,12 +217,34 @@ class OffApiClientTest {
 
         assertEquals(1, captured.size)
         val url = captured[0].url
+        // Scheme + host pinned so a regression that switches to http://, or to
+        // world.openbeautyfacts.org (the cosmetics sibling — same host suffix,
+        // different content corpus), trips this test.
+        assertEquals("https", url.protocol.name)
         assertEquals("world.openfoodfacts.org", url.host)
         assertEquals("/api/v2/product/5449000000996.json", url.encodedPath)
         assertEquals(
             "code,product_name,brands,image_url,status",
             url.parameters["fields"],
         )
+    }
+
+    // -- #30 / SR-2: regex boundary cases (a typo like `{7,13}` must fail) --
+
+    @Test
+    fun lookup_exactly6Digits_accepted_andUrlBuilt() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        OffApiClient(clientCapturing(captured)).lookup("123456")
+        assertEquals(1, captured.size)
+        assertEquals("/api/v2/product/123456.json", captured[0].url.encodedPath)
+    }
+
+    @Test
+    fun lookup_exactly14Digits_accepted_andUrlBuilt() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        OffApiClient(clientCapturing(captured)).lookup("12345678901234")
+        assertEquals(1, captured.size)
+        assertEquals("/api/v2/product/12345678901234.json", captured[0].url.encodedPath)
     }
 
     // -- #30 belt-and-suspenders: any IllegalArgumentException the engine throws
@@ -232,14 +285,41 @@ class OffApiClientTest {
 
     @Test
     fun lookup_networkError_logsHintNotFullBarcode() = runTest {
-        JulLogCapture("OffApiClient").use { capture ->
-            val sut = OffApiClient(clientThrowing(IOException("offline")))
-            sut.lookup("5449000000996")
+        assertCatchArmRedactsBarcode(IOException("offline"))
+    }
 
+    @Test
+    fun lookup_jsonConvertException_logsHintNotFullBarcode() = runTest {
+        // ContentNegotiation/Ktor throws JsonConvertException on parse failure;
+        // pin the redaction for that catch arm independently of the IO arm.
+        assertCatchArmRedactsBarcode(io.ktor.serialization.JsonConvertException("bad json"))
+    }
+
+    @Test
+    fun lookup_serializationException_logsHintNotFullBarcode() = runTest {
+        assertCatchArmRedactsBarcode(kotlinx.serialization.SerializationException("bad shape"))
+    }
+
+    @Test
+    fun lookup_illegalArgumentException_logsHintNotFullBarcode() = runTest {
+        // Engine-runtime IAE only (URL building is outside the try, and a
+        // regex-validated barcode produces only safe path segments). Pinned at
+        // SEVERE so a future refactor that drops the SEVERE designation also
+        // trips this test.
+        assertCatchArmRedactsBarcode(IllegalArgumentException("bad URL"))
+    }
+
+    private suspend fun assertCatchArmRedactsBarcode(thrown: Throwable) {
+        JulLogCapture("OffApiClient").use { capture ->
+            val sut = OffApiClient(clientThrowing(thrown))
+            sut.lookup("5449000000996")
             val joined = capture.messages().joinToString(" | ")
-            assertTrue("expected hint '5449…96' in: $joined", joined.contains("5449…96"))
+            assertTrue(
+                "expected hint '5449…96' for ${thrown::class.simpleName} in: $joined",
+                joined.contains("5449…96"),
+            )
             assertFalse(
-                "full barcode '5449000000996' leaked into log: $joined",
+                "full barcode leaked for ${thrown::class.simpleName} in: $joined",
                 joined.contains("5449000000996"),
             )
         }

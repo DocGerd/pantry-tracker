@@ -812,6 +812,13 @@ class ScanViewModelTest {
             assertFalse("product name leaked: $joined", joined.contains("Sensitive Brand-Name Product"))
             assertFalse("brand leaked: $joined", joined.contains("Sensitive Brand Co."))
             assertFalse("image URL leaked: $joined", joined.contains("secret-asset.jpg"))
+            // Positive markers: SR-3 wants PII redacted but the *structural*
+            // labels (phase type + mode) preserved so the log line still
+            // disambiguates which arm failed. A regression that drops the log
+            // call entirely, or rewrites it as `logger.warning("failed")`, would
+            // miss the absence-only assertions above but trip these.
+            assertTrue("expected phaseType marker: $joined", joined.contains("phaseType=Preview"))
+            assertTrue("expected mode marker: $joined", joined.contains("mode=Add"))
         }
     }
 
