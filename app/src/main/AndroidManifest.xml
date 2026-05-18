@@ -4,11 +4,9 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- ACCESS_NETWORK_STATE is library-injected (Ktor's OkHttp engine + Coil
-         use ConnectivityManager). It is normal-protection, auto-granted at
-         install, not personally-identifying, and is acknowledged explicitly in
-         CHANGELOG under Privacy so readers of the source manifest don't have
-         to diff against the merged manifest to find it. -->
+    <!-- ACCESS_NETWORK_STATE is library-injected by Ktor's OkHttp engine + Coil
+         (both use ConnectivityManager). Normal-protection, no PII. Documented
+         in CHANGELOG under Privacy. -->
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
@@ -22,20 +20,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.PantryTracker"
         tools:targetApi="36">
-        <!-- Cut off ML Kit's Firebase-DataTransport telemetry pipeline.
-             ML Kit barcode-scanning transitively pulls in google-datatransport,
-             which registers a `cct` backend via TransportBackendDiscovery and
-             a JobScheduler that uploads queued events to
-             firebaselogging.googleapis.com. The standard
-             `firebase_data_collection_default_enabled=false` meta-data is only
-             honored by FirebaseInitProvider (which standalone ML Kit doesn't
-             use), so the flag does nothing here — verified empirically.
-             Removing these three components leaves the barcode-detection
-             pipeline intact (it doesn't depend on the transport) but means
-             events queued to SQLiteEventStore have no registered backend to
-             ship to, so nothing leaves the device. Required to keep the
-             CHANGELOG's "single OFF lookup is the only outbound call" promise
-             honest. -->
+        <!-- Sever ML Kit's google-datatransport telemetry pipeline. The
+             standard `firebase_data_collection_default_enabled=false` flag
+             does NOT work in standalone (no-Firebase-project) ML Kit usage —
+             it is only read by FirebaseInitProvider, which ML Kit does not
+             register. Removing the backend + scheduler components is the
+             working opt-out; the barcode detector does not depend on them.
+             See CHANGELOG Privacy for full rationale. -->
         <service
             android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
             tools:node="remove" />

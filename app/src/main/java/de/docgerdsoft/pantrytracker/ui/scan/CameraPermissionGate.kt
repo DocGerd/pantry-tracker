@@ -196,24 +196,40 @@ private fun DeniedScreen(
     }
 }
 
-// Compute the gate's starting phase on (re-)entry. Three cases:
-//   1. Permission granted  → Granted (content renders, no dialog).
-//   2. Permission not granted but the OS reports we should explain why
-//      (i.e. the user previously denied without "Don't ask again", so
-//      shouldShowRequestPermissionRationale==true) → SoftDenied, so the
-//      "Camera access needed" recovery screen with a Try again button is
-//      shown directly — re-entering Scan to Add must NOT re-show the
-//      one-time rationale dialog after the user has already been asked.
-//   3. Otherwise (first-time entry, or hard-denied with "Don't ask again")
-//      → Unknown, which shows the rationale dialog. The launcher callback
-//      still routes a subsequent system-denied result into HardDenied if
-//      shouldShowRationale is false at that point.
-private fun initialPhase(context: Context, activity: Activity?): CameraPermissionPhase = when {
-    ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-        == PackageManager.PERMISSION_GRANTED -> CameraPermissionPhase.Granted
-    activity?.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) == true ->
+// Compute the gate's starting phase on (re-)entry.
+//   1. Permission granted → Granted.
+//   2. Soft-denied (shouldShowRationale==true) → SoftDenied directly, so the
+//      "Camera access needed" recovery screen with Try again is shown without
+//      re-displaying the one-time rationale dialog the user already answered.
+//   3. Otherwise → Unknown (shows rationale dialog). The launcher callback
+//      later promotes a denied result to HardDenied when shouldShowRationale
+//      is false at that point.
+// `internal` (not private) so a JVM Robolectric test can pin the three-arm
+// `when`; the previous private signature is exactly what let the SoftDenied
+// regression escape unit-test coverage.
+internal fun initialPhase(context: Context, activity: Activity?): CameraPermissionPhase {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+        == PackageManager.PERMISSION_GRANTED
+    ) {
+        return CameraPermissionPhase.Granted
+    }
+    if (activity == null) {
+        // findActivity() already walks ContextWrapper.baseContext, so a null
+        // return here means a genuinely no-Activity host. The launcher needs
+        // an Activity to surface the system prompt, so a rationale dialog
+        // would end in an inert Continue button. Fail closed to HardDenied so
+        // the user gets the recoverable "Open settings" path instead.
+        logger.log(
+            Level.WARNING,
+            "CameraPermissionGate: no hosting Activity in LocalContext chain — falling back to HardDenied",
+        )
+        return CameraPermissionPhase.HardDenied
+    }
+    return if (activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
         CameraPermissionPhase.SoftDenied
-    else -> CameraPermissionPhase.Unknown
+    } else {
+        CameraPermissionPhase.Unknown
+    }
 }
 
 // Walks ContextWrapper.baseContext so we find the Activity even when the
