@@ -23,11 +23,17 @@ class JulLogCapture(loggerName: String) : AutoCloseable {
     private val records: MutableList<LogRecord> = mutableListOf()
     private val originalLevel: Level? = logger.level
 
+    // JUL Handler requires flush + close overrides; nothing to flush or close
+    // in an in-memory recorder, hence the no-op bodies + @Suppress.
     private val handler: Handler = object : Handler() {
         override fun publish(record: LogRecord?) {
             if (record != null) records += record
         }
+
+        @Suppress("EmptyFunctionBlock")
         override fun flush() {}
+
+        @Suppress("EmptyFunctionBlock")
         override fun close() {}
     }
 

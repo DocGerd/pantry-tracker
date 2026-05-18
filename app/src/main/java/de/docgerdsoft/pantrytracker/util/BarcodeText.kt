@@ -18,6 +18,14 @@ private const val HINT_PREFIX = 4
 private const val HINT_SUFFIX = 2
 private const val HINT_MIN_LENGTH = 7
 
+// ASCII / ISO-8859 control-char boundaries. Spelt out so call sites read as
+// intent ("strip C0") rather than as numeric ranges, and so Detekt MagicNumber
+// has names to point at.
+private const val C0_END_EXCLUSIVE = 0x20 // U+0000..U+001F = C0 controls
+private const val DEL = 0x7F // U+007F = delete
+private const val C1_START = 0x80 // U+0080..U+009F = C1 controls
+private const val C1_END = 0x9F
+
 // Unicode bidirectional override codepoints. RTL overrides in Compose Text are
 // a known display-spoofing vector (security review SR-13). U+202C (PDF, plain
 // pop-direction) is omitted intentionally — it's a balanced terminator, not an
@@ -43,7 +51,7 @@ private val RTL_OVERRIDES = setOf(
 fun String.sanitizeBarcode(): String =
     filter { c ->
         val code = c.code
-        !(code < 0x20 || code == 0x7F || code in 0x80..0x9F || c in RTL_OVERRIDES)
+        !(code < C0_END_EXCLUSIVE || code == DEL || code in C1_START..C1_END || c in RTL_OVERRIDES)
     }.take(MAX_BARCODE_LENGTH)
 
 /**
@@ -51,6 +59,7 @@ fun String.sanitizeBarcode(): String =
  * shorter than 7 chars the prefix+suffix would overlap or leak the entire
  * string, so we return a placeholder instead.
  */
-fun String.barcodeHint(): String =
-    if (length < HINT_MIN_LENGTH) "<short>"
-    else "${take(HINT_PREFIX)}…${takeLast(HINT_SUFFIX)}"
+fun String.barcodeHint(): String {
+    if (length < HINT_MIN_LENGTH) return "<short>"
+    return "${take(HINT_PREFIX)}…${takeLast(HINT_SUFFIX)}"
+}

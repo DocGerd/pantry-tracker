@@ -24,6 +24,12 @@ import org.junit.Test
 import kotlin.time.Clock
 
 @OptIn(ExperimentalCoroutinesApi::class)
+// Test classes naturally accumulate cases as the ViewModel surface grows; this
+// file groups them by feature area with header comments so they remain readable
+// despite the length. Splitting into per-feature classes would force the
+// FakeProductRepository test double to move to a shared file, which trades one
+// kind of complexity (one large file) for another (cross-file coupling).
+@Suppress("LargeClass")
 class ScanViewModelTest {
 
     private lateinit var fake: FakeProductRepository
