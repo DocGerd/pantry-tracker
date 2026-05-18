@@ -76,11 +76,14 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             logger.log(Level.FINE, "OFF lookup rejected malformed input ${barcode.barcodeHint()}")
             return null
         }
-        return when (val r = lookupOnce(OFF_BASE_URL, barcode)) {
-            is HostResult.Found -> r.product
-            HostResult.NotFound -> null
-            HostResult.Error -> null
+        for (host in OFF_HOSTS) {
+            when (val r = lookupOnce(host, barcode)) {
+                is HostResult.Found -> return r.product
+                HostResult.NotFound -> continue
+                HostResult.Error -> return null // fail fast on real fault
+            }
         }
+        return null
     }
 
     private sealed interface HostResult {
@@ -160,7 +163,12 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             "PantryTracker/${BuildConfig.VERSION_NAME} (https://github.com/DocGerd/pantry-tracker)"
         private const val TIMEOUT_MILLIS = 8_000L
 
-        private const val OFF_BASE_URL = "https://world.openfoodfacts.org/"
+        private val OFF_HOSTS: List<String> = listOf(
+            "https://world.openfoodfacts.org/",
+            "https://world.openbeautyfacts.org/",
+            "https://world.openpetfoodfacts.org/",
+            "https://world.openproductsfacts.org/",
+        )
         private const val OFF_FIELDS = "code,product_name,brands,image_url,status"
 
         // HTTP 404 is the only "not found" signal we distinguish from a generic

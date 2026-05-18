@@ -209,42 +209,59 @@ class OffApiClientTest {
     // -- #30 / SR-2: valid input still hits OFF, via the component URL builder --
 
     @Test
-    fun lookup_validBarcode_buildsComponentUrl() = runTest {
+    fun lookup_validBarcode_firstRequestHitsOff() = runTest {
+        // After v1.1 introduced the host fallback chain, the captured count
+        // depends on whether the test fixture forces a 404 (whole chain walks)
+        // or a 200 (chain stops at OFF). We pin the *first* request as OFF —
+        // any regression that reorders the chain (e.g. swaps Beauty to first)
+        // trips this test.
         val captured = mutableListOf<HttpRequestData>()
-        val sut = OffApiClient(clientCapturing(captured))
+        OffApiClient(clientCapturing(captured)).lookup("5449000000996")
 
-        sut.lookup("5449000000996")
-
-        assertEquals(1, captured.size)
-        val url = captured[0].url
-        // Scheme + host pinned so a regression that switches to http://, or to
-        // world.openbeautyfacts.org (the cosmetics sibling — same host suffix,
-        // different content corpus), trips this test.
-        assertEquals("https", url.protocol.name)
-        assertEquals("world.openfoodfacts.org", url.host)
-        assertEquals("/api/v2/product/5449000000996.json", url.encodedPath)
+        assertTrue("expected at least one request", captured.isNotEmpty())
+        val first = captured[0].url
+        assertEquals("https", first.protocol.name)
+        assertEquals("world.openfoodfacts.org", first.host)
+        assertEquals("/api/v2/product/5449000000996.json", first.encodedPath)
         assertEquals(
             "code,product_name,brands,image_url,status",
-            url.parameters["fields"],
+            first.parameters["fields"],
         )
     }
 
     // -- #30 / SR-2: regex boundary cases (a typo like `{7,13}` must fail) --
 
     @Test
-    fun lookup_exactly6Digits_accepted_andUrlBuilt() = runTest {
+    fun lookup_exactly6Digits_acceptedAndFirstUrlBuilt() = runTest {
         val captured = mutableListOf<HttpRequestData>()
         OffApiClient(clientCapturing(captured)).lookup("123456")
-        assertEquals(1, captured.size)
+        assertTrue(captured.isNotEmpty())
         assertEquals("/api/v2/product/123456.json", captured[0].url.encodedPath)
     }
 
     @Test
-    fun lookup_exactly14Digits_accepted_andUrlBuilt() = runTest {
+    fun lookup_exactly14Digits_acceptedAndFirstUrlBuilt() = runTest {
         val captured = mutableListOf<HttpRequestData>()
         OffApiClient(clientCapturing(captured)).lookup("12345678901234")
-        assertEquals(1, captured.size)
+        assertTrue(captured.isNotEmpty())
         assertEquals("/api/v2/product/12345678901234.json", captured[0].url.encodedPath)
+    }
+
+    // -- v1.1 Item 1: fallback chain --
+
+    @Test
+    fun lookup_offHit_doesNotWalkToBeauty() = runTest {
+        val hit = loadFixture("off/coke_330ml.json")
+        val (client, captured) = clientByHost(
+            mapOf("world.openfoodfacts.org" to hit),
+        )
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
 
     // -- #30 belt-and-suspenders: any IllegalArgumentException the engine throws
@@ -334,6 +351,34 @@ class OffApiClientTest {
         )
         assertNull("expected null lookup for input: $input", sut.lookup(input))
         assertEquals("expected 0 network calls for input: $input", 0, hits)
+    }
+
+    /** Returns 404 for everything UNLESS the host matches one of [bodyByHost]'s keys,
+     *  in which case it returns the mapped body as 200 OK. Captures every request that
+     *  reaches the engine for post-call assertions on host coverage. */
+    private fun clientByHost(
+        bodyByHost: Map<String, String>,
+        captured: MutableList<HttpRequestData> = mutableListOf(),
+    ): Pair<HttpClient, MutableList<HttpRequestData>> {
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            val body = bodyByHost[request.url.host]
+            if (body != null) {
+                respond(
+                    content = ByteReadChannel(body),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            } else {
+                respond(
+                    content = ByteReadChannel(""),
+                    status = HttpStatusCode.NotFound,
+                )
+            }
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        return client to captured
     }
 
     private fun loadFixture(path: String): String =
