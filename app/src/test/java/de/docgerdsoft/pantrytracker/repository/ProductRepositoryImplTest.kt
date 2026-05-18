@@ -223,6 +223,105 @@ class ProductRepositoryImplTest {
         assertEquals(0, fakeOff.lookupCallCount)
     }
 
+    // --- #32 / SR-14, SR-15: response-field size caps + image_url scheme gate ---
+
+    @Test
+    fun lookupForPreview_offHitNameOver256Chars_truncatesNameAt256() = runTest {
+        val fakeOff = FakeOffLookup()
+        // 1_000_000 chars — a buggy/hostile OFF response would otherwise stream
+        // straight into Compose Text and Room (SR-14: unbounded String fields).
+        fakeOff.stub("777", OffProduct(productName = "x".repeat(1_000_000)))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("777") as ScanCandidate.FromOff
+        assertEquals(256, result.name.length)
+    }
+
+    @Test
+    fun lookupForPreview_offHitBrandOver256Chars_truncatesBrandAt256() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "778",
+            OffProduct(productName = "Coke", brands = "y".repeat(10_000)),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("778") as ScanCandidate.FromOff
+        assertEquals(256, result.brand?.length)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlHttps_preserved() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "779",
+            OffProduct(productName = "Sprite", imageUrl = "https://images.openfoodfacts.org/sprite.jpg"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("779") as ScanCandidate.FromOff
+        assertEquals("https://images.openfoodfacts.org/sprite.jpg", result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlHttp_returnsNullImageUrl() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "780",
+            OffProduct(productName = "Sprite", imageUrl = "http://insecure.example/x.jpg"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("780") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlFileScheme_returnsNullImageUrl() = runTest {
+        // SR-15 headline attack: `file:///etc/passwd` would otherwise have
+        // Coil's FileUriFetcher attempt a local file read.
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "781",
+            OffProduct(productName = "Sprite", imageUrl = "file:///etc/passwd"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("781") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlContentScheme_returnsNullImageUrl() = runTest {
+        // Companion to the file-scheme case — content:// would otherwise let
+        // Coil's ContentUriFetcher prompt arbitrary content providers.
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "782",
+            OffProduct(productName = "Sprite", imageUrl = "content://com.evil/data"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("782") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlOver2048Chars_returnsNullImageUrl() = runTest {
+        // 2 KB cap on URL length defends against a 4 GB asset URL whose query
+        // string alone exhausts memory before decode (SR-15 second angle).
+        val fakeOff = FakeOffLookup()
+        val longUrl = "https://images.openfoodfacts.org/" + "x".repeat(3_000)
+        fakeOff.stub(
+            "783",
+            OffProduct(productName = "Sprite", imageUrl = longUrl),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("783") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
     // --- #31 / SR-12: discard log redacts barcode + drops brand ---
 
     @Test

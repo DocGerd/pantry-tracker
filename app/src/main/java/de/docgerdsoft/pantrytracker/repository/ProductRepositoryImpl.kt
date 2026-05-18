@@ -84,9 +84,27 @@ class ProductRepositoryImpl(
         }
         return ScanCandidate.FromOff(
             barcode = code,
-            name = name,
-            brand = off.brands?.takeIf { it.isNotBlank() },
-            imageUrl = off.imageUrl?.takeIf { it.isNotBlank() },
+            // Cap at 256 chars to bound the worst-case Compose Text + Room
+            // SQLite + UI render path. SR-14 — without this, a buggy or
+            // hostile OFF response with a 50 MB product_name buffers fully
+            // into memory before any UI affordance fires.
+            name = name.take(MAX_OFF_TEXT_LENGTH),
+            brand = off.brands?.takeIf { it.isNotBlank() }?.take(MAX_OFF_TEXT_LENGTH),
+            // SR-15: drop the URL entirely unless it's https and within 2 KB.
+            // Anything else (`file://`, `content://`, http, or a 4 GB URL whose
+            // query string alone OOMs the decoder) is an attacker-influenced
+            // sink we don't render. Coil's default ImageLoader auto-registers
+            // file/content/resource fetchers; gating upstream is the only
+            // defense given Coil 3 doesn't expose an "exclude default fetcher"
+            // API. AsyncImage hides the image area gracefully on null.
+            imageUrl = off.imageUrl?.takeIf {
+                it.startsWith("https://") && it.length < MAX_IMAGE_URL_LENGTH
+            },
         )
+    }
+
+    private companion object {
+        private const val MAX_OFF_TEXT_LENGTH = 256
+        private const val MAX_IMAGE_URL_LENGTH = 2048
     }
 }
