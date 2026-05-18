@@ -65,56 +65,59 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     // visible signal is the manual-entry sheet, not a toast or error dialog.
     override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
-        // Format gate (SR-2). Returning null (not throwing) matches the "OFF
-        // miss == drop to manual entry" contract — the caller can't distinguish
-        // a bad-format reject from a 404, which is the user-visible behaviour
-        // we want. Logged at FINE so the (silent-to-the-user) rejection still
-        // leaves a trace operators can surface via
-        // `adb shell setprop log.tag.OffApiClient VERBOSE` when investigating
-        // a hostile-input report.
         if (!BARCODE_PATTERN.matches(barcode)) {
             logger.log(Level.FINE, "OFF lookup rejected malformed input ${barcode.barcodeHint()}")
             return null
         }
-        // Component URL builder so each path segment is percent-encoded
-        // explicitly (SR-2). Built outside the `try` so any IAE here is a
-        // programmer error (e.g. malformed OFF_BASE_URL constant) and surfaces
-        // in dev rather than silently degrading prod to manual-entry-forever.
+        return when (val r = lookupOnce(OFF_BASE_URL, barcode)) {
+            is HostResult.Found -> r.product
+            HostResult.NotFound -> null
+            HostResult.Error -> null
+        }
+    }
+
+    private sealed interface HostResult {
+        data class Found(val product: OffProduct) : HostResult
+        data object NotFound : HostResult
+        data object Error : HostResult
+    }
+
+    private suspend fun lookupOnce(baseUrl: String, barcode: String): HostResult {
         val url: Url = URLBuilder().apply {
-            takeFrom(OFF_BASE_URL)
+            takeFrom(baseUrl)
             appendPathSegments("api", "v2", "product", "$barcode.json")
             parameters.append("fields", OFF_FIELDS)
         }.build()
         return try {
-            val response: HttpResponse = httpClient.get(url)
-            if (!response.status.isSuccess()) return null
-            val envelope = response.body<OffApiEnvelope>()
-            if (envelope.status != 1) null else envelope.product
+            classifyResponse(httpClient.get(url))
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
-            // Covers network down, DNS failures, connect/socket timeouts (OkHttp
-            // surfaces timeout as SocketTimeoutException which is an IOException).
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup network error for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.WARNING, "OFF lookup network error for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         } catch (e: JsonConvertException) {
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup JSON conversion error for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.WARNING, "OFF lookup JSON conversion error for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         } catch (e: SerializationException) {
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup serialization error for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.WARNING, "OFF lookup serialization error for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         } catch (e: IllegalArgumentException) {
-            // Engine-runtime IAE only (URL building is outside the try and a
-            // regex-validated 6-14-digit barcode produces only safe path
-            // segments). Logged at SEVERE so an exotic engine failure is noisy
-            // in crash-report aggregators despite the null return.
             @Suppress("SwallowedException")
-            logger.log(Level.SEVERE, "OFF lookup engine-runtime IAE for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.SEVERE, "OFF lookup engine-runtime IAE for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         }
+    }
+
+    private suspend fun classifyResponse(response: HttpResponse): HostResult {
+        if (response.status.value == HTTP_NOT_FOUND) return HostResult.NotFound
+        if (!response.status.isSuccess()) return HostResult.Error
+        val envelope = response.body<OffApiEnvelope>()
+        if (envelope.status != OFF_STATUS_FOUND) return HostResult.NotFound
+        val product = envelope.product ?: return HostResult.NotFound
+        return HostResult.Found(product)
     }
 
     companion object {
@@ -128,6 +131,17 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
 
         private const val OFF_BASE_URL = "https://world.openfoodfacts.org/"
         private const val OFF_FIELDS = "code,product_name,brands,image_url,status"
+
+        // HTTP 404 is the only "not found" signal we distinguish from a generic
+        // transport error; on the OFF fallback chain (Task 1.2) it's the trigger
+        // to try the next host. Other 4xx/5xx codes mean the request never
+        // exited our trust boundary cleanly, so we fail closed (Error).
+        private const val HTTP_NOT_FOUND = 404
+
+        // OFF envelope's status flag — 1 == hit, 0 == miss. Hoisted from a
+        // literal to give the comparison in classifyResponse a name; the OFF
+        // schema docs use the same convention.
+        private const val OFF_STATUS_FOUND = 1
 
         // EAN-8 .. ITF-14 covers every numeric symbology ML Kit can decode in
         // the formats we enable; 6 is the lower bound because EAN-8 minus the
