@@ -24,6 +24,13 @@ captures/
 # scan results.
 gradle.lockfile
 
+# Settings-level lockfile is a side-effect of `--write-locks` on Gradle 9.x —
+# written for every configuration in the build tree even when empty. Ours
+# contains only `empty=incomingCatalogForLibs0` (the version-catalog
+# resolution has nothing to lock). No audit value, regenerated on every lock
+# run; ignore alongside the runtime lockfile.
+settings-gradle.lockfile
+
 # Kotlin / IntelliJ
 out/
 
