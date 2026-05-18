@@ -39,6 +39,11 @@ There are no servers to deploy.
         └─────────────────────────┘
 ```
 
+*The single OFF host above represents the OFF project family. A lookup
+walks `world.openfoodfacts.org` → Open Beauty Facts → Open Pet Food Facts
+→ Open Products Facts on `404` only; any other failure fails fast. See
+[§8.9](08-crosscutting-concepts.md#89-security) for the host list and chain rules.*
+
 ## 7.2 Build artifacts
 
 | Artifact | Purpose | Where it comes from |

@@ -41,7 +41,7 @@ covers each.
 
 | Stimulus | Source | Expected reaction |
 |----------|--------|-------------------|
-| Use app for 10 minutes with mitmproxy capturing traffic | maintainer | The only outbound requests are to `world.openfoodfacts.org/api/v2/product/<barcode>.json`. No analytics endpoints, no crash reporter, no fingerprinting beacons. |
+| Use app for 10 minutes with mitmproxy capturing traffic | maintainer | The only outbound requests are to the OFF project family at `/api/v2/product/<barcode>.json` — `world.openfoodfacts.org` on the happy path, plus `world.openbeautyfacts.org` / `world.openpetfoodfacts.org` / `world.openproductsfacts.org` only on a `404`-walk (see [§8.9](../architecture/08-crosscutting-concepts.md#89-security)). No analytics endpoints, no crash reporter, no fingerprinting beacons. |
 
 ### Q2 — Reliability: schema mismatch is loud
 
