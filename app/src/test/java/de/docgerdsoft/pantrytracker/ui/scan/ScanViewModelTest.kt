@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -678,6 +680,77 @@ class ScanViewModelTest {
         // FakeProductRepository.suspendOnLookup records every cancelled barcode.
         assertTrue("expected in-flight lookup for 12345 to be cancelled by onCameraError",
             "12345" in fake.cancelledLookups)
+    }
+
+    // --- #31 / SR-3,4,11: log redaction ---
+
+    @Test
+    fun resolveBarcode_failure_logsHintNotFullBarcode() = runTest {
+        fake.lookupShouldThrow = RuntimeException("simulated repository failure")
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem() // Idle
+                vm.onBarcodeDecoded("5449000000996")
+                awaitItem() // Loading
+                awaitItem() // Error
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected hint '5449…96' in log: $joined", joined.contains("5449…96"))
+            assertFalse(
+                "full barcode '5449000000996' leaked into log: $joined",
+                joined.contains("5449000000996"),
+            )
+        }
+    }
+
+    @Test
+    fun confirm_failure_doesNotLogScanCandidateContents() = runTest {
+        // SR-3: the prior log used `phase=$phase`, which serialised the entire
+        // ScanCandidate via data-class toString (barcode + name + brand + imageUrl).
+        // The redaction replaces it with `phaseType=Preview` and nothing else.
+        fake.lookupResponses["5449000000996"] = ScanCandidate.FromOff(
+            barcode = "5449000000996",
+            name = "Sensitive Brand-Name Product",
+            brand = "Sensitive Brand Co.",
+            imageUrl = "https://images.example/secret-asset.jpg",
+        )
+        fake.addShouldThrow = RuntimeException("simulated DB write failure")
+
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem() // Idle
+                vm.onBarcodeDecoded("5449000000996")
+                awaitItem() // Loading
+                awaitItem() // Preview
+                vm.confirm()
+                awaitItem() // Error
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertFalse("barcode leaked: $joined", joined.contains("5449000000996"))
+            assertFalse("product name leaked: $joined", joined.contains("Sensitive Brand-Name Product"))
+            assertFalse("brand leaked: $joined", joined.contains("Sensitive Brand Co."))
+            assertFalse("image URL leaked: $joined", joined.contains("secret-asset.jpg"))
+        }
+    }
+
+    @Test
+    fun submitManualEntry_failure_doesNotLogName() = runTest {
+        // SR-4: the prior log included `name=$trimmed` — leaks user-typed
+        // product names (often household-specific) into logcat.
+        fake.addShouldThrow = RuntimeException("simulated DB write failure")
+
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem() // Idle
+                vm.onBarcodeDecoded("0000000000000") // unknown → ManualEntry
+                awaitItem() // Loading
+                awaitItem() // ManualEntry
+                vm.submitManualEntry(name = "Private Household Inventory", initialQuantity = 1)
+                awaitItem() // Error
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertFalse("user-typed name leaked: $joined", joined.contains("Private Household Inventory"))
+        }
     }
 
     private class FakeProductRepository : ProductRepository {

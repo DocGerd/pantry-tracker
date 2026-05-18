@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.util.barcodeHint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -96,8 +97,9 @@ class ScanViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // Log barcode as a redacted hint (SR-11): 4-prefix + ellipsis + 2-suffix.
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "resolveBarcode($barcode) failed", e)
+            logger.log(Level.WARNING, "resolveBarcode(${barcode.barcodeHint()}) failed", e)
             ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
         }
         _uiState.update { state ->
@@ -164,8 +166,15 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // SR-3: previously `phase=$phase` serialised the full ScanCandidate
+                // via data-class toString (barcode + name + brand + imageUrl).
+                // Phase type alone is enough to disambiguate which arm failed.
                 @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "confirm() failed (mode=${state.mode}, phase=$phase)", e)
+                logger.log(
+                    Level.WARNING,
+                    "confirm() failed (mode=${state.mode}, phaseType=${phase::class.simpleName})",
+                    e,
+                )
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { s ->
@@ -223,8 +232,10 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // SR-4: drop `name=$trimmed` — user-typed product names are
+                // often household-specific and leak into logcat via JUL→Log.w.
                 @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "submitManualEntry(name=$trimmed, qty=$initialQuantity) failed", e)
+                logger.log(Level.WARNING, "submitManualEntry(qty=$initialQuantity) failed", e)
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { state ->

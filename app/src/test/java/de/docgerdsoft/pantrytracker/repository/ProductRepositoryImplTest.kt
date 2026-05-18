@@ -6,11 +6,14 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
+import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -218,6 +221,37 @@ class ProductRepositoryImplTest {
         assertNull(sut.lookupForPreview(""))
         assertNull(sut.lookupForPreview("   "))
         assertEquals(0, fakeOff.lookupCallCount)
+    }
+
+    // --- #31 / SR-12: discard log redacts barcode + drops brand ---
+
+    @Test
+    fun lookupForPreview_offHitBlankName_logsHintWithoutBarcodeOrBrand() = runTest {
+        // The prior INFO log line `"OFF hit for $code discarded — name blank, brand=${off.brands}"`
+        // leaked both the raw barcode and the OFF response brand string into
+        // logcat. The redaction keeps the diagnostic value via barcodeHint()
+        // and drops `brand` entirely (zero value over the hint).
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "5449000000996",
+            OffProduct(productName = null, brands = "Coca-Cola Company"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        JulLogCapture("ProductRepositoryImpl").use { capture ->
+            assertNull(sut.lookupForPreview("5449000000996"))
+
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected hint '5449…96' in log: $joined", joined.contains("5449…96"))
+            assertFalse(
+                "full barcode '5449000000996' leaked into log: $joined",
+                joined.contains("5449000000996"),
+            )
+            assertFalse(
+                "brand 'Coca-Cola Company' leaked into log: $joined",
+                joined.contains("Coca-Cola Company"),
+            )
+        }
     }
 
     private class FakeClock(initial: Instant) : Clock {
