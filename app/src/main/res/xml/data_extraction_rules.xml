@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SR-16: API 31+ replacement for the deprecated `android:allowBackup="false"`
+  attribute. Both cloud-backup and device-transfer are gated on the destination
+  supporting end-to-end encryption — pantry data isn't sensitive enough to
+  refuse backup entirely, but it shouldn't leave the device in cleartext.
+
+  We keep `allowBackup="false"` on the manifest for pre-API-31 compatibility;
+  this file takes effect only on API 31+ (where allowBackup is a no-op).
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true" />
+    <device-transfer disableIfNoEncryptionCapabilities="true" />
+</data-extraction-rules>
