@@ -11,6 +11,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.utils.io.ByteReadChannel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -262,6 +263,161 @@ class OffApiClientTest {
         assertEquals(true, result?.productName?.isNotBlank() ?: false)
         assertEquals(1, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
+    fun lookup_offMiss_beautyHit_returnsBeautyProduct_doesNotWalkFurther() = runTest {
+        val beautyBody = loadFixture("off/coke_330ml.json")  // schema-identical envelope
+        val (client, captured) = clientByHost(
+            mapOf("world.openbeautyfacts.org" to beautyBody),
+        )
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(2, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+        assertEquals("world.openbeautyfacts.org", captured[1].url.host)
+    }
+
+    @Test
+    fun lookup_offMissBeautyMiss_petFoodHit_doesNotWalkToProducts() = runTest {
+        val petFoodBody = loadFixture("off/coke_330ml.json")
+        val (client, captured) = clientByHost(
+            mapOf("world.openpetfoodfacts.org" to petFoodBody),
+        )
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(3, captured.size)
+        assertEquals(
+            listOf(
+                "world.openfoodfacts.org",
+                "world.openbeautyfacts.org",
+                "world.openpetfoodfacts.org",
+            ),
+            captured.map { it.url.host },
+        )
+    }
+
+    @Test
+    fun lookup_allFourMiss_returnsNull_walksAllFour() = runTest {
+        val (client, captured) = clientByHost(emptyMap()) // everything 404
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        assertEquals(4, captured.size)
+        assertEquals(
+            listOf(
+                "world.openfoodfacts.org",
+                "world.openbeautyfacts.org",
+                "world.openpetfoodfacts.org",
+                "world.openproductsfacts.org",
+            ),
+            captured.map { it.url.host },
+        )
+    }
+
+    @Test
+    fun lookup_off5xx_returnsNull_doesNotWalk() = runTest {
+        // Regression guard for the "do not walk past a real fault" rule. A 500
+        // from OFF means *that server* is sick; it does not imply the barcode
+        // might exist on Beauty Facts. Walking would multiply downtime by 4.
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel(""),
+                status = HttpStatusCode.InternalServerError,
+            )
+        }) {
+            install(ContentNegotiation) { json() }
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        assertEquals(1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
+    fun lookup_offMiss_beautyTimeout_returnsNull_doesNotWalkFurther() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            when (request.url.host) {
+                "world.openfoodfacts.org" -> respond(
+                    content = ByteReadChannel(""),
+                    status = HttpStatusCode.NotFound,
+                )
+                else -> throw SocketTimeoutException("beauty timeout")
+            }
+        }) {
+            install(ContentNegotiation) { json() }
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        assertEquals(2, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+        assertEquals("world.openbeautyfacts.org", captured[1].url.host)
+    }
+
+    @Test
+    fun lookup_offStatusNotOne_walksToBeauty() = runTest {
+        val notFoundFixture = loadFixture("off/not_found.json")
+        val beautyBody = loadFixture("off/coke_330ml.json")
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            when (request.url.host) {
+                "world.openfoodfacts.org" -> respond(
+                    content = ByteReadChannel(notFoundFixture),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+                "world.openbeautyfacts.org" -> respond(
+                    content = ByteReadChannel(beautyBody),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+                else -> respond(content = ByteReadChannel(""), status = HttpStatusCode.NotFound)
+            }
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("0000000000000")
+
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(2, captured.size)
+    }
+
+    @Test
+    fun lookup_cancellation_propagates() = runTest {
+        // Pin the structured-concurrency contract: a cancelled caller's job
+        // must actually cancel us, not silently become null.
+        val client = HttpClient(MockEngine { throw CancellationException("cancelled") }) {
+            install(ContentNegotiation) { json() }
+        }
+        val sut = OffApiClient(client)
+
+        try {
+            sut.lookup("5449000000996")
+            org.junit.Assert.fail("expected CancellationException to propagate")
+        } catch (e: CancellationException) {
+            // expected
+        }
     }
 
     // -- #30 belt-and-suspenders: any IllegalArgumentException the engine throws
