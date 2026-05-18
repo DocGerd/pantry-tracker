@@ -230,10 +230,58 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
 5. [ ] `./gradlew :app:assembleRelease` and verify with `apksigner verify`.
 6. [ ] Walk the [v1.0 UAT checklist](../uat/v1-uat-checklist.md) on a real
        device using the release APK. Sign off when all green.
-7. [ ] Tag the commit: `git tag -a v1.0 -m "v1.0 release" && git push origin v1.0`
-8. [ ] Create a GitHub Release attaching `app-release.apk`:
+7. [ ] **Lock dependencies for the tag** — see
+       [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure)
+       below. Produces one extra commit immediately before the tag.
+8. [ ] Tag the commit: `git tag -a v1.0 -m "v1.0 release" && git push origin v1.0`
+9. [ ] Create a GitHub Release attaching `app-release.apk`:
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
-9. [ ] Install the release APK on your daily-driver device.
+10. [ ] Install the release APK on your daily-driver device.
+
+### Release-tag dependency-lock procedure
+
+Day-to-day, `app/gradle.lockfile` is **gitignored** — it's regenerated each
+Security-CI run from the current resolved dependency graph (commenting a
+developer-local snapshot would cause OSV-Scanner to report drift no one can
+explain). At a release tag, the priority flips: the tag commit needs an
+**immutable record of exactly what shipped** so post-hoc CVE forensics has
+a concrete answer.
+
+Run these commands as the commit immediately preceding the tag (between
+checklist steps 6 and 8 above):
+
+```bash
+# Regenerate the lockfile from the current resolved graph.
+./gradlew :app:dependencies --write-locks
+
+# Force-add (it's gitignored) and commit on its own so the diff is
+# reviewable as "the dependency snapshot for v1.0.0", not buried in
+# unrelated work.
+git add -f app/gradle.lockfile
+git commit -m "chore(release): lock dependencies for v1.0.0"
+```
+
+Then proceed with step 8 (`git tag -a ...`). The tag commit will include
+the lockfile; the immediately-following commit on `main` will not (because
+day-to-day no-commit policy resumes, and the file's gitignored). That's
+intentional — the lockfile is a release artifact, not a maintained file.
+
+### Note: `distributionSha256Sum` must move atomically with `distributionUrl`
+
+`gradle/wrapper/gradle-wrapper.properties` pins both `distributionUrl` and
+`distributionSha256Sum` for SR-5 (defends against a MITM that swaps the
+Gradle distribution archive). When upgrading the Gradle wrapper, use:
+
+```bash
+./gradlew wrapper --gradle-version X.Y.Z \
+  --gradle-distribution-sha256-sum $(curl -sSL \
+    https://services.gradle.org/distributions/gradle-X.Y.Z-all.zip.sha256)
+```
+
+This is the **only** invocation form that updates both fields atomically.
+Running plain `./gradlew wrapper --gradle-version X.Y.Z` updates the URL
+but leaves the *old* SHA in place — the next wrapper run will then refuse
+to start because the new archive doesn't match the old hash.
 
 ---
 
