@@ -10,6 +10,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Explicit least-privilege scope for the GITHUB_TOKEN (SR-18). The build job
+# only reads — it doesn't post comments, publish releases, or push tags — so
+# `contents: read` covers the checkout step and nothing else. Older repos
+# default to read/write; this declaration is the only safe defense.
+# `security.yml` already declares the same; keep them in sync.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

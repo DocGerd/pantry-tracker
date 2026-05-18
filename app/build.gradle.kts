@@ -89,6 +89,11 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // SR-19: explicit declarations even though AGP defaults match.
+            // Defends against a future merge accident or plugin that silently
+            // flips either flag. Two lines, zero behaviour change today.
+            isDebuggable = false
+            isJniDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
