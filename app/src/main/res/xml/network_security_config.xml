@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SR-7: deny cleartext traffic for ALL destinations. Platform default already
+  denies cleartext on API 28+, but minSdk = 26 leaves API 26/27 open. Coil's
+  image fetch is the externally-influenced path (image URL comes from the
+  OFF response), so this is the only sink that matters for v1.
+
+  No <trust-anchors> element — system CAs apply by default. No <pin-set>
+  either: pinning is deferred to v2 per docs/security/security-review-
+  2026-05-17.md (OFF has no remote-update channel for the v1 client, so a
+  pin-set CA-rotation incident would brick scans with no recovery path).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

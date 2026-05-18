@@ -223,6 +223,262 @@ class ProductRepositoryImplTest {
         assertEquals(0, fakeOff.lookupCallCount)
     }
 
+    // --- #32 / SR-14, SR-15: response-field size caps + image_url scheme gate ---
+
+    @Test
+    fun lookupForPreview_offHitNameOver256Chars_truncatesNameAt256() = runTest {
+        val fakeOff = FakeOffLookup()
+        // 1_000_000 chars — a buggy/hostile OFF response would otherwise stream
+        // straight into Compose Text and Room (SR-14: unbounded String fields).
+        fakeOff.stub("777", OffProduct(productName = "x".repeat(1_000_000)))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("777") as ScanCandidate.FromOff
+        assertEquals(256, result.name.length)
+    }
+
+    @Test
+    fun lookupForPreview_offHitBrandOver256Chars_truncatesBrandAt256() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "778",
+            OffProduct(productName = "Coke", brands = "y".repeat(10_000)),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("778") as ScanCandidate.FromOff
+        assertEquals(256, result.brand?.length)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlHttps_preserved() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "779",
+            OffProduct(productName = "Sprite", imageUrl = "https://images.openfoodfacts.org/sprite.jpg"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("779") as ScanCandidate.FromOff
+        assertEquals("https://images.openfoodfacts.org/sprite.jpg", result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlHttp_returnsNullImageUrl() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "780",
+            OffProduct(productName = "Sprite", imageUrl = "http://insecure.example/x.jpg"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("780") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlFileScheme_returnsNullImageUrl() = runTest {
+        // SR-15 headline attack: `file:///etc/passwd` would otherwise have
+        // Coil's FileUriFetcher attempt a local file read.
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "781",
+            OffProduct(productName = "Sprite", imageUrl = "file:///etc/passwd"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("781") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlContentScheme_returnsNullImageUrl() = runTest {
+        // Companion to the file-scheme case — content:// would otherwise let
+        // Coil's ContentUriFetcher silently query arbitrary content providers
+        // via ContentResolver.openInputStream (no UI prompt).
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub(
+            "782",
+            OffProduct(productName = "Sprite", imageUrl = "content://com.evil/data"),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("782") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlOver2048Chars_returnsNullImageUrl() = runTest {
+        // 2 KB cap on URL length defends against a 4 GB asset URL whose query
+        // string alone exhausts memory before decode (SR-15 second angle).
+        val fakeOff = FakeOffLookup()
+        val longUrl = "https://images.openfoodfacts.org/" + "x".repeat(3_000)
+        fakeOff.stub(
+            "783",
+            OffProduct(productName = "Sprite", imageUrl = longUrl),
+        )
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("783") as ScanCandidate.FromOff
+        assertNull(result.imageUrl)
+    }
+
+    // --- PR #40 review: exact-boundary tests for the length caps ---
+
+    @Test
+    fun lookupForPreview_offHitNameExactly256Chars_passesThrough() = runTest {
+        val fakeOff = FakeOffLookup()
+        val name256 = "x".repeat(256)
+        fakeOff.stub("784", OffProduct(productName = name256))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("784") as ScanCandidate.FromOff
+        // length 256 is below take(256) — preserved unchanged.
+        assertEquals(256, result.name.length)
+        assertEquals(name256, result.name)
+    }
+
+    @Test
+    fun lookupForPreview_offHitNameExactly257Chars_truncatesTo256() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("785", OffProduct(productName = "x".repeat(257)))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("785") as ScanCandidate.FromOff
+        // Pins the boundary so a typo to .take(255) or MAX_OFF_TEXT_LENGTH=257 fails.
+        assertEquals(256, result.name.length)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlExactly2047Chars_preserved() = runTest {
+        val fakeOff = FakeOffLookup()
+        // 2047 chars — under the strict < 2048 gate.
+        val url = "https://" + "x".repeat(2039)
+        assertEquals(2047, url.length)
+        fakeOff.stub("786", OffProduct(productName = "Sprite", imageUrl = url))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("786") as ScanCandidate.FromOff
+        assertEquals(url, result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlExactly2048Chars_returnsNull() = runTest {
+        val fakeOff = FakeOffLookup()
+        // Exactly at the cap — the strict < operator rejects.
+        val url = "https://" + "x".repeat(2040)
+        assertEquals(2048, url.length)
+        fakeOff.stub("787", OffProduct(productName = "Sprite", imageUrl = url))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("787") as ScanCandidate.FromOff
+        // Pins the boundary so a typo to MAX_IMAGE_URL_LENGTH_EXCLUSIVE=20480
+        // or operator-flip to `<=` fails — the existing 3 K-char test would
+        // pass both regressions.
+        assertNull(result.imageUrl)
+    }
+
+    // --- PR #40 review: brand mapping null + blank cases ---
+
+    @Test
+    fun lookupForPreview_offHitBrandNull_returnsNullBrand() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("788", OffProduct(productName = "Sprite", brands = null))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("788") as ScanCandidate.FromOff
+        assertNull(result.brand)
+    }
+
+    @Test
+    fun lookupForPreview_offHitBrandBlank_returnsNullBrand() = runTest {
+        // Pins the `?.takeIf { it.isNotBlank() }?.let { capOffText(...) }`
+        // chain — a regression to `brand = off.brands?.take(256)` would map
+        // blank to "  " here and no test currently fails.
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("789", OffProduct(productName = "Sprite", brands = "   "))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("789") as ScanCandidate.FromOff
+        assertNull(result.brand)
+    }
+
+    // --- PR #40 review: image-url scheme is case-insensitive (RFC 3986 §3.1) ---
+
+    @Test
+    fun lookupForPreview_offHitImageUrlUppercaseHttps_preserved() = runTest {
+        // Schemes are case-insensitive per RFC 3986; OkHttp/Coil normalise.
+        // A regression to case-sensitive `startsWith("https://")` would drop
+        // this legitimate (if unusual) shape.
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("790", OffProduct(productName = "Sprite", imageUrl = "HTTPS://images.openfoodfacts.org/x.jpg"))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("790") as ScanCandidate.FromOff
+        assertEquals("HTTPS://images.openfoodfacts.org/x.jpg", result.imageUrl)
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlMixedCaseHttps_preserved() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("791", OffProduct(productName = "Sprite", imageUrl = "Https://images.openfoodfacts.org/x.jpg"))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        val result = sut.lookupForPreview("791") as ScanCandidate.FromOff
+        assertEquals("Https://images.openfoodfacts.org/x.jpg", result.imageUrl)
+    }
+
+    // --- PR #40 review: new gate/cap logs leave a forensic trail ---
+
+    @Test
+    fun lookupForPreview_offHitNameTruncated_logsInfoWithLengthsAndHint() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("792", OffProduct(productName = "x".repeat(500)))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        JulLogCapture("ProductRepositoryImpl").use { capture ->
+            sut.lookupForPreview("792")
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected truncation log: $joined", joined.contains("name truncated"))
+            assertTrue("expected from-length: $joined", joined.contains("500"))
+            assertTrue("expected to-length: $joined", joined.contains("256"))
+            assertTrue("expected redacted code hint: $joined", joined.contains("<short>"))
+            // The raw 500-char payload must not appear in the log.
+            assertFalse("raw name leaked: $joined", joined.contains("x".repeat(500)))
+        }
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlSchemeRejected_logsFineCategoricalReason() = runTest {
+        val fakeOff = FakeOffLookup()
+        fakeOff.stub("793", OffProduct(productName = "Sprite", imageUrl = "file:///etc/passwd"))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        JulLogCapture("ProductRepositoryImpl").use { capture ->
+            sut.lookupForPreview("793")
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected scheme-reason log: $joined", joined.contains("image_url dropped"))
+            assertTrue("expected categorical reason: $joined", joined.contains("scheme"))
+            // The hostile URL itself must NOT appear — it's attacker-controlled content.
+            assertFalse("raw URL leaked: $joined", joined.contains("/etc/passwd"))
+        }
+    }
+
+    @Test
+    fun lookupForPreview_offHitImageUrlLengthRejected_logsFineCategoricalReasonWithLength() = runTest {
+        val fakeOff = FakeOffLookup()
+        val long = "https://images.openfoodfacts.org/" + "y".repeat(3_000)
+        fakeOff.stub("794", OffProduct(productName = "Sprite", imageUrl = long))
+        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+
+        JulLogCapture("ProductRepositoryImpl").use { capture ->
+            sut.lookupForPreview("794")
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected length-reason log: $joined", joined.contains("length="))
+            assertFalse("raw URL leaked: $joined", joined.contains("yyyyyyyyyy"))
+        }
+    }
+
     // --- #31 / SR-12: discard log redacts barcode + drops brand ---
 
     @Test

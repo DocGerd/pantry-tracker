@@ -10,11 +10,31 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Explicit least-privilege scope for the GITHUB_TOKEN (SR-18). The build job
+# only reads — it doesn't post comments, publish releases, or push tags — so
+# `contents: read` covers the checkout step and nothing else. Older repos
+# default to read/write; this declaration is the only safe defense.
+# `security.yml` declares the same scope per-job; this declaration is top-level
+# so it covers every step uniformly.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      # SR-5 guard: a bare-flag `./gradlew wrapper --gradle-version X.Y.Z`
+      # silently drops `distributionSha256Sum` from gradle-wrapper.properties.
+      # The wrapper refuses to start on the *next* invocation, but by then the
+      # diff has been reviewed and may have been merged. This step fails the
+      # PR check at the point of regression — see docs/release/SHIPPING.md for
+      # the atomic-update form maintainers must use.
+      - name: Assert Gradle wrapper SHA is pinned (SR-5)
+        run: |
+          grep -q '^distributionSha256Sum=' gradle/wrapper/gradle-wrapper.properties \
+            || { echo "::error file=gradle/wrapper/gradle-wrapper.properties::distributionSha256Sum missing — wrapper upgrade dropped the pin (see docs/release/SHIPPING.md)"; exit 1; }
 
       - name: Detect Gradle wrapper
         id: gate

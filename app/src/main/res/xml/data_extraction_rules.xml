@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SR-16: API 31+ replacement for the Android-Lint-flagged
+  `android:allowBackup="false"` mechanism. Matches the manifest's
+  `allowBackup="false"` stance (deny-by-default for both backup paths) via an
+  explicit `<exclude domain="root" />` on both elements.
+
+  Without the `<exclude>` children, the empty `<cloud-backup>` /
+  `<device-transfer>` elements would mean "back up *everything in the default
+  backup set* if the destination supports E2EE" — the opposite of the
+  manifest's policy on pre-API-31. The cross-file inconsistency was flagged
+  in PR #40 review.
+
+  `disableIfNoEncryptionCapabilities="true"` is kept as belt-and-suspenders:
+  even if a future contributor relaxes the `<exclude>` to allow specific
+  paths, the destination still has to be E2EE-capable.
+
+  Note on `allowBackup` interaction: `allowBackup="false"` in the manifest
+  applies to cloud backup on every API level; this file is consulted only on
+  API 31+ for the finer-grained cloud-backup / device-transfer split.
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer disableIfNoEncryptionCapabilities="true">
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>
