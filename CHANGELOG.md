@@ -10,7 +10,7 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ---
 
-## [1.0.0] — TBD (footnote link active once the v1.0 tag is pushed)
+## [1.0.0] — 2026-05-18
 
 First public-ready release. Single-user, sideloaded — no Play Store presence.
 
