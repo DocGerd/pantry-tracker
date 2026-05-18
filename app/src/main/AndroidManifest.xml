@@ -44,10 +44,11 @@
             android:exported="true"
             android:taskAffinity="">
             <!-- SR-1: empty taskAffinity prevents a hostile app from launching
-                 MainActivity into its own task via matching affinity +
-                 FLAG_ACTIVITY_NEW_TASK. The blank string opts out of affinity
-                 grouping entirely; the package-name default would group us
-                 with any other app that happened to use the same affinity. -->
+                 MainActivity into its own task. The package-name default
+                 leaves us open to a hostile app that explicitly sets
+                 taskAffinity="de.docgerdsoft.pantrytracker" + uses
+                 FLAG_ACTIVITY_NEW_TASK to inject itself into our task stack.
+                 The blank string opts out of affinity grouping entirely. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
