@@ -77,7 +77,7 @@ fun CameraPermissionGate(
     val activity = context.findActivity()
     val lifecycleOwner = LocalLifecycleOwner.current
     var phase: CameraPermissionPhase by remember {
-        mutableStateOf(initialPhase(context))
+        mutableStateOf(initialPhase(context, activity))
     }
 
     // Re-check permission on ON_RESUME so the Settings round-trip recovers.
@@ -196,14 +196,41 @@ private fun DeniedScreen(
     }
 }
 
-private fun initialPhase(context: Context): CameraPermissionPhase =
+// Compute the gate's starting phase on (re-)entry.
+//   1. Permission granted → Granted.
+//   2. Soft-denied (shouldShowRationale==true) → SoftDenied directly, so the
+//      "Camera access needed" recovery screen with Try again is shown without
+//      re-displaying the one-time rationale dialog the user already answered.
+//   3. Otherwise → Unknown (shows rationale dialog). The launcher callback
+//      later promotes a denied result to HardDenied when shouldShowRationale
+//      is false at that point.
+// `internal` (not private) so a JVM Robolectric test can pin the three-arm
+// `when`; the previous private signature is exactly what let the SoftDenied
+// regression escape unit-test coverage.
+internal fun initialPhase(context: Context, activity: Activity?): CameraPermissionPhase {
     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
         == PackageManager.PERMISSION_GRANTED
     ) {
-        CameraPermissionPhase.Granted
+        return CameraPermissionPhase.Granted
+    }
+    if (activity == null) {
+        // findActivity() already walks ContextWrapper.baseContext, so a null
+        // return here means a genuinely no-Activity host. The launcher needs
+        // an Activity to surface the system prompt, so a rationale dialog
+        // would end in an inert Continue button. Fail closed to HardDenied so
+        // the user gets the recoverable "Open settings" path instead.
+        logger.log(
+            Level.WARNING,
+            "CameraPermissionGate: no hosting Activity in LocalContext chain — falling back to HardDenied",
+        )
+        return CameraPermissionPhase.HardDenied
+    }
+    return if (activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+        CameraPermissionPhase.SoftDenied
     } else {
         CameraPermissionPhase.Unknown
     }
+}
 
 // Walks ContextWrapper.baseContext so we find the Activity even when the
 // LocalContext is wrapped (ContextThemeWrapper, etc.). A plain `context as?

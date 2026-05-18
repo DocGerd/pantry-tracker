@@ -60,9 +60,10 @@ First public-ready release. Single-user, sideloaded — no Play Store presence.
 ### Privacy
 
 - **No accounts, no analytics, no crash reporter.** The app makes no outbound network calls of its own except the single OFF lookup (`GET world.openfoodfacts.org/api/v2/product/<barcode>.json`). The request carries only the scanned barcode plus a static `PantryTracker/<version> (<repo URL>)` User-Agent — no user identifier, no cookie, no device fingerprint.
+- **ML Kit telemetry is disarmed at the manifest level.** Google's ML Kit barcode-scanning artifact transitively pulls in `google-datatransport`, which by default registers a `cct` backend that uploads SDK-usage events to `firebaselogging.googleapis.com` via a JobScheduler. We remove the three components that make that pipeline live — `TransportBackendDiscovery`, `JobInfoSchedulerService`, and `AlarmManagerSchedulerBroadcastReceiver` — via `tools:node="remove"` in our `AndroidManifest.xml`. The barcode detector itself does not depend on the transport; events queued by ML Kit fail backend-discovery and are silently dropped, so nothing leaves the device. The standard `firebase_data_collection_default_enabled=false` flag is **not** sufficient in standalone (no-Firebase-project) mode — it is only honoured by `FirebaseInitProvider`, which ML Kit does not register.
 - **No cleartext network traffic.** OFF is HTTPS-only; no certificate pinning (intentional — pinning would break the app on routine cert rotation).
 - **`android:allowBackup = false`** — Google Backup does NOT auto-restore the pantry on a fresh install. Trade-off documented in [arc42 §8.9](docs/architecture/08-crosscutting-concepts.md#89-security).
-- **Permissions: only `CAMERA` (runtime) and `INTERNET` (install-time).** No location, contacts, storage, microphone, or sensor permissions.
+- **Permissions: `CAMERA` (runtime), `INTERNET` and `ACCESS_NETWORK_STATE` (install-time).** No location, contacts, storage, microphone, or sensor permissions. `ACCESS_NETWORK_STATE` is pulled in transitively by the HTTP stack to let it check connectivity before retrying; it does not query SSIDs and is not user-personally-identifying.
 
 ### Build / quality
 

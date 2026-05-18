@@ -128,10 +128,10 @@ scanning against real products).
 ## 10. Detail screen — rename + stepper
 
 - [ ] Tap any row in Home → Detail screen opens
-- [ ] Top app bar shows the product name + a Back arrow
-- [ ] Image (if any), name, brand (if any), current quantity, "Updated <relative time>" line all visible
-- [ ] Name field is editable; type a new name → tap **Save**
-- [ ] Snackbar confirms (or no error appears)
+- [ ] Top app bar shows **"Product details"** + a Back arrow on the left + a Delete trash icon on the right
+- [ ] Image (if any), name, brand (if any), current quantity, "Last updated <relative time>" line all visible
+- [ ] Name field is editable; type a new name → commit by tapping the **Done** action on the keyboard (or by moving focus away from the field) — there is no separate Save button
+- [ ] No error appears; "Last updated" timestamp refreshes to "just now"
 - [ ] Quantity stepper: tap **+** → quantity increases by 1; **−** → decreases; below 0 it clamps at 0
 - [ ] Press Back → Home shows the renamed product + new quantity
 
