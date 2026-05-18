@@ -1,9 +1,11 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
+import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
@@ -12,7 +14,9 @@ import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
 import java.net.ConnectException
@@ -125,6 +129,213 @@ class OffApiClientTest {
         assertEquals(0, hits)
     }
 
+    // -- #30 / SR-2: format validation rejects hostile input before any network call --
+
+    @Test
+    fun lookup_belowMinLength_returnsNull_withoutHittingNetwork() = runTest {
+        assertRejectedWithoutNetwork("12345") // 5 digits, regex min is 6
+    }
+
+    @Test
+    fun lookup_aboveMaxLength_returnsNull_withoutHittingNetwork() = runTest {
+        assertRejectedWithoutNetwork("123456789012345") // 15 digits, regex max is 14
+    }
+
+    @Test
+    fun lookup_nonDigit_returnsNull_withoutHittingNetwork() = runTest {
+        assertRejectedWithoutNetwork("abc1234567")
+    }
+
+    @Test
+    fun lookup_queryInjection_returnsNull_withoutHittingNetwork() = runTest {
+        // The most dangerous input shape: would have spliced &token=… into the
+        // OFF request as a query parameter with the old string-interpolation URL.
+        assertRejectedWithoutNetwork("123?token=bar")
+    }
+
+    @Test
+    fun lookup_pathInjection_returnsNull_withoutHittingNetwork() = runTest {
+        assertRejectedWithoutNetwork("../../admin")
+    }
+
+    @Test
+    fun lookup_fragmentInjection_returnsNull_withoutHittingNetwork() = runTest {
+        assertRejectedWithoutNetwork("123#bar")
+    }
+
+    @Test
+    fun lookup_newlineInjection_returnsNull_withoutHittingNetwork() = runTest {
+        // The validator runs on the raw input — \n is a non-digit so the regex
+        // rejects without needing to invoke sanitize first.
+        assertRejectedWithoutNetwork("\n5449000000996")
+    }
+
+    @Test
+    fun lookup_rtlOverridePrefix_returnsNull_withoutHittingNetwork() = runTest {
+        assertRejectedWithoutNetwork("‮123456789012")
+    }
+
+    @Test
+    fun lookup_backslashPathTraversal_returnsNull_withoutHittingNetwork() = runTest {
+        // Windows-flavoured variant of pathInjection — backslash is not a path
+        // separator on Linux but a server framework that normalises both could
+        // still mis-route, so the regex must reject either way.
+        assertRejectedWithoutNetwork("123\\..\\admin")
+    }
+
+    @Test
+    fun lookup_percentEncodedNul_returnsNull_withoutHittingNetwork() = runTest {
+        // Pure printable ASCII — sanitize won't strip it; the regex is the only
+        // gate. If the regex ever loosened beyond `[0-9]` this would slip through
+        // and a downstream sink that percent-decodes the path could see a NUL.
+        assertRejectedWithoutNetwork("123%00")
+    }
+
+    @Test
+    fun lookup_percentEncodedCrlf_returnsNull_withoutHittingNetwork() = runTest {
+        // Classic HTTP-request-splitting shape if a downstream proxy
+        // percent-decodes the path. Same reasoning as %00.
+        assertRejectedWithoutNetwork("123%0d%0a")
+    }
+
+    @Test
+    fun lookup_leadingWhitespace_returnsNull_withoutHittingNetwork() = runTest {
+        // U+0020 is printable, so sanitize keeps it (see BarcodeTextTest.
+        // sanitize_keepsRegularSpace) — the regex is the only defense against a
+        // space-prefixed barcode reaching the URL builder.
+        assertRejectedWithoutNetwork(" 5449000000996")
+    }
+
+    // -- #30 / SR-2: valid input still hits OFF, via the component URL builder --
+
+    @Test
+    fun lookup_validBarcode_buildsComponentUrl() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        val sut = OffApiClient(clientCapturing(captured))
+
+        sut.lookup("5449000000996")
+
+        assertEquals(1, captured.size)
+        val url = captured[0].url
+        // Scheme + host pinned so a regression that switches to http://, or to
+        // world.openbeautyfacts.org (the cosmetics sibling — same host suffix,
+        // different content corpus), trips this test.
+        assertEquals("https", url.protocol.name)
+        assertEquals("world.openfoodfacts.org", url.host)
+        assertEquals("/api/v2/product/5449000000996.json", url.encodedPath)
+        assertEquals(
+            "code,product_name,brands,image_url,status",
+            url.parameters["fields"],
+        )
+    }
+
+    // -- #30 / SR-2: regex boundary cases (a typo like `{7,13}` must fail) --
+
+    @Test
+    fun lookup_exactly6Digits_accepted_andUrlBuilt() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        OffApiClient(clientCapturing(captured)).lookup("123456")
+        assertEquals(1, captured.size)
+        assertEquals("/api/v2/product/123456.json", captured[0].url.encodedPath)
+    }
+
+    @Test
+    fun lookup_exactly14Digits_accepted_andUrlBuilt() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        OffApiClient(clientCapturing(captured)).lookup("12345678901234")
+        assertEquals(1, captured.size)
+        assertEquals("/api/v2/product/12345678901234.json", captured[0].url.encodedPath)
+    }
+
+    // -- #30 belt-and-suspenders: any IllegalArgumentException the engine throws
+    //    (e.g. an exotic URL parser surprise the regex didn't catch) still maps
+    //    to a null lookup rather than escaping to the caller. --
+
+    @Test
+    fun lookup_illegalArgumentException_returnsNull() = runTest {
+        val sut = OffApiClient(clientThrowing(IllegalArgumentException("bad URL")))
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    // -- #30 / SR-2 telemetry: malformed-input rejections still leave a trace --
+
+    @Test
+    fun lookup_rejectedFormat_logsFineWithHint() = runTest {
+        JulLogCapture("OffApiClient").use { capture ->
+            val sut = OffApiClient(
+                HttpClient(MockEngine { error("rejected input must not reach the engine") }) {
+                    install(ContentNegotiation) { json() }
+                },
+            )
+            assertNull(sut.lookup("123?token=bar"))
+
+            // FINE-level so a hostile-input burst is reproducible via
+            // `adb shell setprop log.tag.OffApiClient VERBOSE` without polluting
+            // default logcat output. Hint must be present, raw payload absent.
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected hint in: $joined", joined.contains("123?…ar") || joined.contains("<short>"))
+            assertFalse(
+                "full hostile input '123?token=bar' leaked: $joined",
+                joined.contains("123?token=bar"),
+            )
+        }
+    }
+
+    // -- #31 / SR-10: barcode redacted to hint in WARNING log lines --
+
+    @Test
+    fun lookup_networkError_logsHintNotFullBarcode() = runTest {
+        assertCatchArmRedactsBarcode(IOException("offline"))
+    }
+
+    @Test
+    fun lookup_jsonConvertException_logsHintNotFullBarcode() = runTest {
+        // ContentNegotiation/Ktor throws JsonConvertException on parse failure;
+        // pin the redaction for that catch arm independently of the IO arm.
+        assertCatchArmRedactsBarcode(io.ktor.serialization.JsonConvertException("bad json"))
+    }
+
+    @Test
+    fun lookup_serializationException_logsHintNotFullBarcode() = runTest {
+        assertCatchArmRedactsBarcode(kotlinx.serialization.SerializationException("bad shape"))
+    }
+
+    @Test
+    fun lookup_illegalArgumentException_logsHintNotFullBarcode() = runTest {
+        // Engine-runtime IAE only (URL building is outside the try, and a
+        // regex-validated barcode produces only safe path segments). Pinned at
+        // SEVERE so a future refactor that drops the SEVERE designation also
+        // trips this test.
+        assertCatchArmRedactsBarcode(IllegalArgumentException("bad URL"))
+    }
+
+    private suspend fun assertCatchArmRedactsBarcode(thrown: Throwable) {
+        JulLogCapture("OffApiClient").use { capture ->
+            val sut = OffApiClient(clientThrowing(thrown))
+            sut.lookup("5449000000996")
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue(
+                "expected hint '5449…96' for ${thrown::class.simpleName} in: $joined",
+                joined.contains("5449…96"),
+            )
+            assertFalse(
+                "full barcode leaked for ${thrown::class.simpleName} in: $joined",
+                joined.contains("5449000000996"),
+            )
+        }
+    }
+
+    private suspend fun assertRejectedWithoutNetwork(input: String) {
+        var hits = 0
+        val sut = OffApiClient(
+            HttpClient(MockEngine { hits++; error("should not be reached for input: $input") }) {
+                install(ContentNegotiation) { json() }
+            },
+        )
+        assertNull("expected null lookup for input: $input", sut.lookup(input))
+        assertEquals("expected 0 network calls for input: $input", 0, hits)
+    }
+
     private fun loadFixture(path: String): String =
         javaClass.classLoader!!.getResource(path)!!.readText()
 
@@ -139,6 +350,16 @@ class OffApiClientTest {
 
     private fun clientThrowing(t: Throwable): HttpClient =
         HttpClient(MockEngine { throw t }) {
+            install(ContentNegotiation) { json() }
+        }
+
+    // Captures every request that reaches the engine; responds 404 so the
+    // SUT's null-on-404 path runs and the test focuses purely on URL shape.
+    private fun clientCapturing(out: MutableList<HttpRequestData>): HttpClient =
+        HttpClient(MockEngine { request ->
+            out += request
+            respond(content = ByteReadChannel(""), status = HttpStatusCode.NotFound)
+        }) {
             install(ContentNegotiation) { json() }
         }
 }

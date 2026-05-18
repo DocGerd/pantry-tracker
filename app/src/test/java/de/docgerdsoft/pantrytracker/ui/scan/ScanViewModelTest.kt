@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -22,6 +24,12 @@ import org.junit.Test
 import kotlin.time.Clock
 
 @OptIn(ExperimentalCoroutinesApi::class)
+// Test classes naturally accumulate cases as the ViewModel surface grows; this
+// file groups them by feature area with header comments so they remain readable
+// despite the length. Splitting into per-feature classes would force the
+// FakeProductRepository test double to move to a shared file, which trades one
+// kind of complexity (one large file) for another (cross-file coupling).
+@Suppress("LargeClass")
 class ScanViewModelTest {
 
     private lateinit var fake: FakeProductRepository
@@ -678,6 +686,160 @@ class ScanViewModelTest {
         // FakeProductRepository.suspendOnLookup records every cancelled barcode.
         assertTrue("expected in-flight lookup for 12345 to be cancelled by onCameraError",
             "12345" in fake.cancelledLookups)
+    }
+
+    // --- #30 / SR-13: input sanitization at the scan boundary ---
+
+    @Test
+    fun onBarcodeDecoded_rtlOverridePrefix_sanitizesBeforeDispatch() = runTest {
+        // ML Kit decode of a barcode behind an RTL-override codepoint must not
+        // forward the override to the repository (where it would mis-render in
+        // Compose Text(barcode) and pollute the URL path / Room column).
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("‮5449000000996")
+            awaitItem() // Loading
+            awaitItem() // ManualEntry (no seed → local miss + OFF miss)
+        }
+        assertEquals(listOf("5449000000996"), fake.completedLookups)
+    }
+
+    @Test
+    fun onBarcodeDecoded_newlineInjection_sanitizesBeforeDispatch() = runTest {
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("5449\n000000996")
+            awaitItem() // Loading
+            awaitItem() // ManualEntry
+        }
+        assertEquals(listOf("5449000000996"), fake.completedLookups)
+    }
+
+    @Test
+    fun onBarcodeDecoded_onlyControlChars_isIgnoredWithoutDispatch() = runTest {
+        // Sanitize collapses to empty, which the blank-guard treats as a no-op
+        // — same as a low-confidence ML Kit frame producing a blank decode.
+        vm.uiState.test {
+            awaitItem()
+            vm.onBarcodeDecoded("\u0000\u0007‮\n\r\u007f")
+            expectNoEvents()
+        }
+        assertEquals(0, fake.lookupCallCount)
+    }
+
+    @Test
+    fun onBarcodeDecoded_nonBlankCollapsedToBlank_logsInfoWithLengthOnly() = runTest {
+        // A non-blank input that sanitize collapses to empty is anomalous —
+        // ML Kit shouldn't emit C0/C1/RTL for the EAN/UPC formats. We want
+        // *one* INFO record so the case is auditable, but the log carries the
+        // input length only (no content — by definition hostile or corrupt).
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem()
+                vm.onBarcodeDecoded("\u0000\u0007‮\n\r\u007f")
+                expectNoEvents()
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected fully-stripped INFO record: $joined", joined.contains("fully stripped"))
+            assertTrue("expected len=6 marker: $joined", joined.contains("len=6"))
+            assertFalse("RLO leaked into log: $joined", joined.contains("\u202e"))
+        }
+    }
+
+    @Test
+    fun onBarcodeDecoded_blankInput_doesNotLog() = runTest {
+        // The pre-existing low-confidence-frame case must stay silent —
+        // emitting an INFO at the camera frame rate would spam logcat.
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem()
+                vm.onBarcodeDecoded("")
+                vm.onBarcodeDecoded("   ")
+                expectNoEvents()
+            }
+            assertTrue(
+                "expected zero log records, got: ${capture.messages()}",
+                capture.messages().isEmpty(),
+            )
+        }
+    }
+
+    // --- #31 / SR-3,4,11: log redaction ---
+
+    @Test
+    fun resolveBarcode_failure_logsHintNotFullBarcode() = runTest {
+        fake.lookupShouldThrow = RuntimeException("simulated repository failure")
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem() // Idle
+                vm.onBarcodeDecoded("5449000000996")
+                awaitItem() // Loading
+                awaitItem() // Error
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertTrue("expected hint '5449…96' in log: $joined", joined.contains("5449…96"))
+            assertFalse(
+                "full barcode '5449000000996' leaked into log: $joined",
+                joined.contains("5449000000996"),
+            )
+        }
+    }
+
+    @Test
+    fun confirm_failure_doesNotLogScanCandidateContents() = runTest {
+        // SR-3: the prior log used `phase=$phase`, which serialised the entire
+        // ScanCandidate via data-class toString (barcode + name + brand + imageUrl).
+        // The redaction replaces it with `phaseType=Preview` and nothing else.
+        fake.lookupResponses["5449000000996"] = ScanCandidate.FromOff(
+            barcode = "5449000000996",
+            name = "Sensitive Brand-Name Product",
+            brand = "Sensitive Brand Co.",
+            imageUrl = "https://images.example/secret-asset.jpg",
+        )
+        fake.addShouldThrow = RuntimeException("simulated DB write failure")
+
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem() // Idle
+                vm.onBarcodeDecoded("5449000000996")
+                awaitItem() // Loading
+                awaitItem() // Preview
+                vm.confirm()
+                awaitItem() // Error
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertFalse("barcode leaked: $joined", joined.contains("5449000000996"))
+            assertFalse("product name leaked: $joined", joined.contains("Sensitive Brand-Name Product"))
+            assertFalse("brand leaked: $joined", joined.contains("Sensitive Brand Co."))
+            assertFalse("image URL leaked: $joined", joined.contains("secret-asset.jpg"))
+            // Positive markers: SR-3 wants PII redacted but the *structural*
+            // labels (phase type + mode) preserved so the log line still
+            // disambiguates which arm failed. A regression that drops the log
+            // call entirely, or rewrites it as `logger.warning("failed")`, would
+            // miss the absence-only assertions above but trip these.
+            assertTrue("expected phaseType marker: $joined", joined.contains("phaseType=Preview"))
+            assertTrue("expected mode marker: $joined", joined.contains("mode=Add"))
+        }
+    }
+
+    @Test
+    fun submitManualEntry_failure_doesNotLogName() = runTest {
+        // SR-4: the prior log included `name=$trimmed` — leaks user-typed
+        // product names (often household-specific) into logcat.
+        fake.addShouldThrow = RuntimeException("simulated DB write failure")
+
+        JulLogCapture("ScanViewModel").use { capture ->
+            vm.uiState.test {
+                awaitItem() // Idle
+                vm.onBarcodeDecoded("0000000000000") // unknown → ManualEntry
+                awaitItem() // Loading
+                awaitItem() // ManualEntry
+                vm.submitManualEntry(name = "Private Household Inventory", initialQuantity = 1)
+                awaitItem() // Error
+            }
+            val joined = capture.messages().joinToString(" | ")
+            assertFalse("user-typed name leaked: $joined", joined.contains("Private Household Inventory"))
+        }
     }
 
     private class FakeProductRepository : ProductRepository {

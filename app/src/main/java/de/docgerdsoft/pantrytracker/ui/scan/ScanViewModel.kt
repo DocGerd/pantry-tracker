@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.util.barcodeHint
+import de.docgerdsoft.pantrytracker.util.sanitizeBarcode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,11 +46,31 @@ class ScanViewModel(
      *   qty 0 → NotInInventory. OFF is skipped entirely.
      */
     fun onBarcodeDecoded(barcode: String) {
-        if (barcode.isBlank()) return
-        if (isAlreadyShowing(barcode)) return
+        // SR-13: sanitize at the scan boundary so the rest of the flow (URL
+        // path, Room column, Compose Text) sees a barcode with no C0/C1
+        // control chars and no bidirectional override codepoints. Sanitize
+        // before the blank guard so an input of only control chars is dropped
+        // the same way as a blank decode from a low-confidence ML Kit frame.
+        val clean = barcode.sanitizeBarcode()
+        if (clean.isBlank()) {
+            // A non-blank input that sanitize collapsed to empty is anomalous —
+            // ML Kit's rawValue for the EAN/UPC formats we enable is digits-only,
+            // so this only fires if the format filter widens, a corrupt symbology
+            // is decoded, or an adversarial sticker is presented. Log INFO with
+            // the input length only (no content — by definition hostile or
+            // corrupt) so the case is auditable without per-frame noise.
+            if (barcode.isNotBlank()) {
+                logger.log(
+                    Level.INFO,
+                    "scan decode fully stripped by sanitize (len=${barcode.length})",
+                )
+            }
+            return
+        }
+        if (isAlreadyShowing(clean)) return
         lookupJob?.cancel()
-        _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(barcode)) }
-        lookupJob = viewModelScope.launch { resolveBarcode(barcode) }
+        _uiState.update { it.copy(phase = ScanUiState.Phase.Loading(clean)) }
+        lookupJob = viewModelScope.launch { resolveBarcode(clean) }
     }
 
     private fun isAlreadyShowing(barcode: String): Boolean =
@@ -96,8 +118,9 @@ class ScanViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // Log barcode as a redacted hint (SR-11): 4-prefix + ellipsis + 2-suffix.
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "resolveBarcode($barcode) failed", e)
+            logger.log(Level.WARNING, "resolveBarcode(${barcode.barcodeHint()}) failed", e)
             ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
         }
         _uiState.update { state ->
@@ -164,8 +187,14 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // Logs only mode + phase-type; the full ScanCandidate
+                // (barcode/name/brand/imageUrl) is sensitive — SR-3.
                 @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "confirm() failed (mode=${state.mode}, phase=$phase)", e)
+                logger.log(
+                    Level.WARNING,
+                    "confirm() failed (mode=${state.mode}, phaseType=${phase::class.simpleName})",
+                    e,
+                )
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { s ->
@@ -223,8 +252,10 @@ class ScanViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // Intentionally excludes `name`: user-typed product names are
+                // household-specific (SR-4).
                 @Suppress("SwallowedException")
-                logger.log(Level.WARNING, "submitManualEntry(name=$trimmed, qty=$initialQuantity) failed", e)
+                logger.log(Level.WARNING, "submitManualEntry(qty=$initialQuantity) failed", e)
                 ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
             }
             _uiState.update { state ->

@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
 import de.docgerdsoft.pantrytracker.BuildConfig
+import de.docgerdsoft.pantrytracker.util.barcodeHint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -10,7 +11,11 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpHeaders
+import io.ktor.http.URLBuilder
+import io.ktor.http.Url
+import io.ktor.http.appendPathSegments
 import io.ktor.http.isSuccess
+import io.ktor.http.takeFrom
 import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
@@ -48,12 +53,28 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     // visible signal is the manual-entry sheet, not a toast or error dialog.
     override suspend fun lookup(barcode: String): OffProduct? {
         if (barcode.isBlank()) return null
+        // Format gate (SR-2). Returning null (not throwing) matches the "OFF
+        // miss == drop to manual entry" contract — the caller can't distinguish
+        // a bad-format reject from a 404, which is the user-visible behaviour
+        // we want. Logged at FINE so the (silent-to-the-user) rejection still
+        // leaves a trace operators can surface via
+        // `adb shell setprop log.tag.OffApiClient VERBOSE` when investigating
+        // a hostile-input report.
+        if (!BARCODE_PATTERN.matches(barcode)) {
+            logger.log(Level.FINE, "OFF lookup rejected malformed input ${barcode.barcodeHint()}")
+            return null
+        }
+        // Component URL builder so each path segment is percent-encoded
+        // explicitly (SR-2). Built outside the `try` so any IAE here is a
+        // programmer error (e.g. malformed OFF_BASE_URL constant) and surfaces
+        // in dev rather than silently degrading prod to manual-entry-forever.
+        val url: Url = URLBuilder().apply {
+            takeFrom(OFF_BASE_URL)
+            appendPathSegments("api", "v2", "product", "$barcode.json")
+            parameters.append("fields", OFF_FIELDS)
+        }.build()
         return try {
-            val response: HttpResponse = httpClient.get(
-                "https://world.openfoodfacts.org/api/v2/product/$barcode.json",
-            ) {
-                url.parameters.append("fields", "code,product_name,brands,image_url,status")
-            }
+            val response: HttpResponse = httpClient.get(url)
             if (!response.status.isSuccess()) return null
             val envelope = response.body<OffApiEnvelope>()
             if (envelope.status != 1) null else envelope.product
@@ -63,15 +84,23 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             // Covers network down, DNS failures, connect/socket timeouts (OkHttp
             // surfaces timeout as SocketTimeoutException which is an IOException).
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup network error for $barcode", e)
+            logger.log(Level.WARNING, "OFF lookup network error for ${barcode.barcodeHint()}", e)
             null
         } catch (e: JsonConvertException) {
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup JSON conversion error for $barcode", e)
+            logger.log(Level.WARNING, "OFF lookup JSON conversion error for ${barcode.barcodeHint()}", e)
             null
         } catch (e: SerializationException) {
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup serialization error for $barcode", e)
+            logger.log(Level.WARNING, "OFF lookup serialization error for ${barcode.barcodeHint()}", e)
+            null
+        } catch (e: IllegalArgumentException) {
+            // Engine-runtime IAE only (URL building is outside the try and a
+            // regex-validated 6-14-digit barcode produces only safe path
+            // segments). Logged at SEVERE so an exotic engine failure is noisy
+            // in crash-report aggregators despite the null return.
+            @Suppress("SwallowedException")
+            logger.log(Level.SEVERE, "OFF lookup engine-runtime IAE for ${barcode.barcodeHint()}", e)
             null
         }
     }
@@ -84,6 +113,15 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         private val USER_AGENT: String =
             "PantryTracker/${BuildConfig.VERSION_NAME} (https://github.com/DocGerd/pantry-tracker)"
         private const val TIMEOUT_MILLIS = 8_000L
+
+        private const val OFF_BASE_URL = "https://world.openfoodfacts.org/"
+        private const val OFF_FIELDS = "code,product_name,brands,image_url,status"
+
+        // EAN-8 .. ITF-14 covers every numeric symbology ML Kit can decode in
+        // the formats we enable; 6 is the lower bound because EAN-8 minus the
+        // check digit is sometimes scanned as 7, and the manual-entry sheet
+        // accepts down to 6 for partial codes (matches the OFF API's tolerance).
+        private val BARCODE_PATTERN = Regex("^[0-9]{6,14}$")
 
         private fun defaultClient(): HttpClient = HttpClient(OkHttp) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
