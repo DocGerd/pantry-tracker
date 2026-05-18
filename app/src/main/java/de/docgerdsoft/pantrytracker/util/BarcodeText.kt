@@ -58,6 +58,14 @@ fun String.sanitizeBarcode(): String =
  * Produces a redacted log fingerprint of the form `"5449…96"`. For inputs
  * shorter than 7 chars the prefix+suffix would overlap or leak the entire
  * string, so we return a placeholder instead.
+ *
+ * Granularity is calibrated for EAN-13 / ITF-14 (4-prefix + 2-suffix reveals
+ * 46% / 43% of digits — meaningful redaction for log breadcrumbs). EAN-8 is
+ * the deliberate trade-off case: revealing 6 of 8 digits leaves only 100
+ * candidates, which is more fingerprintable than ideal. Spec'd this way in
+ * security review #31 / SR-10 for log-readability consistency across all
+ * symbologies; if v1.1 wants to tighten the EAN-8 case, raise
+ * [HINT_MIN_LENGTH] to 9 (collapses EAN-8 to `"<short>"`).
  */
 fun String.barcodeHint(): String {
     if (length < HINT_MIN_LENGTH) return "<short>"
