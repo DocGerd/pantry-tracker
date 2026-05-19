@@ -42,8 +42,13 @@ gate is the human's explicit click on "Merge pull request".
 
 Workflow:
 
-1. Open the PR with `Closes #N` or `Refs #N` in the body — no PR ships without
-   a linked issue. If none exists, `gh issue create` first.
+1. Open the PR with a linked issue in the body — no PR ships without one. If
+   none exists, `gh issue create` first. Use `Closes #N` (or `Fixes #N` /
+   `Resolves #N`) when the PR fully resolves the issue — these auto-close it
+   on merge. Use `Refs #N` only when the PR is a partial step and the issue
+   should stay open. Picking `Refs` for a PR that *does* fully resolve the
+   issue leaves the issue open after merge and requires a manual close —
+   bitten on v1.1's #47/#49/#50.
 2. Run the multi-agent review. The canonical entry point is **user-triggered
    `/ultrareview`** (cloud, billed — Claude cannot launch it itself). The
    Claude-invokable local equivalent is the `pr-review-toolkit:review-pr`
@@ -157,9 +162,12 @@ under `docs/security/`.
 
 ## Things that have bitten past sessions
 
-*Eviction criterion: remove an entry when the underlying library version
-that caused it is no longer in `app/gradle.lockfile`, or when the
-convention has been encoded as a detekt / lint rule.*
+*Eviction criterion: remove an entry when one of these is true — the
+underlying library version that caused it is no longer in
+`app/gradle.lockfile`; the convention has been encoded as a detekt / lint
+rule; the CI workflow, pre-commit hook, or build script that surfaced it
+now catches the problem; or the workflow doc the entry mirrors has been
+restructured to make the lesson load-bearing on its own.*
 
 - **`runCatching` swallows `CancellationException`**. In `suspend` code use a
   plain `try/catch` and rethrow `CancellationException` explicitly — otherwise
@@ -174,25 +182,16 @@ convention has been encoded as a detekt / lint rule.*
 - **Control characters in Kotlin test source**: write them as `\uXXXX` escapes
   (six visible source characters), not literal control bytes. Tooling that
   reads the file otherwise faithfully writes whatever byte landed there.
-- **Real-device UAT is non-negotiable for HTTP-client changes.** v1.1's SR-24
-  body cap passed all 45 JVM tests but failed step 2 of UAT on a known-OFF
-  barcode: OFF's CDN uses chunked transfer encoding and omits
-  `Content-Length`, so a "fail-closed on missing CL" policy bricked every
-  lookup. The fix (commit 7599bb2) had to revert to "silently pass when CL
-  absent". Lesson: anything that touches request/response headers needs a
-  real-network smoke test, not just `MockEngine`.
-- **`GRADLE_USER_HOME=/tmp/gradle-user-home` masks `~/.gradle/gradle.properties`.**
-  The WSL sandbox config redirects Gradle's user home to a tmp dir, so the
-  four `PANTRY_TRACKER_RELEASE_*` props in your real `~/.gradle/gradle.properties`
-  are invisible to `assembleRelease`. Bridge them with
-  `grep '^PANTRY_TRACKER_RELEASE_' ~/.gradle/gradle.properties > /tmp/gradle-user-home/gradle.properties`
-  before invoking release builds, or `assembleRelease` produces
-  `app-release-UNSIGNED.apk`.
-- **`Closes #N` vs `Refs #N` in PR bodies**: only `Closes` (or `Fixes` /
-  `Resolves`) auto-closes the issue on merge. `Refs` does not. Bit us when
-  merging PR #47 left #44/#45/#46 open despite shipping their features.
-- **`gh release create` 422 "ReleaseAsset.name already exists" is a false
-  negative.** The CLI returns 422 even when the APK upload actually
-  succeeded. Always verify via `gh release view <tag>` before retrying —
-  retrying will create a phantom duplicate release that gets rolled back
-  but consumes a release ID.
+- **Real-device UAT is non-negotiable for HTTP-client changes.** JVM tests
+  with `MockEngine` cannot reproduce CDN-specific behaviour like chunked
+  transfer encoding (OFF chunks everything and omits `Content-Length`). A
+  header-keyed policy that all unit tests endorse can still brick every
+  scan on a real device. Anything that touches request/response headers,
+  body validation, or response classification needs a real-device smoke
+  test before merging — see `docs/uat/v1-uat-checklist.md`.
+- **Release-procedure gotchas** (`GRADLE_USER_HOME` redirect masking signing
+  props; `gh release create` returning a spurious `422 ReleaseAsset.name
+  already exists` after a successful upload) are documented in
+  [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
+  consult that table before debugging a release-build or release-publish
+  failure.
