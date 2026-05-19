@@ -1,10 +1,22 @@
 # Pantry Tracker — Claude operating notes
 
 Standalone Android Kotlin/Compose app for whole-number kitchen inventory.
-Single `:app` module. v1.0.0 shipped 2026-05-18 as a signed sideload APK.
+Single `:app` module. v1.0.0 shipped 2026-05-18; v1.1.0 (Fallbacks & undo)
+shipped 2026-05-19, both as signed sideload APKs on GitHub Releases.
 
 This file is loaded into every Claude Code session in this repo. Keep it
 high-signal — pointers, not duplication of the source-of-truth docs.
+
+## Hard governance rule: only humans merge to main
+
+**Every change reaching `main` MUST go through a PR that the human merges.**
+Claude may open PRs, push to feature branches, dispatch review subagents,
+post + resolve inline threads, create tags, build APKs, and create GitHub
+Releases — but MUST NOT invoke `gh pr merge` or `git push origin main` (or
+any equivalent that lands code on main). No exceptions for one-line reverts,
+"UAT-verified" hotfixes, wrap-up phases, or ambiguous "do the rest" /
+"continue" instructions. When in doubt, ASK before merging. The audit-trail
+gate is the human's explicit click on "Merge pull request".
 
 ## Commands
 
@@ -30,8 +42,13 @@ high-signal — pointers, not duplication of the source-of-truth docs.
 
 Workflow:
 
-1. Open the PR with `Closes #N` or `Refs #N` in the body — no PR ships without
-   a linked issue. If none exists, `gh issue create` first.
+1. Open the PR with a linked issue in the body — no PR ships without one. If
+   none exists, `gh issue create` first. Use `Closes #N` (or `Fixes #N` /
+   `Resolves #N`) when the PR fully resolves the issue — these auto-close it
+   on merge. Use `Refs #N` only when the PR is a partial step and the issue
+   should stay open. Picking `Refs` for a PR that *does* fully resolve the
+   issue leaves the issue open after merge and requires a manual close —
+   bitten on v1.1's #47/#49/#50.
 2. Run the multi-agent review. The canonical entry point is **user-triggered
    `/ultrareview`** (cloud, billed — Claude cannot launch it itself). The
    Claude-invokable local equivalent is the `pr-review-toolkit:review-pr`
@@ -145,9 +162,12 @@ under `docs/security/`.
 
 ## Things that have bitten past sessions
 
-*Eviction criterion: remove an entry when the underlying library version
-that caused it is no longer in `app/gradle.lockfile`, or when the
-convention has been encoded as a detekt / lint rule.*
+*Eviction criterion: remove an entry when one of these is true — the
+underlying library version that caused it is no longer in
+`app/gradle.lockfile`; the convention has been encoded as a detekt / lint
+rule; the CI workflow, pre-commit hook, or build script that surfaced it
+now catches the problem; or the workflow doc the entry mirrors has been
+restructured to make the lesson load-bearing on its own.*
 
 - **`runCatching` swallows `CancellationException`**. In `suspend` code use a
   plain `try/catch` and rethrow `CancellationException` explicitly — otherwise
@@ -162,3 +182,16 @@ convention has been encoded as a detekt / lint rule.*
 - **Control characters in Kotlin test source**: write them as `\uXXXX` escapes
   (six visible source characters), not literal control bytes. Tooling that
   reads the file otherwise faithfully writes whatever byte landed there.
+- **Real-device UAT is non-negotiable for HTTP-client changes.** JVM tests
+  with `MockEngine` cannot reproduce CDN-specific behaviour like chunked
+  transfer encoding (OFF chunks everything and omits `Content-Length`). A
+  header-keyed policy that all unit tests endorse can still brick every
+  scan on a real device. Anything that touches request/response headers,
+  body validation, or response classification needs a real-device smoke
+  test before merging — see `docs/uat/v1-uat-checklist.md`.
+- **Release-procedure gotchas** (`GRADLE_USER_HOME` redirect masking signing
+  props; `gh release create` returning a spurious `422 ReleaseAsset.name
+  already exists` after a successful upload) are documented in
+  [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
+  consult that table before debugging a release-build or release-publish
+  failure.
