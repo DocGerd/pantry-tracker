@@ -10,23 +10,40 @@
 #   -f on git push        (= --force shorthand; tolerates `git -c x=y push -f`)
 #
 # Governance-enforced blocks (CLAUDE.md hard rule: "only humans merge to main"):
-#   git push <...>:main   any push whose destination is `main` (incl. `HEAD:main`,
-#                         `:main` delete, bare `main`). Tolerates branch names that
-#                         merely *contain* "main" (e.g. `feature/main-cleanup`)
-#                         because the dst-token must be word-boundaried by space
-#                         or `:` (refspec separator).
+#   git push <...>main    any push whose destination ref is `main`, in any
+#                         common refspec form: bare `main`, `HEAD:main`, `:main`
+#                         (delete), `abc123:main`, `refs/heads/main`,
+#                         `HEAD:refs/heads/main`, `+main` / `+refs/heads/main`
+#                         (force-refspec without --force flag). Anchored to the
+#                         same `git push` invocation so unrelated mentions of
+#                         "main" elsewhere in the command line do NOT trigger
+#                         (e.g. `git push origin feature/foo && echo main` is
+#                         allowed). Tolerates `main` as the SRC of a refspec
+#                         (`main:foo` pushes local main to remote foo — fine)
+#                         and branch names that merely *contain* "main"
+#                         (`feature/main-cleanup`).
 #   gh pr merge           the other path that lands code on main.
+#
+# A quote-stripping pre-pass normalizes the command before governance matching,
+# so `git push origin "main"`, `eval "git push origin main"`, and
+# `bash -c "gh pr merge 47"` are all caught despite the wrapping quotes.
 #
 # Fail-closed: if JSON parsing fails (python3 missing, malformed input, schema
 # changed), the hook exits 2 with a diagnostic — refusing the action is the
 # only safe default for a guard hook. A guard that silently allows when it
 # can't tell what's happening is worse than no guard at all.
 #
-# Known limitation: this hook matches on raw command text, so a Bash command
-# whose *body* contains these flag literals (e.g. `cat <<EOF` heredoc that
-# echoes "--force" as data, or `grep --no-verify file`) will false-positive
-# and be blocked. If you need to write/echo this text, prefer the Write or
-# Edit tools (which this hook doesn't match) or rename the literal.
+# Known limitations:
+# - Matches on raw command text. A Bash command whose *body* contains these
+#   flag literals (e.g. `cat <<EOF` heredoc echoing "--force" as data, or
+#   `grep --no-verify file`) will false-positive and be blocked. If you need
+#   to write/echo this text, prefer the Write or Edit tools (which this hook
+#   doesn't match) or rename the literal.
+# - Cannot catch deferred shell expansion. `r=main; git push origin $r` and
+#   `branch=$(echo main); git push origin $branch` slip through because the
+#   literal text contains no `main` ref-token at hook-evaluation time. There
+#   is no general defense against this in a text-pattern hook; policy +
+#   review must catch variable-laundering attempts.
 #
 # Test:
 #   echo '{"tool_input":{"command":"git commit --no-verify -m x"}}' \
@@ -70,6 +87,21 @@
 #   echo '{"tool_input":{"command":"gh pr view 47"}}' \
 #     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
 # Expected: exit=0 (gh pr view is not gh pr merge).
+#   echo '{"tool_input":{"command":"git push origin refs/heads/main"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (full ref form, dst still main).
+#   echo '{"tool_input":{"command":"git push origin +main"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (force-refspec without --force flag).
+#   echo '{"tool_input":{"command":"eval \"git push origin main\""}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (quote-strip pre-pass catches eval/bash -c wrappers).
+#   echo '{"tool_input":{"command":"echo $(gh pr merge 47)"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (subshell form; leading char class includes `(`).
+#   echo '{"tool_input":{"command":"git push origin feature/foo && echo main"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=0 (FP fix: `main` outside the same `git push` invocation).
 set -euo pipefail
 
 input="$(cat)"
@@ -157,7 +189,7 @@ if [[ " $command " =~ (^|[[:space:]])--force-with-lease([[:space:]=]|$) ]]; then
 # `git status && git push -f` still match. The cost is over-matching across
 # quoted strings containing the literal text `git push`, which is acceptable
 # (see "Known limitation" in the header).
-git_lead='(^|[[:space:]\;\|\&])git([[:space:]]+[^[:space:]]+)*[[:space:]]+'
+git_lead='(^|[[:space:]\;\|\&\(`])git([[:space:]]+[^[:space:]]+)*[[:space:]]+'
 if [[ "$command" =~ ${git_lead}commit[[:space:]] ]] && \
    [[ " $command " =~ (^|[[:space:]])-n([[:space:]=]|$) ]]; then
     reject "git commit -n"
@@ -169,20 +201,50 @@ fi
 
 # Governance: only humans merge to main (CLAUDE.md hard rule).
 #
-# Pattern: any `git push` whose destination ref is `main`. `main` must be
-# preceded by either whitespace (bare ref form: `git push origin main`) or `:`
-# (refspec dst form: `HEAD:main`, `:main` delete, `abc123:main`) and followed
-# by whitespace or end-of-string. This intentionally does NOT match `main` when
-# it appears as the SRC of a refspec like `main:foo` (colon AFTER main, not
-# before), nor branch names that merely contain "main" like `feature/main-x`
-# (slash before main, not space or colon).
-if [[ "$command" =~ ${git_lead}push[[:space:]] ]] && \
-   [[ " $command " =~ (^|[[:space:]:])main([[:space:]]|$) ]]; then
+# Quote-stripping pre-pass: normalize the command by removing ASCII single and
+# double quotes before the governance regexes run. This lets `git push origin
+# "main"`, `eval "git push origin main"`, and `bash -c "gh pr merge 47"` match
+# despite the wrapping quotes. The original $command is preserved for the
+# reject message so the user sees what they actually typed.
+command_match="${command//\"/}"
+command_match="${command_match//\'/}"
+
+# Single combined regex (not two independent matches): require `main` to appear
+# as the *destination* of the same `git push` invocation. Walking through it:
+#   ${git_lead}push[[:space:]]+        the `git push ` invocation
+#   ([^[:space:]\;\|\&]+[[:space:]]+)* zero or more intermediate argv tokens,
+#                                       stopping at any shell separator (so
+#                                       `... feature/foo && echo main` cannot
+#                                       reach the `main` token from this push)
+#   \+?                                 optional force-refspec prefix `+`
+#   (refs/heads/                        full ref form `refs/heads/main`
+#   |[^[:space:]\;\|\&]*:(refs/heads/)?)?  OR colon-prefixed dst forms:
+#                                       `HEAD:main`, `:main`, `abc:main`,
+#                                       `HEAD:refs/heads/main`
+#   main                                the dst ref itself
+#   (\^[^[:space:]\;\|\&]*)?            optional revspec suffix `^...`
+#   ([[:space:]\;\|\&\)`]|$)            end of the argv token. Includes `)`
+#                                       and backtick so subshell forms like
+#                                       `echo $(git push origin main)` and
+#                                       `` `git push origin main` `` terminate
+#                                       correctly.
+#
+# Allowed-by-design (the regex correctly does NOT match these):
+#   git push origin main:foo            main is SRC, not dst (colon AFTER main)
+#   git push origin feature/main-x      branch name merely contains "main"
+#                                       (preceded by `/` but not in dst position)
+#   git push origin feature/foo && echo main  the `&&` breaks argv-token continuity
+push_main_regex="${git_lead}push[[:space:]]+([^[:space:]\;\|\&]+[[:space:]]+)*\+?(refs/heads/|[^[:space:]\;\|\&]*:(refs/heads/)?)?main(\^[^[:space:]\;\|\&]*)?([[:space:]\;\|\&\)\`]|$)"
+if [[ "$command_match" =~ $push_main_regex ]]; then
     reject_governance "git push to main"
 fi
 
-# Governance: `gh pr merge` is the other path that lands code on main.
-if [[ "$command" =~ (^|[[:space:]\;\|\&])gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$) ]]; then
+# Governance: `gh pr merge` is the other path that lands code on main. The
+# leading char class includes `(` and backtick so subshell forms like
+# `echo $(gh pr merge 47)` and `` `gh pr merge 47` `` are caught. Single-quoted
+# so the literal backtick isn't interpreted as command substitution.
+gh_pr_merge_regex='(^|[[:space:]\;\|\&\(`])gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'
+if [[ "$command_match" =~ $gh_pr_merge_regex ]]; then
     reject_governance "gh pr merge"
 fi
 
