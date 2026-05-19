@@ -180,6 +180,58 @@ class HomeViewModelTest {
         assertNull(fake.lastDeletedId)
     }
 
+    @Test
+    fun confirmDelete_emitsSnackbarDeletedEvent_withTheDeletedProduct() = runTest {
+        val now = Clock.System.now()
+        val target = Product(
+            id = 7, barcode = "X", name = "Beans",
+            quantity = 2, createdAt = now, updatedAt = now,
+        )
+        fake.emit(listOf(target))
+
+        vm.snackbarEvents.test {
+            vm.requestDelete(target)
+            vm.confirmDelete()
+            val event = awaitItem()
+            assertEquals(SnackbarEvent.Deleted(target), event)
+        }
+    }
+
+    @Test
+    fun undoDelete_callsRepositoryRestore_withSameProduct() = runTest {
+        val now = Clock.System.now()
+        val target = Product(
+            id = 7, barcode = "X", name = "Beans",
+            quantity = 2, createdAt = now, updatedAt = now,
+        )
+
+        vm.undoDelete(target)
+
+        // FakeProductRepository captures `restore` invocations into `restored`.
+        // Same captured instance round-trips: id, createdAt, updatedAt all preserved.
+        assertEquals(listOf(target), fake.restored)
+    }
+
+    @Test
+    fun confirmDelete_twice_emitsTwoSeparateEvents_noDrop() = runTest {
+        // Pins the Channel-not-StateFlow choice: back-to-back deletes must
+        // both surface as discrete snackbar events, even if the screen
+        // hasn't fully consumed the previous one. A StateFlow with
+        // equal-Product semantics could collapse the two.
+        val now = Clock.System.now()
+        val a = Product(id = 1, barcode = "A", name = "A", quantity = 1, createdAt = now, updatedAt = now)
+        val b = Product(id = 2, barcode = "B", name = "B", quantity = 1, createdAt = now, updatedAt = now)
+        fake.emit(listOf(a, b))
+
+        vm.snackbarEvents.test {
+            vm.requestDelete(a); vm.confirmDelete()
+            assertEquals(SnackbarEvent.Deleted(a), awaitItem())
+
+            vm.requestDelete(b); vm.confirmDelete()
+            assertEquals(SnackbarEvent.Deleted(b), awaitItem())
+        }
+    }
+
     private class FakeProductRepository : ProductRepository {
         private val all = MutableStateFlow<List<Product>>(emptyList())
         var lastSearchQuery: String? = null
