@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Standard Pantry Tracker multi-agent PR review cycle using the GitHub MCP — dispatch toolkit agents, post inline findings as a batched review, fix every finding, verify, hand off to human for merge, capture lessons. Use when about to open or resume review on a PR.
+description: Standard Pantry Tracker multi-agent PR review cycle using the GitHub MCP — dispatch toolkit agents, post inline findings as a batched review, fix every finding, verify, hand off to human for merge, capture lessons. Use when reviewing, addressing comments on, posting findings to, resolving review threads on, or deciding "ready to merge" for a PR — including phrasings like "review PR #N", "address comments on #N", "is #N ready to merge", "post the review", "resolve the threads".
 ---
 
 # PR Review — standard cycle
@@ -16,10 +16,12 @@ the forbid list, or the project-specific gotchas each session.
   exists yet, create one first via
   `mcp__plugin_github_github__issue_write` method=create.
 - Working tree clean on the PR's branch.
-- GitHub MCP loaded (`mcp__plugin_github_github__*` available via ToolSearch).
-  If not, ask the user to install/enable it before proceeding — falling back
-  to `gh` CLI bypasses the resolve-thread native call and reintroduces the
-  bash `!`-mangling problem.
+- GitHub MCP available — the `mcp__plugin_github_github__*` schemas are
+  deferred; fetch each tool's schema via `ToolSearch select:<name>` (or
+  `ToolSearch select:name1,name2,...`) before its first call in a session.
+  If the MCP isn't installed, fall back to the older `gh` CLI path
+  (`.claude/skills/post-finding/`) — the bash `!`-mangling issue that
+  motivated the MCP path is back in scope on that fallback.
 
 ## Steps
 
@@ -33,27 +35,28 @@ Pull what the review subagents need to reason about the change.
 
 ### 2. Dispatch the multi-agent review
 
-**Default: invoke the `pr-review-toolkit:review-pr` skill.** It dispatches the
-full specialist set (code-reviewer, silent-failure-hunter, pr-test-analyzer,
-type-design-analyzer, comment-analyzer, code-simplifier) in parallel against
-the PR diff.
+If the user has separately triggered `/ultrareview` (canonical, cloud-billed
+— Claude cannot launch it), wait for those findings instead of dispatching
+the local toolkit.
+
+Otherwise: **invoke the `pr-review-toolkit:review-pr` skill** as the default.
+It dispatches the full specialist set (code-reviewer, silent-failure-hunter,
+pr-test-analyzer, type-design-analyzer, comment-analyzer, code-simplifier)
+in parallel against the PR diff.
 
 **Lightweight alternative** for one-file or mechanical PRs (docs-only renames,
-trivial config bumps, single-line fixes) — dispatch these three in one
-message, in parallel:
-
-- `pr-review-toolkit:code-reviewer`        — correctness + conventions
-- `pr-review-toolkit:silent-failure-hunter` — error handling + security smells
-- `pr-review-toolkit:code-simplifier`      — style, clarity, dead abstractions
-
-Skip the full toolkit only when the implementer self-report is thorough and
-the diff is auditable in one read (see the
-`feedback_subagent_review_proportionality` memory).
+trivial config bumps, single-line fixes) — dispatch only the relevant subset
+of `pr-review-toolkit:*` agents in parallel. Skip the full 6-agent set only
+when the diff is small + mechanical AND the implementer self-report calls out
+every change; verify diffs yourself instead.
 
 ### 3. Consolidate findings as one batched inline review
 
-Each finding becomes one inline comment on the diff, all under a single
-review submission. The pending-review pattern lets you batch.
+**Zero-findings shortcut:** if all dispatched reviewers report zero findings,
+skip step 3 entirely and proceed directly to step 5 → step 6's APPROVE path.
+
+Otherwise: each finding becomes one inline comment on the diff, all under a
+single review submission. The pending-review pattern lets you batch.
 
 a. Create the pending review (no `event` → stays pending):
 
@@ -62,6 +65,7 @@ a. Create the pending review (no `event` → stays pending):
 b. For each finding, add one inline comment to the pending review:
 
    `add_comment_to_pending_review`
+     owner=<owner> repo=<repo> pullNumber=<n>
      path=<file>
      line=<line>                      (last line if multi-line)
      startLine=<line>                 (only for multi-line ranges)
@@ -70,21 +74,35 @@ b. For each finding, add one inline comment to the pending review:
      body=<finding text + suggested fix>
 
    Body convention: one short paragraph stating the issue, a fenced suggested
-   diff or fix snippet, and (if relevant) the project gotcha it maps to
-   (e.g. "runCatching swallows CancellationException").
+   diff or fix snippet, and (if relevant) a cross-reference to the CLAUDE.md
+   "Things that have bitten past sessions" section.
 
 c. Submit the pending review:
 
    `pull_request_review_write` method=submit_pending
-     event=REQUEST_CHANGES            (use COMMENT only if every finding is a nit)
+     event=REQUEST_CHANGES            (or COMMENT — see note below)
      body=<one-line summary listing how many findings, grouped by severity>
 
-d. Capture the thread node IDs for the resolve step:
+   ⚠ **GitHub forbids self-REQUEST_CHANGES.** When reviewing your own PR (the
+   common solo-dev case), use `event=COMMENT` — the inline threads still post;
+   only the formal "changes requested" status is blocked. Reserve
+   `REQUEST_CHANGES` for reviews of other contributors' PRs.
 
-   `pull_request_read` method=get_review_comments
+d. Capture thread node IDs for the resolve step.
 
-   Returns each thread's `id` (e.g. `PRRT_kwDOxxx`), `isResolved`, and the
-   comments it contains. Record `{path:line → threadId}` mappings.
+   `pull_request_read` method=get_review_comments perPage=100
+
+   Returns each thread's `isResolved` / `isOutdated` / `isCollapsed` flags
+   and the comments it contains — but **note: this MCP method does not
+   surface the thread node ID (PRRT_kwDOxxx)** that `resolve_thread`
+   requires. Fall back to GraphQL via a Python helper (see
+   `.claude/skills/post-finding/SKILL.md` for the query shape) to fetch
+   `{threadId, isResolved, comments[0].databaseId}` tuples. Map them to your
+   findings via `databaseId` — the integer in the inline-comment URL
+   `discussion_r<databaseId>` matches the response's `databaseId`. Record
+   threads keyed by `threadId`, not by `path:line` (which collides when
+   multiple findings share a line). Paginate via `after` if the PR has >100
+   threads.
 
 ### 4. Fix every finding on the same branch
 
@@ -93,20 +111,20 @@ reference the finding in the commit message body (helps the audit trail).
 
 After each fix lands and is pushed, resolve the matching thread:
 
-   `pull_request_review_write` method=resolve_thread  threadId=PRRT_kwDOxxx
+   `pull_request_review_write` method=resolve_thread
+     owner=<owner> repo=<repo> pullNumber=<n>   (schema-required even though
+                                                 unused for this method;
+                                                 omitting → InputValidationError)
+     threadId=PRRT_kwDOxxx
 
-The MCP exposes this natively — no GraphQL plumbing, no Python-subprocess
-workaround for bash `!`-mangling. Resolving an already-resolved thread is a
-no-op, so it's safe to re-run in a loop.
+Resolving an already-resolved thread is a no-op, so it's safe to re-run.
 
 ### 5. Verification gate
 
 Invoke `superpowers:verification-before-completion` to enforce
-evidence-before-assertion, then run the project gates:
+evidence-before-assertion, then run the project gates documented in
+CLAUDE.md §Commands (`./gradlew :app:detekt`, `:app:lint`, `:app:test`) plus:
 
-- `./gradlew :app:detekt`
-- `./gradlew :app:lint`
-- `./gradlew :app:test`
 - `pull_request_read` method=get_check_runs → CI green on the PR's head SHA
 
 For HTTP-client / header / response-policy changes: real-device UAT per
@@ -117,74 +135,42 @@ incident.
 
 ### 6. Ready-to-merge handoff
 
-Once all findings are resolved (every thread `isResolved=true`), all gates
-green, and CI green on the head SHA:
+Once all threads are resolved (`isResolved=true`) and CI is green on the
+head SHA:
 
 a. Post a one-line APPROVE summary:
 
    `pull_request_review_write` method=create
      event=APPROVE
-     body="Ready to merge — N findings resolved, CI green."
+     body="Ready to merge — review clean, CI green."          (N=0 path)
+       OR
+     body="Ready to merge — N findings resolved, CI green."   (N≥1 path)
 
 b. STOP. The human clicks "Merge pull request".
 
-⚠ **Claude MUST NOT invoke any of the following — no exceptions, no
-one-line-revert hotfixes, no ambiguous "do the rest" instructions:**
+⚠ **Claude MUST NOT cause `main` to advance via any vector.** Per CLAUDE.md's
+hard governance rule, this is non-negotiable. The bash hook from #64 blocks
+the shell-based paths it knows about but cannot reach the MCP. **When in
+doubt about any merge-adjacent action, ASK.** Known vectors as of this
+writing:
 
-- `mcp__plugin_github_github__merge_pull_request`  (MCP merge)
-- `gh pr merge`                                     (gh CLI merge)
-- `git push origin main`                            (direct push to main)
+- `mcp__plugin_github_github__merge_pull_request`  (MCP — this skill's forbid list is the only gate)
+- `gh pr merge`                                     (gh CLI — bash hook gates)
+- `git push origin main`                            (direct push — bash hook gates)
 
-The bash hook at `.claude/hooks/block-dangerous-bash.sh` (added in #64) blocks
-the two `git`/`gh` shell-based vectors, but does NOT cover the MCP merge call
-— this skill's forbid list is the only gate for that vector. When in doubt,
-ASK before any merge-adjacent action.
+A new merge tool appearing in a future plugin update must be added to this
+list AND, ideally, to the bash hook regex.
 
 ### 7. After merge, capture lessons
 
 Once the human has merged, invoke `claude-md-management:revise-claude-md` to
-land any new lessons into CLAUDE.md.
+land any new lessons into CLAUDE.md. Apply the eviction criterion documented
+there — don't duplicate lessons already encoded in a CI rule, lint rule,
+hook, or load-bearing doc.
 
-Apply the eviction criterion already in CLAUDE.md — only land lessons that
-are NOT already encoded in one of:
+## Cross-reference
 
-- a CI workflow rule
-- a detekt or lint rule
-- a pre-commit / pre-push hook
-- a load-bearing doc (SHIPPING.md, UAT checklist, etc.)
-
-If the lesson is already encoded somewhere that gates the relevant action, a
-CLAUDE.md entry is duplication — skip it.
-
-## Project-specific gotchas worth surfacing in findings
-
-- **`Closes #N` vs `Refs #N`**: only `Closes` auto-closes the linked issue on
-  merge. Bitten on PRs #47, #49, #50 — all used `Refs`, all required manual
-  issue closure.
-- **detekt list-key overrides**: in `detekt-config.yml`, any list-valued field
-  (`excludes`, `ignoreNumbers`, `comments`, `ignoreAnnotated`, …) REPLACES the
-  bundled default — re-list every default entry first or the rule silently
-  starts firing on test paths.
-- **`runCatching` in suspend code**: swallows `CancellationException`. Use
-  `try/catch (CancellationException) { throw }` then catch the broader type
-  — otherwise a cancelled `viewModelScope` job can still race a state write.
-- **Compose androidTest `assert()`**: bare `assert()` is a no-op on ART, so a
-  failing assertion silently passes. Use `org.junit.Assert.*` or the Compose
-  test-rule assertions (`assertExists()`, `assertIsDisplayed()`).
-- **Control characters in Kotlin source**: write them as `\uXXXX` escapes,
-  not literal control bytes. Editors and the Write tool faithfully persist
-  whatever byte landed there.
-- **HTTP / header / response-policy changes**: real-device UAT non-negotiable
-  (MockEngine doesn't emit chunked encoding).
-
-## Why this skill exists
-
-The PR review cycle has been documented in three places — CLAUDE.md prose,
-the `post-finding` skill (gh-api-based, now superseded by the MCP path for
-this workflow), and accumulated memory feedback. Each session re-derived the
-exact tool calls and re-discovered the project gotchas.
-
-This skill collapses that into one entry point. The GitHub MCP eliminates
-the previous biggest source of friction (GraphQL resolveReviewThread via
-Python subprocess to dodge bash `!`-mangling) and adds a new governance gap
-(MCP-based merge bypasses the bash hook) — both are addressed inline above.
+When drafting finding bodies, cross-reference the "Things that have bitten
+past sessions" section in CLAUDE.md — many findings map to a named gotcha
+there (Closes vs Refs, `runCatching`/CancellationException, detekt list-keys,
+Compose `assert()`, control chars in Kotlin source, HTTP/real-device UAT).
