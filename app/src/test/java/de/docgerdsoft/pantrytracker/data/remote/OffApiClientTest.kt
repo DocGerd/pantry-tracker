@@ -1,10 +1,11 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
+import de.docgerdsoft.pantrytracker.data.remote.OffApiClient.Companion.MAX_BODY_BYTES
+import de.docgerdsoft.pantrytracker.data.remote.OffApiClient.Companion.installOffBodyCap
 import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
-import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
@@ -554,7 +555,9 @@ class OffApiClientTest {
         // Ktor 3's SaveBody enforces body-size == Content-Length, so the body
         // size matches the header; the validator is what fails the response.
         val oversizedSize = 1_048_576 // 1 MB
-        val client = HttpClient(MockEngine { _ ->
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
             respond(
                 content = ByteReadChannel("x".repeat(oversizedSize)),
                 status = HttpStatusCode.OK,
@@ -565,18 +568,49 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            HttpResponseValidator {
-                validateResponse { response ->
-                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                    if (contentLength != null && contentLength > 256L * 1024L) {
-                        throw IOException("OFF response body exceeds cap: $contentLength bytes")
-                    }
-                }
-            }
+            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 
-        assertNull(sut.lookup("5449000000996"))
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        // Pin fail-fast: an oversized OFF response is a real fault (not a miss),
+        // so the chain must NOT walk to sister hosts — that would quadruple the
+        // OOM exposure on chunked-bypass paths. Mirrors the 5xx fail-fast test.
+        assertEquals("oversized must fail-fast", 1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
+    fun lookup_oversizedNoContentLength_returnsNull_failsFast() = runTest {
+        // Chunked / proxy-stripped Content-Length must fail-closed (SR-24
+        // defence-in-depth): the validator throws OversizedResponseException(-1)
+        // rather than letting the body buffer into memory unchecked.
+        // The MockEngine response below sets Content-Type but omits Content-Length
+        // entirely — Ktor 3 still permits this (engine derives length from the
+        // ByteReadChannel) — and the chain must short-circuit on OFF.
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel("""{"status":1,"product":{"code":"x"}}"""),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            installOffBodyCap()
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        // Missing CL is treated as a real fault (sick CDN / hostile proxy), not
+        // as a miss — chain MUST NOT walk to sister hosts.
+        assertEquals("no-Content-Length must fail-fast", 1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
 
     @Test
@@ -585,7 +619,7 @@ class OffApiClientTest {
         // Build a body of exactly 256 KB of valid JSON by padding the
         // product_name field with filler — Ktor 3's SaveBody enforces
         // body-size == Content-Length, so the body actually has to match.
-        val capBytes = 256 * 1024
+        val capBytes = MAX_BODY_BYTES.toInt()
         val body = paddedProductJson(capBytes)
         val client = HttpClient(MockEngine { _ ->
             respond(
@@ -598,14 +632,7 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            HttpResponseValidator {
-                validateResponse { response ->
-                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                    if (contentLength != null && contentLength > capBytes.toLong()) {
-                        throw IOException("body exceeds cap")
-                    }
-                }
-            }
+            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 
@@ -616,7 +643,7 @@ class OffApiClientTest {
 
     @Test
     fun lookup_atCapPlusOneByteContentLength_isRejected() = runTest {
-        val capBytes = 256 * 1024
+        val capBytes = MAX_BODY_BYTES.toInt()
         val advertised = capBytes + 1
         val body = paddedProductJson(advertised)
         val client = HttpClient(MockEngine { _ ->
@@ -630,14 +657,7 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json() }
-            HttpResponseValidator {
-                validateResponse { response ->
-                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                    if (contentLength != null && contentLength > capBytes.toLong()) {
-                        throw IOException("body exceeds cap")
-                    }
-                }
-            }
+            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 
@@ -648,6 +668,12 @@ class OffApiClientTest {
      * Returns a valid OFF envelope JSON of exactly [targetBytes] length by
      * padding the product_name field with repeated filler. Used only by the
      * boundary tests above; the body shape mirrors `off/coke_330ml.json`.
+     *
+     * Length must be exact (not *"at least N"*) because Ktor 3's `SaveBody`
+     * plugin enforces `body.size == Content-Length`; mismatched lengths
+     * surface as engine-level errors, not validator rejections — which would
+     * give the boundary tests a false-positive failure path that bypasses the
+     * validator entirely.
      */
     private fun paddedProductJson(targetBytes: Int): String {
         val prefix = """{"code":"5449000000996","product":{"brands":"Coca-Cola",""" +

@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.data.remote
 import de.docgerdsoft.pantrytracker.BuildConfig
 import de.docgerdsoft.pantrytracker.util.barcodeHint
 import io.ktor.client.HttpClient
+import io.ktor.client.HttpClientConfig
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpResponseValidator
@@ -209,12 +210,19 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         // hostile or accidentally-huge response. OFF single-product JSON observed
         // at 5-20 KB; 256 KB is a 10x safety factor. The cap is strict-greater-
         // than — a Content-Length of exactly MAX_BODY_BYTES is allowed.
-        private const val MAX_BODY_BYTES: Long = 256L * 1024L
+        // `internal` so the OffApiClientTest body-cap boundary tests can reference
+        // the cap value instead of duplicating the literal, keeping the production
+        // constant and the test boundary in lockstep.
+        internal const val MAX_BODY_BYTES: Long = 256L * 1024L
 
         // Extends IOException deliberately — the existing `catch (e: IOException)`
         // arm in lookupOnce already maps it to HostResult.Error so no new catch
         // arm is needed.
-        private class OversizedResponseException(size: Long) :
+        // `internal` (and not nested in `companion`-private scope) so the
+        // body-cap tests can `assertThrows`/catch this exact type rather than the
+        // broader IOException supertype — a regression that re-throws a plain
+        // IOException would silently pass against the supertype.
+        internal class OversizedResponseException(size: Long) :
             IOException("OFF response body exceeds cap: $size bytes")
 
         private val OFF_HOSTS: List<String> = listOf(
@@ -249,20 +257,42 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
                 connectTimeoutMillis = TIMEOUT_MILLIS
                 socketTimeoutMillis = TIMEOUT_MILLIS
             }
+            installOffBodyCap()
+            defaultRequest {
+                headers.append(HttpHeaders.UserAgent, USER_AGENT)
+            }
+        }
+
+        // Ktor 3 exposes HttpResponseValidator as a top-level extension on
+        // HttpClientConfig — not via install(...) as Ktor 2 docs (and the v1.1
+        // plan) suggested. Do not rewrite to install(HttpResponseValidator) { ... }.
+        //
+        // Extracted as `internal` so the body-cap tests can wire the exact same
+        // validator into their MockEngine-backed clients — keeping the cap
+        // literal, the exception type, and the missing-Content-Length policy in
+        // one place. Without this extension the 3 boundary tests would inline
+        // copies of the validator and silently diverge from production
+        // (the original PR review caught exactly that).
+        internal fun HttpClientConfig<*>.installOffBodyCap() {
             HttpResponseValidator {
                 // SR-24: reject responses whose advertised body exceeds the cap
-                // before any parse happens. Bodies without Content-Length (chunked)
-                // are not size-checked at the header stage — acceptable for v1.1
-                // because OFF's CDN sends Content-Length for product responses.
+                // BEFORE any parse happens.
+                //
+                // Fail-closed on missing Content-Length: a chunked response, a
+                // gzipped response with no advertised length, or a proxy-rewritten
+                // response with the CL header stripped would otherwise bypass
+                // the cap and let `response.body<OffApiEnvelope>()` buffer an
+                // unbounded body into memory. Defence-in-depth (SR-24) is
+                // specifically about NOT trusting the upstream CDN to keep
+                // sending Content-Length forever, so we treat the header's
+                // absence as failure rather than as "allowed".
                 validateResponse { response ->
                     val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                    if (contentLength != null && contentLength > MAX_BODY_BYTES) {
+                        ?: throw OversizedResponseException(-1L)
+                    if (contentLength > MAX_BODY_BYTES) {
                         throw OversizedResponseException(contentLength)
                     }
                 }
-            }
-            defaultRequest {
-                headers.append(HttpHeaders.UserAgent, USER_AGENT)
             }
         }
     }
