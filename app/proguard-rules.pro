@@ -35,6 +35,20 @@
 -keep interface de.docgerdsoft.pantrytracker.data.local.ProductDao { *; }
 -keep interface de.docgerdsoft.pantrytracker.data.local.OffLookupCacheDao { *; }
 
+# ML Kit barcode scanning (com.google.mlkit:barcode-scanning).
+# Discovered necessary during v1.2 UAT: real-device crash with NPE in
+# `com.google.mlkit.vision.barcode.internal.zzg.zzb` at
+# `BarcodeScanning.getClient(options)` (CameraPreview.kt:55).
+# ML Kit ships consumer-rules.pro but they do not cover all of its
+# internal dependency-injection wiring under AGP 9 / R8 8.9.27 / ML Kit
+# 17.3.0. Keep everything under the mlkit namespaces broadly — the
+# scanner relies on heavy reflection inside `zz*` classes.
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.android.gms.vision.** { *; }
+-keep class com.google.android.gms.internal.mlkit_** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.vision.**
+
 # Pin OffLookupCacheEntry's primary constructor. The data class has an
 # `init { require(name.isNotBlank()) }` invariant (PR C polish) — if R8
 # inlines or simplifies the constructor body, the IllegalArgumentException
