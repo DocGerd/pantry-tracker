@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
+import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
 import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import kotlinx.coroutines.test.runTest
@@ -567,10 +568,12 @@ class ProductRepositoryImplTest {
     }
 
     private class FakeOffLookup : OffLookup {
-        val responses = mutableMapOf<String, OffProduct>()
+        private val responses = mutableMapOf<String, OffLookupResult>()
         var lookupCallCount = 0
-        fun stub(code: String, value: OffProduct) { responses[code] = value }
-        override suspend fun lookup(barcode: String): OffProduct? {
+        fun stub(code: String, product: OffProduct, host: String = "https://world.openfoodfacts.org/") {
+            responses[code] = OffLookupResult(product, host)
+        }
+        override suspend fun lookup(barcode: String): OffLookupResult? {
             lookupCallCount++
             return responses[barcode]
         }

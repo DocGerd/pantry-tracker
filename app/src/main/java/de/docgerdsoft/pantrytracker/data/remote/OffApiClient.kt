@@ -73,7 +73,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     // into manual entry. Exceptions are logged at WARN (one per scan max — not
     // logcat-spammy) so flaky-network reports have a stack trace, but the user-
     // visible signal is the manual-entry sheet, not a toast or error dialog.
-    override suspend fun lookup(barcode: String): OffProduct? {
+    override suspend fun lookup(barcode: String): OffLookupResult? {
         if (barcode.isBlank()) return null
         // Format gate (SR-2). Returning null (not throwing) matches the "OFF
         // miss == drop to manual entry" contract — the caller can't distinguish
@@ -88,7 +88,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         }
         for (host in OFF_HOSTS) {
             when (val r = lookupOnce(host, barcode)) {
-                is HostResult.Found -> return r.product
+                is HostResult.Found -> return OffLookupResult(r.product, host)
                 HostResult.NotFound -> continue
                 HostResult.Error -> return null // don't multiply downtime by 4 across sister hosts
             }

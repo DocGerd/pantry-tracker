@@ -6,8 +6,10 @@ package de.docgerdsoft.pantrytracker.data.remote
  * map-backed fake without spinning up a [io.ktor.client.HttpClient].
  *
  * Contract matches [OffApiClient.lookup]: returns `null` on miss / 4xx / 5xx /
- * IOException / blank barcode; throws only on `CancellationException`.
+ * IOException / blank barcode; on a hit returns an [OffLookupResult] carrying
+ * both the resolved [OffProduct] and the OFF host that served it (used by the
+ * v1.2 lookup cache, #48). Throws only on `CancellationException`.
  */
 interface OffLookup {
-    suspend fun lookup(barcode: String): OffProduct?
+    suspend fun lookup(barcode: String): OffLookupResult?
 }

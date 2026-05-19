@@ -78,7 +78,8 @@ class ProductRepositoryImpl(
     override suspend fun lookupForPreview(code: String): ScanCandidate? {
         if (code.isBlank()) return null
         findLocalByBarcode(code)?.let { return ScanCandidate.Persisted(it) }
-        val off = offLookup.lookup(code) ?: return null
+        val result = offLookup.lookup(code) ?: return null
+        val off = result.product
         val name = off.productName?.takeIf { it.isNotBlank() }
         if (name == null) {
             // C6: OFF returned a status=1 envelope but product_name was blank/absent.
