@@ -69,10 +69,9 @@ class ProductRepositoryImpl(
     }
 
     override suspend fun restore(product: Product) {
-        // Upsert preserves id + createdAt + updatedAt as carried on the
-        // captured Product. The autoGenerate=true primary key honours
-        // non-zero ids, so the row reappears under its original id and any
-        // search/sort indices that referenced it remain valid.
+        // Upsert preserves every field of the captured Product. The
+        // autoGenerate=true primary key honours non-zero ids, so the row
+        // reappears under its original id.
         dao.upsert(product)
     }
 

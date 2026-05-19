@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
+import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
 import de.docgerdsoft.pantrytracker.util.JulLogCapture
@@ -152,10 +153,26 @@ class ProductRepositoryImplTest {
 
     @Test
     fun restore_reInsertsProductWithOriginalIdAndTimestamps() = runTest {
-        // Seed via addNew so Room assigns the real id, then snapshot the
-        // persisted Product (id + timestamps) before delete. The captured
-        // instance is the same one the snackbar closure would hold post-delete.
-        val id = repo.addNew(name = "Coke", barcode = "5449000000996", initialQuantity = 3)
+        // Build the seed Product directly so brand + imageUrl are non-null —
+        // addNew() leaves both null by default, which would make the brand /
+        // imageUrl assertions below vacuous (null round-tripping to null
+        // doesn't prove every field is preserved). The clock value is hand-
+        // stamped to a known instant so the restored row can be compared
+        // against a value the test fixture controls end-to-end. Inserted via
+        // dao.upsert so Room still owns id assignment (mirrors what addNew
+        // would have done internally).
+        val seedInstant = clock.now()
+        val seed = Product(
+            id = 0L, // autoGenerate — Room assigns the real id on upsert
+            barcode = "5449000000996",
+            name = "Coke",
+            brand = "Coca-Cola Co.",
+            imageUrl = "https://images.openfoodfacts.org/coke.jpg",
+            quantity = 3,
+            createdAt = seedInstant,
+            updatedAt = seedInstant,
+        )
+        val id = db.productDao().upsert(seed)
         val original = repo.findById(id)!!
         // Advance the clock so a write would visibly bump updatedAt — proves
         // restore preserves the captured Instant and doesn't re-stamp it.
@@ -170,7 +187,9 @@ class ProductRepositoryImplTest {
         assertNotNull(restored)
         assertEquals(id, restored?.id)
         assertEquals("Coke", restored?.name)
+        assertEquals("Coca-Cola Co.", restored?.brand)
         assertEquals("5449000000996", restored?.barcode)
+        assertEquals("https://images.openfoodfacts.org/coke.jpg", restored?.imageUrl)
         assertEquals(3, restored?.quantity)
         // Pins the contract: restore round-trips the captured timestamps —
         // the post-undo row is identity-equal to the pre-delete one (the

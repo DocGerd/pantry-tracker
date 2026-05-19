@@ -58,15 +58,22 @@ interface ProductRepository {
     suspend fun delete(productId: Long)
 
     /**
-     * Re-inserts the full [product] entity preserving its `id`, `createdAt`, and
-     * `updatedAt`. Intended for delete-undo: the caller captures the [Product]
-     * before [delete], then calls [restore] with that captured instance on UNDO.
+     * Re-inserts the full [product] entity preserving every field — `id`,
+     * `name`, `brand`, `barcode`, `imageUrl`, `quantity`, `createdAt`, and
+     * `updatedAt` all round-trip unchanged. Intended for delete-undo: the
+     * caller captures the [Product] before [delete], then calls [restore]
+     * with that captured instance on UNDO.
      *
-     * Implementation note: backed by an upsert, so passing a `barcode` that
-     * collides with an existing unique-indexed row overwrites it. In the
-     * undo flow this is benign — between delete and restore the only race
-     * window is the snackbar duration (~4 s) and the unique index makes any
-     * concurrent insert fail loudly.
+     * Failure modes:
+     *
+     * - Backed by an upsert: if a row with the same `id` already exists,
+     *   it is **silently overwritten** with [product]. The undo flow keeps
+     *   this benign — between [delete] and [restore] the only race window
+     *   is the snackbar duration (~4 s) and the id is unique-by-construction.
+     * - If a different row exists with the same `barcode` (unique index),
+     *   the underlying Room insert throws `SQLiteConstraintException` — the
+     *   suspend call propagates that up so the caller can surface a
+     *   restore-failed UI event instead of silently no-op'ing.
      */
     suspend fun restore(product: Product)
 }
