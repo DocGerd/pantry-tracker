@@ -248,7 +248,7 @@ class OffApiClientTest {
 
     @Test
     fun lookup_offMiss_beautyHit_returnsBeautyProduct_doesNotWalkFurther() = runTest {
-        val beautyBody = loadFixture("off/coke_330ml.json")  // schema-identical envelope
+        val beautyBody = loadFixture("off/coke_330ml.json") // schema-identical envelope
         val (client, captured) = clientByHost(
             mapOf("world.openbeautyfacts.org" to beautyBody),
         )
@@ -448,8 +448,10 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException to propagate")
-        } catch (e: CancellationException) {
-            // expected
+        } catch (@Suppress("SwallowedException") expected: CancellationException) {
+            // Test contract: this catch arm proves CE propagates; the exception
+            // payload itself is irrelevant — we asserted via fail() that we
+            // reached here. Detekt's SwallowedException is suppressed.
         }
     }
 
@@ -476,8 +478,9 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException from host 2")
-        } catch (e: CancellationException) {
-            // expected
+        } catch (@Suppress("SwallowedException") expected: CancellationException) {
+            // See first-host test above: catch arm is the assertion mechanism,
+            // not the payload-carrier. Detekt's SwallowedException is suppressed.
         }
     }
 
