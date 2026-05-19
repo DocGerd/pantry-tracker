@@ -199,3 +199,27 @@ scanning against real products).
 - If `Test Product` (from test 3) is still in your test pantry after the
   full walkthrough, clear it with `adb shell pm clear ...` before signing
   off the v1.0 release APK.
+
+---
+
+## v1.2 minified-APK pass (PENDING — to be filled at merge time)
+
+- **Date:** YYYY-MM-DD
+- **Device:** [model / Android version]
+- **APK:** `app-release.apk` (R8 minified + shrinkResources enabled)
+- **APK size:** 24,140,473 bytes (24.1 MB; 40.4% reduction vs v1.1.0's 40.5 MB)
+- **Scenarios — all must pass:**
+  - [ ] Scan known food product → OFF resolves → preview sheet appears
+  - [ ] Scan known beauty product (fallback chain → beauty-facts host)
+  - [ ] Scan known pet food (fallback chain → pet-food host)
+  - [ ] Scan known generic product (fallback chain → products-facts host)
+  - [ ] Scan unknown/garbage barcode → manual entry sheet appears
+  - [ ] Add scanned product → appears in inventory list
+  - [ ] Change quantity (+/-) → persists across cold-start
+  - [ ] Rename product → persists
+  - [ ] Delete product → undo snackbar restores
+  - [ ] Image loading from OFF (Coil) — image displays on detail screen
+  - [ ] **Upgrade-install from v1.1.0** — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top — verifies `MIGRATION_1_2` runs on a real device and pantry data is preserved
+  - [ ] **OFF lookup cache** — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
+- **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
+- **Sign-off:** [signature/handle]

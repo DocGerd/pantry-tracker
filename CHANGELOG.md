@@ -19,12 +19,25 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
   no network call, no 4-host fallback walk. 30-day TTL; cache row is
   deleted when the barcode is committed to the pantry. (#48)
 
+### Changed
+
+- Release builds now use R8 minify + `shrinkResources`. APK size
+  reduced from 40,523,977 bytes (~38.65 MB) at v1.1.0 to 24,140,473
+  bytes (~23.02 MB) at v1.2.0 — a 40.4% reduction. (SR-9, refs #36)
+
 ### Security
 
 - Replace header-only OFF response body cap with streamed enforcement.
   The 256 KB cap now fires on chunked responses regardless of
   Content-Length advertisement, closing the gap left by the v1.1.0
   hotfix. (#52)
+- R8 strips unused code from the release artifact, reducing attack
+  surface. Belt-and-braces `-keep` rules in `app/proguard-rules.pro`
+  preempt the "first-time R8 enable strips reflection target"
+  symptom for kotlinx.serialization @Serializable types
+  (`OffProduct`, `OffApiEnvelope`) and Room entities/DAOs (`Product`,
+  `OffLookupCacheEntry`, `ProductDao`, `OffLookupCacheDao`, plus
+  `AppDatabase` and `Converters` defensively). (SR-9, refs #36)
 
 ---
 
