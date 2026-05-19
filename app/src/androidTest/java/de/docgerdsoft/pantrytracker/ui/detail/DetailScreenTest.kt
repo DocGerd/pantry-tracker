@@ -140,5 +140,8 @@ class DetailScreenTest {
             deleteCalls += productId
             flow.value = null
         }
+        override suspend fun restore(product: Product) {
+            flow.value = product
+        }
     }
 }

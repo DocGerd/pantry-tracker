@@ -56,4 +56,17 @@ interface ProductRepository {
     suspend fun rename(productId: Long, newName: String)
 
     suspend fun delete(productId: Long)
+
+    /**
+     * Re-inserts the full [product] entity preserving its `id`, `createdAt`, and
+     * `updatedAt`. Intended for delete-undo: the caller captures the [Product]
+     * before [delete], then calls [restore] with that captured instance on UNDO.
+     *
+     * Implementation note: backed by an upsert, so passing a `barcode` that
+     * collides with an existing unique-indexed row overwrites it. In the
+     * undo flow this is benign — between delete and restore the only race
+     * window is the snackbar duration (~4 s) and the unique index makes any
+     * concurrent insert fail loudly.
+     */
+    suspend fun restore(product: Product)
 }

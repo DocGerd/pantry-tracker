@@ -151,6 +151,35 @@ class ProductRepositoryImplTest {
     }
 
     @Test
+    fun restore_reInsertsProductWithOriginalIdAndTimestamps() = runTest {
+        // Seed via addNew so Room assigns the real id, then snapshot the
+        // persisted Product (id + timestamps) before delete. The captured
+        // instance is the same one the snackbar closure would hold post-delete.
+        val id = repo.addNew(name = "Coke", barcode = "5449000000996", initialQuantity = 3)
+        val original = repo.findById(id)!!
+        // Advance the clock so a write would visibly bump updatedAt — proves
+        // restore preserves the captured Instant and doesn't re-stamp it.
+        clock.advanceBy(60_000)
+
+        repo.delete(id)
+        assertNull(repo.findById(id))
+
+        repo.restore(original)
+
+        val restored = repo.findById(id)
+        assertNotNull(restored)
+        assertEquals(id, restored?.id)
+        assertEquals("Coke", restored?.name)
+        assertEquals("5449000000996", restored?.barcode)
+        assertEquals(3, restored?.quantity)
+        // Pins the contract: restore round-trips the captured timestamps —
+        // the post-undo row is identity-equal to the pre-delete one (the
+        // 60 s clock advance would shift updatedAt if restore re-stamped).
+        assertEquals(original.createdAt, restored?.createdAt)
+        assertEquals(original.updatedAt, restored?.updatedAt)
+    }
+
+    @Test
     fun findLocalByBarcode_returnsRow_orNull() = runTest {
         repo.addNew(name = "Coke", barcode = "5449000000996", initialQuantity = 1)
         assertEquals("Coke", repo.findLocalByBarcode("5449000000996")?.name)

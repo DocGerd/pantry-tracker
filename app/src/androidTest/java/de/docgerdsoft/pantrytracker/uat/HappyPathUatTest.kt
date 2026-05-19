@@ -247,5 +247,12 @@ class HappyPathUatTest {
         override suspend fun delete(productId: Long) {
             rows.value = rows.value - productId
         }
+
+        override suspend fun restore(product: Product) {
+            // Mirror production: upsert by id preserves the captured row
+            // (id + createdAt + updatedAt) so the post-undo observation is
+            // identity-equal to the pre-delete one.
+            rows.value = rows.value + (product.id to product)
+        }
     }
 }

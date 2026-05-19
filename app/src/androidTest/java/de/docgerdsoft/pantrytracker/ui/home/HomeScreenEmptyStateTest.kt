@@ -125,5 +125,6 @@ class HomeScreenEmptyStateTest {
         override suspend fun applyDelta(productId: Long, delta: Int) = Unit
         override suspend fun rename(productId: Long, newName: String) = Unit
         override suspend fun delete(productId: Long) = Unit
+        override suspend fun restore(product: Product) = Unit
     }
 }

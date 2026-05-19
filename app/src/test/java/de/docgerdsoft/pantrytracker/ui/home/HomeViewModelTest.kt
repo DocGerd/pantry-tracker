@@ -226,5 +226,13 @@ class HomeViewModelTest {
         override suspend fun delete(productId: Long) {
             lastDeletedId = productId
         }
+
+        val restored = mutableListOf<Product>()
+        override suspend fun restore(product: Product) {
+            // Test-fake: route to the same observable as the real impl so a
+            // post-restore `observeProducts` collector sees the row reappear.
+            restored.add(product)
+            all.value = (all.value + product).distinctBy { it.id }
+        }
     }
 }
