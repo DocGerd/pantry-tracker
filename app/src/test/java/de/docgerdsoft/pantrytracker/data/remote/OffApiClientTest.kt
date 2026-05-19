@@ -1,5 +1,7 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
+import de.docgerdsoft.pantrytracker.data.remote.OffApiClient.Companion.MAX_BODY_BYTES
+import de.docgerdsoft.pantrytracker.data.remote.OffApiClient.Companion.installOffBodyCap
 import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -448,10 +450,8 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException to propagate")
-        } catch (@Suppress("SwallowedException") expected: CancellationException) {
-            // Test contract: this catch arm proves CE propagates; the exception
-            // payload itself is irrelevant — we asserted via fail() that we
-            // reached here. Detekt's SwallowedException is suppressed.
+        } catch (@Suppress("SwallowedException") e: CancellationException) {
+            // expected — CE escape is the assertion target; nothing to do with `e`
         }
     }
 
@@ -478,9 +478,8 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException from host 2")
-        } catch (@Suppress("SwallowedException") expected: CancellationException) {
-            // See first-host test above: catch arm is the assertion mechanism,
-            // not the payload-carrier. Detekt's SwallowedException is suppressed.
+        } catch (@Suppress("SwallowedException") e: CancellationException) {
+            // expected — CE escape is the assertion target; nothing to do with `e`
         }
     }
 
@@ -544,6 +543,145 @@ class OffApiClientTest {
         // SEVERE so a future refactor that drops the SEVERE designation also
         // trips this test.
         assertCatchArmRedactsBarcode(IllegalArgumentException("bad URL"))
+    }
+
+    // -- v1.1 Item 2: SR-24 body-size cap --
+
+    @Test
+    fun lookup_oversizedContentLength_returnsNull_failsFastWithoutParse() = runTest {
+        // A 1 MB response advertised via Content-Length must be rejected at
+        // the validator BEFORE parse — both for memory and to surface DoS-shaped
+        // server behaviour as a fast null rather than a slow timeout.
+        // Ktor 3's SaveBody enforces body-size == Content-Length, so the body
+        // size matches the header; the validator is what fails the response.
+        val oversizedSize = 1_048_576 // 1 MB
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel("x".repeat(oversizedSize)),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf("application/json"),
+                    HttpHeaders.ContentLength to listOf(oversizedSize.toString()),
+                ),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            installOffBodyCap()
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        // Pin fail-fast: an oversized OFF response is a real fault (not a miss),
+        // so the chain must NOT walk to sister hosts — that would quadruple the
+        // OOM exposure on chunked-bypass paths. Mirrors the 5xx fail-fast test.
+        assertEquals("oversized must fail-fast", 1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
+    fun lookup_oversizedNoContentLength_returnsNull_failsFast() = runTest {
+        // Chunked / proxy-stripped Content-Length must fail-closed (SR-24
+        // defence-in-depth): the validator throws OversizedResponseException(-1)
+        // rather than letting the body buffer into memory unchecked.
+        // The MockEngine response below sets Content-Type but omits Content-Length
+        // entirely — Ktor 3 still permits this (engine derives length from the
+        // ByteReadChannel) — and the chain must short-circuit on OFF.
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel("""{"status":1,"product":{"code":"x"}}"""),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            installOffBodyCap()
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull(result)
+        // Missing CL is treated as a real fault (sick CDN / hostile proxy), not
+        // as a miss — chain MUST NOT walk to sister hosts.
+        assertEquals("no-Content-Length must fail-fast", 1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
+    fun lookup_atExactly256KBContentLength_isAllowed() = runTest {
+        // The cap is strict-greater-than (> 256KB), so exactly 256 KB is allowed.
+        // Build a body of exactly 256 KB of valid JSON by padding the
+        // product_name field with filler — Ktor 3's SaveBody enforces
+        // body-size == Content-Length, so the body actually has to match.
+        val capBytes = MAX_BODY_BYTES.toInt()
+        val body = paddedProductJson(capBytes)
+        val client = HttpClient(MockEngine { _ ->
+            respond(
+                content = ByteReadChannel(body),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf("application/json"),
+                    HttpHeaders.ContentLength to listOf(capBytes.toString()),
+                ),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            installOffBodyCap()
+        }
+        val sut = OffApiClient(client)
+
+        // Should NOT trip the validator (size == cap, not >); product parses.
+        val result = sut.lookup("5449000000996")
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+    }
+
+    @Test
+    fun lookup_atCapPlusOneByteContentLength_isRejected() = runTest {
+        val capBytes = MAX_BODY_BYTES.toInt()
+        val advertised = capBytes + 1
+        val body = paddedProductJson(advertised)
+        val client = HttpClient(MockEngine { _ ->
+            respond(
+                content = ByteReadChannel(body),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf("application/json"),
+                    HttpHeaders.ContentLength to listOf(advertised.toString()),
+                ),
+            )
+        }) {
+            install(ContentNegotiation) { json() }
+            installOffBodyCap()
+        }
+        val sut = OffApiClient(client)
+
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    /**
+     * Returns a valid OFF envelope JSON of exactly [targetBytes] length by
+     * padding the product_name field with repeated filler. Used only by the
+     * boundary tests above; the body shape mirrors `off/coke_330ml.json`.
+     *
+     * Length must be exact (not *"at least N"*) because Ktor 3's `SaveBody`
+     * plugin enforces `body.size == Content-Length`; mismatched lengths
+     * surface as engine-level errors, not validator rejections — which would
+     * give the boundary tests a false-positive failure path that bypasses the
+     * validator entirely.
+     */
+    private fun paddedProductJson(targetBytes: Int): String {
+        val prefix = """{"code":"5449000000996","product":{"brands":"Coca-Cola",""" +
+            """"code":"5449000000996","product_name":""""
+        val suffix = """"},"status":1,"status_verbose":"product found"}"""
+        val padLen = targetBytes - prefix.length - suffix.length
+        require(padLen >= 0) { "targetBytes $targetBytes too small for envelope frame" }
+        return prefix + "x".repeat(padLen) + suffix
     }
 
     private suspend fun assertCatchArmRedactsBarcode(thrown: Throwable) {
