@@ -10,6 +10,17 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ---
 
+## [Unreleased]
+
+### Security
+
+- Replace header-only OFF response body cap with streamed enforcement.
+  The 256 KB cap now fires on chunked responses regardless of
+  Content-Length advertisement, closing the gap left by the v1.1.0
+  hotfix. (#52)
+
+---
+
 ## [1.1.0] — 2026-05-19
 
 Fallbacks & undo milestone. All three feature items shipped:
