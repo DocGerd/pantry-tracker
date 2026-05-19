@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.uat
 
 import androidx.compose.material3.Surface
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
@@ -201,7 +202,13 @@ class HappyPathUatTest {
         rule.waitUntil(timeoutMillis = 2_000) {
             rule.onAllNodesWithText("Soap").fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithText("Soap").assertIsDisplayed()
+        // Use assertCountEquals(1) rather than onNodeWithText("Soap"): a
+        // lingering snackbar that still carries the product name in its
+        // message ("Deleted Soap") would let a single-node assertion match
+        // the wrong semantics node and false-pass even if the row had not
+        // come back. Asserting exactly one node pins both "the row is back"
+        // AND "no stale snackbar is also showing 'Soap'".
+        rule.onAllNodesWithText("Soap").assertCountEquals(1)
         // EmptyState must not re-appear: pins the assertion that undoDelete
         // actually round-tripped through restore(), not just dismissed the
         // snackbar.

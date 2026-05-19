@@ -95,6 +95,15 @@ class HomeScreenTest {
         override suspend fun applyDelta(productId: Long, delta: Int) = Unit
         override suspend fun rename(productId: Long, newName: String) = Unit
         override suspend fun delete(productId: Long) = Unit
-        override suspend fun restore(product: Product) = Unit
+
+        // The screens covered by this test never exercise restore. Throwing on
+        // accidental invocation is a louder failure mode than a silent `= Unit`
+        // — a future test that long-presses + confirms delete + taps UNDO will
+        // surface this immediately instead of green-on-broken.
+        override suspend fun restore(product: Product): Unit =
+            throw NotImplementedError(
+                "test harness does not exercise restore — " +
+                    "use HomeViewModelTest.FakeProductRepository if you need it",
+            )
     }
 }
