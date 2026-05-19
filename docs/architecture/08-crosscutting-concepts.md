@@ -50,7 +50,7 @@ don't restart it.
 | Schema mismatch behaviour | **Crashes**. No `fallbackToDestructiveMigration`. Per spec §7, the user's pantry is sacred — a missed migration must be loud, not silent. |
 | Time stamps | `kotlin.time.Instant` (from kotlinx-datetime). All `Product` rows carry `createdAt` + `updatedAt`. The repository owns the `Clock` (defaults to `Clock.System`; tests inject a fixed clock). |
 | Unique constraints | `Index(value = ["barcode"], unique = true)` — a duplicate-barcode upsert overwrites the existing row by design. |
-| Schema export | The KSP `room.schemaLocation` argument IS wired (`app/build.gradle.kts:81-83`, points at `app/schemas/`) — the build is ready to write schemas. But `@Database(exportSchema = false)` in `AppDatabase.kt:13` is the active gate; flip to `true` and commit the generated schema at the first `@Database(version = 2)` bump. |
+| Schema export | The KSP `room.schemaLocation` argument is wired (`app/build.gradle.kts`, points at `app/schemas/`) and `@Database(exportSchema = true)` is active. The v1 schema baseline is committed under `app/schemas/.../1.json` (since v1.2) to enable MigrationTestHelper-based migration tests. |
 
 ## 8.4 Logging
 
