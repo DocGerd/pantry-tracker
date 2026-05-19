@@ -143,10 +143,17 @@ head SHA:
 a. Post a one-line APPROVE summary:
 
    `pull_request_review_write` method=create
-     event=APPROVE
+     event=APPROVE                    (or COMMENT — see note below)
      body="Ready to merge — review clean, CI green."          (N=0 path)
        OR
      body="Ready to merge — N findings resolved, CI green."   (N≥1 path)
+
+   ⚠ **GitHub forbids self-APPROVE** (symmetric to the self-REQUEST_CHANGES
+   block at step 3c). When the PR author and the reviewing session are the
+   same (the common solo-dev case), use `event=COMMENT` with the same
+   "Ready to merge" body. The inline-threads-resolved state plus the
+   explicit body line carries the same hand-off signal; only the formal
+   "approved" status is unavailable on self-review.
 
 b. STOP. The human clicks "Merge pull request".
 
