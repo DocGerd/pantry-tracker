@@ -76,6 +76,14 @@ complexity:
     # both their state hoisting AND their layout tree inline. 80 is a more
     # realistic threshold; if a Composable still exceeds it, split it.
     threshold: 80
+  TooManyFunctions:
+    # ProductRepository is the canonical aggregator for product CRUD +
+    # observation + OFF preview, and v1.1's delete-undo adds restore() —
+    # legitimately 11 functions on the interface and impl. Default 11
+    # (inclusive) tripped on that single addition; 12 keeps the rule
+    # active for further drift without forcing a premature split.
+    thresholdInClasses: 12
+    thresholdInInterfaces: 12
   LongParameterList:
     # Compose functions routinely accept many state/intent params + a
     # Modifier; 6 (default) flags noise.

@@ -68,6 +68,13 @@ class ProductRepositoryImpl(
         dao.deleteById(productId)
     }
 
+    override suspend fun restore(product: Product) {
+        // Upsert preserves every field of the captured Product. The
+        // autoGenerate=true primary key honours non-zero ids, so the row
+        // reappears under its original id.
+        dao.upsert(product)
+    }
+
     override suspend fun lookupForPreview(code: String): ScanCandidate? {
         if (code.isBlank()) return null
         findLocalByBarcode(code)?.let { return ScanCandidate.Persisted(it) }

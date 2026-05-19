@@ -919,5 +919,6 @@ class ScanViewModelTest {
         }
         override suspend fun rename(productId: Long, newName: String) = Unit
         override suspend fun delete(productId: Long) = Unit
+        override suspend fun restore(product: Product) = Unit
     }
 }

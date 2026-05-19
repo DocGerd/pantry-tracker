@@ -56,4 +56,24 @@ interface ProductRepository {
     suspend fun rename(productId: Long, newName: String)
 
     suspend fun delete(productId: Long)
+
+    /**
+     * Re-inserts the full [product] entity preserving every field — `id`,
+     * `name`, `brand`, `barcode`, `imageUrl`, `quantity`, `createdAt`, and
+     * `updatedAt` all round-trip unchanged. Intended for delete-undo: the
+     * caller captures the [Product] before [delete], then calls [restore]
+     * with that captured instance on UNDO.
+     *
+     * Failure modes:
+     *
+     * - Backed by an upsert: if a row with the same `id` already exists,
+     *   it is **silently overwritten** with [product]. The undo flow keeps
+     *   this benign — between [delete] and [restore] the only race window
+     *   is the snackbar duration (~4 s) and the id is unique-by-construction.
+     * - If a different row exists with the same `barcode` (unique index),
+     *   the underlying Room insert throws `SQLiteConstraintException` — the
+     *   suspend call propagates that up so the caller can surface a
+     *   restore-failed UI event instead of silently no-op'ing.
+     */
+    suspend fun restore(product: Product)
 }

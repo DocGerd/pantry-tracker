@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.SnackbarEvent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -180,11 +181,106 @@ class HomeViewModelTest {
         assertNull(fake.lastDeletedId)
     }
 
+    @Test
+    fun confirmDelete_emitsSnackbarDeletedEvent_withTheDeletedProduct() = runTest {
+        val now = Clock.System.now()
+        val target = Product(
+            id = 7, barcode = "X", name = "Beans",
+            quantity = 2, createdAt = now, updatedAt = now,
+        )
+        fake.emit(listOf(target))
+
+        vm.snackbarEvents.test {
+            vm.requestDelete(target)
+            vm.confirmDelete()
+            val event = awaitItem()
+            assertEquals(SnackbarEvent.Deleted(target), event)
+        }
+    }
+
+    @Test
+    fun undoDelete_callsRepositoryRestore_withSameProduct() = runTest {
+        val now = Clock.System.now()
+        val target = Product(
+            id = 7, barcode = "X", name = "Beans",
+            quantity = 2, createdAt = now, updatedAt = now,
+        )
+
+        vm.undoDelete(target)
+
+        // FakeProductRepository captures `restore` invocations into `restored`.
+        // Same captured instance round-trips: id, createdAt, updatedAt all preserved.
+        assertEquals(listOf(target), fake.restored)
+    }
+
+    @Test
+    fun confirmDelete_repositoryThrows_emitsDeleteFailedEvent_andClearsPending() = runTest {
+        // Pins the "no silent UI lie" contract: when the underlying delete
+        // throws, the snackbar must surface a DeleteFailed event carrying the
+        // product name, AND the pending-delete dialog must clear regardless.
+        val now = Clock.System.now()
+        val target = Product(
+            id = 9, barcode = null, name = "Beans",
+            quantity = 1, createdAt = now, updatedAt = now,
+        )
+        fake.failDelete = true
+        fake.emit(listOf(target))
+
+        vm.snackbarEvents.test {
+            vm.requestDelete(target)
+            vm.confirmDelete()
+            assertEquals(SnackbarEvent.DeleteFailed("Beans"), awaitItem())
+        }
+        // Pending-delete cleared even on failure — the confirm dialog must not
+        // stay stuck on screen after a thrown delete.
+        assertNull(vm.uiState.value.pendingDelete)
+    }
+
+    @Test
+    fun undoDelete_repositoryThrows_emitsRestoreFailedEvent() = runTest {
+        // The matching "no silent UI lie" pin for the restore path: when
+        // repository.restore throws, the snackbar must say so. The row stays
+        // deleted — UNDO is best-effort.
+        val now = Clock.System.now()
+        val target = Product(
+            id = 11, barcode = null, name = "Lentils",
+            quantity = 1, createdAt = now, updatedAt = now,
+        )
+        fake.failRestore = true
+
+        vm.snackbarEvents.test {
+            vm.undoDelete(target)
+            assertEquals(SnackbarEvent.RestoreFailed("Lentils"), awaitItem())
+        }
+    }
+
+    @Test
+    fun confirmDelete_twice_emitsTwoSeparateEvents_noDrop() = runTest {
+        // Pins the Channel-not-StateFlow choice: back-to-back deletes must
+        // both surface as discrete snackbar events, even if the screen
+        // hasn't fully consumed the previous one. A StateFlow with
+        // equal-Product semantics could collapse the two.
+        val now = Clock.System.now()
+        val a = Product(id = 1, barcode = "A", name = "A", quantity = 1, createdAt = now, updatedAt = now)
+        val b = Product(id = 2, barcode = "B", name = "B", quantity = 1, createdAt = now, updatedAt = now)
+        fake.emit(listOf(a, b))
+
+        vm.snackbarEvents.test {
+            vm.requestDelete(a); vm.confirmDelete()
+            assertEquals(SnackbarEvent.Deleted(a), awaitItem())
+
+            vm.requestDelete(b); vm.confirmDelete()
+            assertEquals(SnackbarEvent.Deleted(b), awaitItem())
+        }
+    }
+
     private class FakeProductRepository : ProductRepository {
         private val all = MutableStateFlow<List<Product>>(emptyList())
         var lastSearchQuery: String? = null
         var lastAdded: AddCall? = null
         var lastDeletedId: Long? = null
+        var failDelete: Boolean = false
+        var failRestore: Boolean = false
 
         data class AddCall(
             val name: String,
@@ -224,7 +320,17 @@ class HomeViewModelTest {
         override suspend fun applyDelta(productId: Long, delta: Int) = Unit
         override suspend fun rename(productId: Long, newName: String) = Unit
         override suspend fun delete(productId: Long) {
+            if (failDelete) error("simulated delete failure")
             lastDeletedId = productId
+        }
+
+        val restored = mutableListOf<Product>()
+        override suspend fun restore(product: Product) {
+            if (failRestore) error("simulated restore failure")
+            // Test-fake: route to the same observable as the real impl so a
+            // post-restore `observeProducts` collector sees the row reappear.
+            restored.add(product)
+            all.value = (all.value + product).distinctBy { it.id }
         }
     }
 }

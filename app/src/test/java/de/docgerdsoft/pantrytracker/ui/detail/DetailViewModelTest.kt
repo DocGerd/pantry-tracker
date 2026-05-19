@@ -260,5 +260,11 @@ class DetailViewModelTest {
             deleteError?.let { throw it }
             deleteCalls += productId
         }
+
+        val restoreCalls = mutableListOf<Product>()
+        override suspend fun restore(product: Product) {
+            restoreCalls += product
+            flow.value = product
+        }
     }
 }
