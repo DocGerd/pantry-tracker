@@ -90,19 +90,21 @@ c. Submit the pending review:
 
 d. Capture thread node IDs for the resolve step.
 
-   `pull_request_read` method=get_review_comments perPage=100
+   The MCP's `get_review_comments` returns thread metadata + comments but
+   **not** the thread node ID that `resolve_thread` needs. Fall back to
+   GraphQL — call `gh` from Python (bash mangles `!` in GraphQL queries
+   even inside quoted heredocs). Key threads by `threadId` (`path:line`
+   collides when findings share a line). Paginate via `after=<endCursor>`
+   while `pageInfo.hasNextPage` is true.
 
-   Returns each thread's `isResolved` / `isOutdated` / `isCollapsed` flags
-   and the comments it contains — but **note: this MCP method does not
-   surface the thread node ID (PRRT_kwDOxxx)** that `resolve_thread`
-   requires. Fall back to GraphQL via a Python helper (see
-   `.claude/skills/post-finding/SKILL.md` for the query shape) to fetch
-   `{threadId, isResolved, comments[0].databaseId}` tuples. Map them to your
-   findings via `databaseId` — the integer in the inline-comment URL
-   `discussion_r<databaseId>` matches the response's `databaseId`. Record
-   threads keyed by `threadId`, not by `path:line` (which collides when
-   multiple findings share a line). Paginate via `after` if the PR has >100
-   threads.
+   ```graphql
+   query($owner: String!, $repo: String!, $pr: Int!) {
+     repository(owner: $owner, name: $repo) {
+       pullRequest(number: $pr) {
+         reviewThreads(first: 100) {
+           nodes { id isResolved
+             comments(first: 1) { nodes { databaseId path line } } } } } } }
+   ```
 
 ### 4. Fix every finding on the same branch
 
@@ -149,17 +151,14 @@ a. Post a one-line APPROVE summary:
 b. STOP. The human clicks "Merge pull request".
 
 ⚠ **Claude MUST NOT cause `main` to advance via any vector.** Per CLAUDE.md's
-hard governance rule, this is non-negotiable. The bash hook from #64 blocks
-the shell-based paths it knows about but cannot reach the MCP. **When in
-doubt about any merge-adjacent action, ASK.** Known vectors as of this
-writing:
+hard governance rule, this is non-negotiable. The bash hook at
+`.claude/hooks/block-dangerous-bash.sh` blocks the shell-based paths it
+knows about but cannot reach the MCP. **When in doubt about any
+merge-adjacent action, ASK.** Known vectors:
 
-- `mcp__plugin_github_github__merge_pull_request`  (MCP — this skill's forbid list is the only gate)
+- `mcp__plugin_github_github__merge_pull_request`  (MCP — only Claude observing this list gates it)
 - `gh pr merge`                                     (gh CLI — bash hook gates)
 - `git push origin main`                            (direct push — bash hook gates)
-
-A new merge tool appearing in a future plugin update must be added to this
-list AND, ideally, to the bash hook regex.
 
 ### 7. After merge, capture lessons
 
