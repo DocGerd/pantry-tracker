@@ -300,6 +300,15 @@ class ProductRepositoryImplTest {
         val result = sut.lookupForPreview("444")
 
         assertNull(result)
+        // Pin the negative cache-write contract: a name-blank OFF response
+        // must drop to manual entry AND leave the cache untouched. Without
+        // this, a regression that caches the invalid response would make
+        // the next scan hit the cache and re-skip OFF — locking the bad
+        // shape in until the 30-day TTL expires. (PR #60 pr-test-analyzer)
+        assertNull(
+            "OFF responses with blank name must NOT be cached",
+            db.offLookupCacheDao().findByBarcode("444"),
+        )
     }
 
     @Test
