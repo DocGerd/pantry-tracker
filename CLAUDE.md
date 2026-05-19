@@ -55,18 +55,20 @@ Workflow:
    skill, or dispatch individual `pr-review-toolkit:*` subagents in parallel.
 3. Post each finding as an **inline review thread** on the diff (not a single
    summary comment) so each one can be resolved independently. The `pr-review`
-   skill at `.claude/skills/pr-review/` is canonical — it batches findings
-   into a single pending review via the GitHub MCP's
-   `pull_request_review_write`. The older `post-finding` skill at
-   `.claude/skills/post-finding/` is a `gh api`-based fallback for sessions
+   skill at `.claude/skills/pr-review/` is the canonical end-to-end recipe
+   for this whole workflow — it wraps `pr-review-toolkit:review-pr` from
+   step 2 and covers posting, fixing, resolving, and hand-off. For this step
+   specifically it batches findings into a single pending review via the
+   GitHub MCP's `pull_request_review_write`. The older `post-finding` skill
+   at `.claude/skills/post-finding/` is a `gh api`-based fallback for sessions
    without the GitHub MCP installed.
 4. Fix all findings on the same branch.
 5. After each fix lands, **resolve the corresponding inline thread** via
-   `mcp__plugin_github_github__pull_request_review_write
-   method=resolve_thread` (canonical — no GraphQL plumbing). Fallback when
-   the GitHub MCP isn't available: the GraphQL `resolveReviewThread` mutation
-   called from Python `subprocess` (`gh api graphql` mangles `!` even inside
-   quoted heredocs).
+   `pull_request_review_write method=resolve_thread` (the MCP handles the
+   resolve call; thread IDs are still discovered via GraphQL — see the
+   `pr-review` skill §3d). Fallback when the GitHub MCP isn't available:
+   the GraphQL `resolveReviewThread` mutation called from Python `subprocess`
+   (`gh api graphql` mangles `!` even inside quoted heredocs).
 6. Only then declare ready-to-merge.
 
 ### Subagent & worktree hygiene
