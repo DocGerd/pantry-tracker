@@ -35,7 +35,7 @@ Fallbacks & undo milestone. All three feature items shipped:
 
 ### Tests / quality
 
-- 188 → 190 JVM unit tests; `OffApiClientTest` grew from 41 → 45 cases (full chain matrix + body-cap boundary trio + chunked-bypass + first-and-second-host cancellation propagation).
+- 175 → 194 JVM unit tests (+19 over v1.0); `OffApiClientTest` grew from 32 → 45 cases (full chain matrix + body-cap boundary trio + chunked-bypass + first-and-second-host cancellation propagation + new `SnackbarEvent.{DeleteFailed,RestoreFailed}` emission pinning).
 - `HappyPathUatTest` (instrumented) gained 2 new walks: delete-then-undo and delete-then-snackbar-dismiss.
 - `SnackbarEvent` moved from `ui/home/` to `ui/common/` so v1.2 features can adopt the same channel pattern without churn.
 
