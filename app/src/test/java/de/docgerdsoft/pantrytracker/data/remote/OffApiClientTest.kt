@@ -583,20 +583,23 @@ class OffApiClientTest {
     }
 
     @Test
-    fun lookup_oversizedNoContentLength_returnsNull_failsFast() = runTest {
-        // Chunked / proxy-stripped Content-Length must fail-closed (SR-24
-        // defence-in-depth): the validator throws OversizedResponseException(-1)
-        // rather than letting the body buffer into memory unchecked.
-        // The MockEngine response below sets Content-Type but omits Content-Length
-        // entirely — Ktor 3 still permits this (engine derives length from the
-        // ByteReadChannel) — and the chain must short-circuit on OFF.
+    fun lookup_noContentLength_passesThroughValidator() = runTest {
+        // Regression guard for "the validator must NOT reject chunked-transfer
+        // responses": OFF's CDN omits Content-Length on every product response
+        // in production (chunked transfer encoding for HTTP/2 efficiency). An
+        // earlier hardening attempt threw OversizedResponseException(-1L) on
+        // missing CL, which broke the entire scan path on real devices. The
+        // known limitation — a hostile chunked body can still OOM us before
+        // parse — is tracked for a streaming body-cap fix in v1.2.
         val captured = mutableListOf<HttpRequestData>()
+        val productJson = loadFixture("off/coke_330ml.json")
         val client = HttpClient(MockEngine { request ->
             captured += request
             respond(
-                content = ByteReadChannel("""{"status":1,"product":{"code":"x"}}"""),
+                content = ByteReadChannel(productJson),
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                // Crucially: no HttpHeaders.ContentLength header set.
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
@@ -606,10 +609,10 @@ class OffApiClientTest {
 
         val result = sut.lookup("5449000000996")
 
-        assertNull(result)
-        // Missing CL is treated as a real fault (sick CDN / hostile proxy), not
-        // as a miss — chain MUST NOT walk to sister hosts.
-        assertEquals("no-Content-Length must fail-fast", 1, captured.size)
+        // Response is processed normally: a valid OFF envelope without
+        // Content-Length is NOT a "sick host", it's just chunked transfer.
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals("missing CL must not trigger the chain walk", 1, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
 

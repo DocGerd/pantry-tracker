@@ -278,18 +278,21 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
                 // SR-24: reject responses whose advertised body exceeds the cap
                 // BEFORE any parse happens.
                 //
-                // Fail-closed on missing Content-Length: a chunked response, a
-                // gzipped response with no advertised length, or a proxy-rewritten
-                // response with the CL header stripped would otherwise bypass
-                // the cap and let `response.body<OffApiEnvelope>()` buffer an
-                // unbounded body into memory. Defence-in-depth (SR-24) is
-                // specifically about NOT trusting the upstream CDN to keep
-                // sending Content-Length forever, so we treat the header's
-                // absence as failure rather than as "allowed".
+                // The cap operates on the Content-Length header, NOT on the
+                // streamed body. Responses without Content-Length (OFF's actual
+                // production shape — its CDN uses chunked transfer encoding for
+                // the product API) pass through unchecked. This is a known
+                // SR-24 limitation: a hostile or buggy host returning a multi-MB
+                // chunked body could still OOM us before parse.
+                //
+                // History: an earlier attempt treated missing CL as failure
+                // (throw OversizedResponseException(-1L)) but that rejected
+                // every real OFF response — see release-prep retro / arc42 §11.
+                // True defence-in-depth requires a stream-bounded body read in
+                // classifyResponse, tracked as a v1.2 follow-up.
                 validateResponse { response ->
                     val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                        ?: throw OversizedResponseException(-1L)
-                    if (contentLength > MAX_BODY_BYTES) {
+                    if (contentLength != null && contentLength > MAX_BODY_BYTES) {
                         throw OversizedResponseException(contentLength)
                     }
                 }
