@@ -544,51 +544,24 @@ class OffApiClientTest {
         assertCatchArmRedactsBarcode(IllegalArgumentException("bad URL"))
     }
 
-    // -- v1.1 Item 2: SR-24 body-size cap --
+    // -- #52 / SR-24 v1.2: streamed body-size cap --
+    //
+    // After PR B.1, the body cap is enforced inside `classifyResponse` against
+    // streamed bytes from `bodyAsChannel()`, not against the `Content-Length`
+    // header. These tests therefore omit `Content-Length` entirely — they pin
+    // the streaming-counting behaviour against valid-shaped envelopes whose
+    // *actual* byte count straddles `MAX_BODY_BYTES`. Counterpart to
+    // `lookup_chunkedOversizedBody_failsFastAfterCapBytes` below, which covers
+    // the chain-short-circuit assertion for a far-oversized body.
 
     @Test
-    fun lookup_oversizedContentLength_returnsNull_failsFastWithoutParse() = runTest {
-        // A 1 MB response advertised via Content-Length must be rejected at
-        // the validator BEFORE parse — both for memory and to surface DoS-shaped
-        // server behaviour as a fast null rather than a slow timeout.
-        // Ktor 3's SaveBody enforces body-size == Content-Length, so the body
-        // size matches the header; the validator is what fails the response.
-        val oversizedSize = 1_048_576 // 1 MB
-        val captured = mutableListOf<HttpRequestData>()
-        val client = HttpClient(MockEngine { request ->
-            captured += request
-            respond(
-                content = ByteReadChannel("x".repeat(oversizedSize)),
-                status = HttpStatusCode.OK,
-                headers = headersOf(
-                    HttpHeaders.ContentType to listOf("application/json"),
-                    HttpHeaders.ContentLength to listOf(oversizedSize.toString()),
-                ),
-            )
-        }) {
-            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-        }
-        val sut = OffApiClient(client)
-
-        val result = sut.lookup("5449000000996")
-
-        assertNull(result)
-        // Pin fail-fast: an oversized OFF response is a real fault (not a miss),
-        // so the chain must NOT walk to sister hosts — that would quadruple the
-        // OOM exposure on chunked-bypass paths. Mirrors the 5xx fail-fast test.
-        assertEquals("oversized must fail-fast", 1, captured.size)
-        assertEquals("world.openfoodfacts.org", captured[0].url.host)
-    }
-
-    @Test
-    fun lookup_noContentLength_passesThroughValidator() = runTest {
-        // Regression guard for "the validator must NOT reject chunked-transfer
-        // responses": OFF's CDN omits Content-Length on every product response
-        // in production (chunked transfer encoding for HTTP/2 efficiency). An
-        // earlier hardening attempt threw OversizedResponseException(-1L) on
-        // missing CL, which broke the entire scan path on real devices. The
-        // known limitation — a hostile chunked body can still OOM us before
-        // parse — is tracked for a streaming body-cap fix in v1.2.
+    fun lookup_chunkedSubCapBody_passesThrough() = runTest {
+        // Regression guard for the v1.1.0 hotfix scenario: OFF's CDN ships
+        // every product response chunked (no Content-Length). A small, valid
+        // envelope without Content-Length must pass through cleanly — this is
+        // 99% of real OFF responses. An earlier hardening attempt rejected
+        // missing-CL outright and broke the entire scan path on real devices
+        // (see UAT note in CLAUDE.md "Real-device UAT non-negotiable").
         val captured = mutableListOf<HttpRequestData>()
         val productJson = loadFixture("off/coke_330ml.json")
         val client = HttpClient(MockEngine { request ->
@@ -614,30 +587,61 @@ class OffApiClientTest {
     }
 
     @Test
-    fun lookup_atExactly256KBContentLength_isAllowed() = runTest {
-        // The cap is strict-greater-than (> 256KB), so exactly 256 KB is allowed.
-        // Build a body of exactly 256 KB of valid JSON by padding the
-        // product_name field with filler — Ktor 3's SaveBody enforces
-        // body-size == Content-Length, so the body actually has to match.
+    fun lookup_atExactly256KBBody_isAllowed() = runTest {
+        // The cap is strict-greater-than (`total > MAX_BODY_BYTES`), so a body
+        // of exactly MAX_BODY_BYTES must pass. Stream the body without
+        // Content-Length — this exercises the new streaming counter directly:
+        // it reads chunks until the channel closes, never exceeding the cap.
         val capBytes = MAX_BODY_BYTES.toInt()
         val body = paddedProductJson(capBytes)
+        require(body.toByteArray().size == capBytes) { "padding math off: ${body.toByteArray().size}" }
         val client = HttpClient(MockEngine { _ ->
             respond(
-                content = ByteReadChannel(body),
+                content = ByteReadChannel(body.toByteArray()),
                 status = HttpStatusCode.OK,
-                headers = headersOf(
-                    HttpHeaders.ContentType to listOf("application/json"),
-                    HttpHeaders.ContentLength to listOf(capBytes.toString()),
-                ),
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                // No Content-Length — chunked-encoding shape.
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         }
         val sut = OffApiClient(client)
 
-        // Should NOT trip the validator (size == cap, not >); product parses.
+        // Should NOT trip the streaming cap (total == cap, not >); product parses.
         val result = sut.lookup("5449000000996")
         assertEquals(true, result?.productName?.isNotBlank() ?: false)
+    }
+
+    @Test
+    fun lookup_atCapPlusOneByteBody_isRejected() = runTest {
+        // One byte past the cap trips the strict-greater-than check inside
+        // `readBoundedBody`: as soon as `total > MAX_BODY_BYTES`, the read
+        // throws `OversizedResponseException` (an IOException) and the catch
+        // arm short-circuits the chain. Stream the body without Content-Length
+        // so the assertion targets the streaming counter, not a header check.
+        val capPlusOne = MAX_BODY_BYTES.toInt() + 1
+        val body = paddedProductJson(capPlusOne)
+        require(body.toByteArray().size == capPlusOne) { "padding math off: ${body.toByteArray().size}" }
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel(body.toByteArray()),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                // No Content-Length — chunked-encoding shape.
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val sut = OffApiClient(client)
+
+        assertNull(sut.lookup("5449000000996"))
+        // Pin fail-fast: a body-cap breach is a real fault (not a miss), so
+        // the chain must NOT walk to sister hosts — that would quadruple the
+        // memory exposure on a hostile-CDN attack path.
+        assertEquals("cap+1 must fail-fast, not walk the chain", 1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
 
     @Test
@@ -671,38 +675,17 @@ class OffApiClientTest {
         assertEquals("Chain must not walk after OversizedResponseException", 1, captured.size)
     }
 
-    @Test
-    fun lookup_atCapPlusOneByteContentLength_isRejected() = runTest {
-        val capBytes = MAX_BODY_BYTES.toInt()
-        val advertised = capBytes + 1
-        val body = paddedProductJson(advertised)
-        val client = HttpClient(MockEngine { _ ->
-            respond(
-                content = ByteReadChannel(body),
-                status = HttpStatusCode.OK,
-                headers = headersOf(
-                    HttpHeaders.ContentType to listOf("application/json"),
-                    HttpHeaders.ContentLength to listOf(advertised.toString()),
-                ),
-            )
-        }) {
-            install(ContentNegotiation) { json() }
-        }
-        val sut = OffApiClient(client)
-
-        assertNull(sut.lookup("5449000000996"))
-    }
-
     /**
      * Returns a valid OFF envelope JSON of exactly [targetBytes] length by
-     * padding the product_name field with repeated filler. Used only by the
-     * boundary tests above; the body shape mirrors `off/coke_330ml.json`.
+     * padding the product_name field with repeated filler. Used by the
+     * streaming-cap boundary tests above; the body shape mirrors
+     * `off/coke_330ml.json`.
      *
-     * Length must be exact (not *"at least N"*) because Ktor 3's `SaveBody`
-     * plugin enforces `body.size == Content-Length`; mismatched lengths
-     * surface as engine-level errors, not validator rejections — which would
-     * give the boundary tests a false-positive failure path that bypasses the
-     * validator entirely.
+     * Length must be exact — the boundary tests assert behaviour at
+     * `MAX_BODY_BYTES` and `MAX_BODY_BYTES + 1`, so any slop in the padding
+     * arithmetic would silently move the test off the boundary it claims to
+     * pin. The frame uses only ASCII bytes (`x` filler), so
+     * `String.toByteArray().size == String.length`.
      */
     private fun paddedProductJson(targetBytes: Int): String {
         val prefix = """{"code":"5449000000996","product":{"brands":"Coca-Cola",""" +
