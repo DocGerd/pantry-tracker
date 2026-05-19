@@ -134,6 +134,17 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+
+    // SR-17: ship the exported Room schema JSON into the androidTest APK so
+    // MigrationTestHelper can resolve them as assets at runtime. The helper
+    // reads "<dbClass>/<version>.json" from the test APK's assets — not from
+    // $projectDir/schemas on the host filesystem — so without this wiring,
+    // createDatabase(TEST_DB, 1) throws FileNotFoundException ("Cannot find
+    // the schema file in the assets folder"). The srcDir path matches the
+    // room.schemaLocation value passed to KSP above.
+    sourceSets {
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
+    }
 }
 
 // SR-22: assert the merged release manifest does not declare
@@ -272,6 +283,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.room.testing)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

@@ -15,7 +15,7 @@
 
 | # | Item | Why it's debt | When to address |
 |---|------|---------------|-----------------|
-| TD-1 | **No schema export** (`exportSchema = false` in `@Database`) | First future `Migration` will have no reference schema to test against | Re-enable + commit `app/schemas/` **the same PR** that bumps `@Database(version = 2)`. Documented in `AppDatabase.kt`. |
+| TD-1 | ~~**No schema export**~~ Resolved in v1.2: `exportSchema = true` and the v1 baseline (`app/schemas/.../1.json`) is committed, enabling MigrationTestHelper-based migration tests for future `@Database(version = 2)` bumps. | — | Closed. |
 | TD-2 | **Strings are inline, no `strings.xml` extraction** | Localization is mechanical drudgery once it's needed | v1.1 if a non-English user shows up. |
 | TD-3 | **Versioning is `0.1.0` / versionCode 1** despite shipping a feature-complete v1 | Was never bumped; the release plan is to set it to `1.0.0` / versionCode 2 in the v1.0 release commit | Before tagging `v1.0`. |
 | TD-4 | **No crash reporter** | A real bug on a real device will surface as "the app closed" with no signal back to the maintainer | v1.1 if real users join. ADR-008. |
