@@ -43,10 +43,18 @@ import java.util.logging.Logger
 private val logger: Logger = Logger.getLogger("OffApiClient")
 
 /**
- * Open Food Facts v2 product lookup. Returns null on miss, 4xx/5xx, blank barcode,
- * request timeout, JSON parse failure, or network IOException — the only exception
- * that escapes to the caller is CancellationException (rethrown for structured
- * concurrency, so a caller cancelling our job actually cancels us).
+ * Open Food Facts v2 product lookup. Walks [OFF_HOSTS] (Food → Beauty →
+ * PetFood → Products) only on HTTP 404; any other failure on the current host
+ * (5xx, IOException, parse failure, IllegalArgumentException, or an OFF
+ * contract violation like `status=1` with a null product) short-circuits to
+ * null so a sick host can't multiply downtime by 4. Happy path = a single
+ * request to `world.openfoodfacts.org`.
+ *
+ * Returns null on miss (all four hosts returned 404), on a blank or
+ * malformed-format barcode (SR-2 gate), or on any non-cancellation exception
+ * thrown by the HTTP / decode pipeline. The only exception that escapes to
+ * the caller is CancellationException (rethrown for structured concurrency,
+ * so a caller cancelling our job actually cancels us).
  *
  * Production uses the no-arg secondary constructor, which builds a real
  * OkHttp-backed HttpClient. Tests inject a MockEngine-backed HttpClient via the
@@ -76,45 +84,115 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             logger.log(Level.FINE, "OFF lookup rejected malformed input ${barcode.barcodeHint()}")
             return null
         }
+        for (host in OFF_HOSTS) {
+            when (val r = lookupOnce(host, barcode)) {
+                is HostResult.Found -> return r.product
+                HostResult.NotFound -> continue
+                HostResult.Error -> return null // don't multiply downtime by 4 across sister hosts
+            }
+        }
+        return null
+    }
+
+    private sealed interface HostResult {
+        data class Found(val product: OffProduct) : HostResult
+        data object NotFound : HostResult
+        data object Error : HostResult
+    }
+
+    /**
+     * Performs a single-host OFF v2 product lookup against [baseUrl]. Caller
+     * [lookup] dispatches one call to this helper per host in [OFF_HOSTS],
+     * advancing on [HostResult.NotFound] and short-circuiting on
+     * [HostResult.Error].
+     *
+     * Catch-arm contract:
+     * - **CancellationException** rethrown for structured concurrency, so a
+     *   caller cancelling our job actually cancels us.
+     * - **IOException** covers network down, DNS failures, and connect/socket
+     *   timeouts — OkHttp surfaces `HttpTimeout` failures as
+     *   `SocketTimeoutException` (an `IOException`), so a separate
+     *   `HttpRequestTimeoutException` catch is intentionally absent.
+     * - **JsonConvertException / SerializationException** at WARNING — parse
+     *   failures suggest a server-side surprise; logged but not user-visible.
+     * - **IllegalArgumentException** at SEVERE — engine-runtime only (URL
+     *   building is outside the `try`, and a regex-validated 6-14-digit
+     *   barcode produces only safe path segments). The SEVERE level is
+     *   deliberate: an exotic engine failure should be loud in crash-report
+     *   aggregators despite the null return.
+     *
+     * @return [HostResult.Found] on 200 + valid envelope (`status=1` + non-null
+     *   product); [HostResult.NotFound] on HTTP 404 or envelope `status != 1`
+     *   (status-sentinel miss — chain walks); [HostResult.Error] on any other
+     *   outcome (non-success HTTP, OFF contract violation `status=1` with null
+     *   product, IOException, parse error, engine-runtime IAE — all logged,
+     *   chain short-circuits). Throws only [CancellationException].
+     */
+    private suspend fun lookupOnce(baseUrl: String, barcode: String): HostResult {
         // Component URL builder so each path segment is percent-encoded
-        // explicitly (SR-2). Built outside the `try` so any IAE here is a
-        // programmer error (e.g. malformed OFF_BASE_URL constant) and surfaces
+        // explicitly (SR-2). Built outside the `try` so any IAE is a
+        // programmer error (e.g. malformed baseUrl constant) and surfaces
         // in dev rather than silently degrading prod to manual-entry-forever.
         val url: Url = URLBuilder().apply {
-            takeFrom(OFF_BASE_URL)
+            takeFrom(baseUrl)
             appendPathSegments("api", "v2", "product", "$barcode.json")
             parameters.append("fields", OFF_FIELDS)
         }.build()
         return try {
-            val response: HttpResponse = httpClient.get(url)
-            if (!response.status.isSuccess()) return null
-            val envelope = response.body<OffApiEnvelope>()
-            if (envelope.status != 1) null else envelope.product
+            classifyResponse(httpClient.get(url), barcode, baseUrl)
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
-            // Covers network down, DNS failures, connect/socket timeouts (OkHttp
-            // surfaces timeout as SocketTimeoutException which is an IOException).
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup network error for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.WARNING, "OFF lookup network error for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         } catch (e: JsonConvertException) {
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup JSON conversion error for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.WARNING, "OFF lookup JSON conversion error for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         } catch (e: SerializationException) {
             @Suppress("SwallowedException")
-            logger.log(Level.WARNING, "OFF lookup serialization error for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.WARNING, "OFF lookup serialization error for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         } catch (e: IllegalArgumentException) {
-            // Engine-runtime IAE only (URL building is outside the try and a
-            // regex-validated 6-14-digit barcode produces only safe path
-            // segments). Logged at SEVERE so an exotic engine failure is noisy
-            // in crash-report aggregators despite the null return.
             @Suppress("SwallowedException")
-            logger.log(Level.SEVERE, "OFF lookup engine-runtime IAE for ${barcode.barcodeHint()}", e)
-            null
+            logger.log(Level.SEVERE, "OFF lookup engine-runtime IAE for ${barcode.barcodeHint()} on $baseUrl", e)
+            HostResult.Error
         }
+    }
+
+    private suspend fun classifyResponse(
+        response: HttpResponse,
+        barcode: String,
+        baseUrl: String,
+    ): HostResult {
+        if (response.status.value == HTTP_NOT_FOUND) return HostResult.NotFound
+        if (!response.status.isSuccess()) {
+            // Non-success non-404: this host is sick (5xx, 401, 403, ...). Logged
+            // at WARNING so operators triaging "scans aren't working" see the
+            // status code in logcat; every other Error branch already logs, and
+            // the silent-error gap on this branch was the only outlier.
+            logger.log(
+                Level.WARNING,
+                "OFF lookup non-success HTTP ${response.status.value} for ${barcode.barcodeHint()} on $baseUrl",
+            )
+            return HostResult.Error
+        }
+        val envelope = response.body<OffApiEnvelope>()
+        if (envelope.status != OFF_STATUS_FOUND) return HostResult.NotFound
+        val product = envelope.product
+        if (product == null) {
+            // OFF contract violation: `status=1` must come with a product object.
+            // Treat the same as a 5xx — "this host is sick, don't walk the
+            // sister hosts". The chain walks for genuine misses (status=0 / 404),
+            // not for upstream protocol bugs.
+            logger.log(
+                Level.WARNING,
+                "OFF contract violation: status=1 with null product for ${barcode.barcodeHint()} on $baseUrl",
+            )
+            return HostResult.Error
+        }
+        return HostResult.Found(product)
     }
 
     companion object {
@@ -126,8 +204,24 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             "PantryTracker/${BuildConfig.VERSION_NAME} (https://github.com/DocGerd/pantry-tracker)"
         private const val TIMEOUT_MILLIS = 8_000L
 
-        private const val OFF_BASE_URL = "https://world.openfoodfacts.org/"
+        private val OFF_HOSTS: List<String> = listOf(
+            "https://world.openfoodfacts.org/",
+            "https://world.openbeautyfacts.org/",
+            "https://world.openpetfoodfacts.org/",
+            "https://world.openproductsfacts.org/",
+        )
         private const val OFF_FIELDS = "code,product_name,brands,image_url,status"
+
+        // HTTP 404 is the only "not found" signal we distinguish from a generic
+        // transport error; on the OFF fallback chain (Task 1.2) it's the trigger
+        // to try the next host. Other 4xx/5xx codes mean the request never
+        // exited our trust boundary cleanly, so we fail closed (Error).
+        private const val HTTP_NOT_FOUND = 404
+
+        // OFF envelope's status flag — 1 == hit, 0 == miss. Hoisted from a
+        // literal to give the comparison in classifyResponse a name; the OFF
+        // schema docs use the same convention.
+        private const val OFF_STATUS_FOUND = 1
 
         // EAN-8 .. ITF-14 covers every numeric symbology ML Kit can decode in
         // the formats we enable; 6 is the lower bound because EAN-8 minus the

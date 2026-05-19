@@ -10,6 +10,14 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ---
 
+## [Unreleased]
+
+### Privacy
+
+- **OFF lookup now walks up to four sister-project hosts on 404** (v1.0 used a single host). The chain is `world.openfoodfacts.org` (food) → `world.openbeautyfacts.org` (cosmetics) → `world.openpetfoodfacts.org` (pet food) → `world.openproductsfacts.org` (everything else). The happy path is still a single request to OFF; the chain only walks on `404` (every other failure mode — 5xx, timeout, network error — fails fast without walking further, so a sick OFF host can't multiply downtime by 4). Every request still carries only the scanned barcode plus the static `PantryTracker/<version> (<repo URL>)` User-Agent — no user identifier, no cookie, no device fingerprint.
+
+---
+
 ## [1.0.0] — 2026-05-18
 
 First public-ready release. Single-user, sideloaded — no Play Store presence.
