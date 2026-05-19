@@ -248,7 +248,7 @@ class OffApiClientTest {
 
     @Test
     fun lookup_offMiss_beautyHit_returnsBeautyProduct_doesNotWalkFurther() = runTest {
-        val beautyBody = loadFixture("off/coke_330ml.json")  // schema-identical envelope
+        val beautyBody = loadFixture("off/coke_330ml.json") // schema-identical envelope
         val (client, captured) = clientByHost(
             mapOf("world.openbeautyfacts.org" to beautyBody),
         )
@@ -448,8 +448,8 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException to propagate")
-        } catch (e: CancellationException) {
-            // expected
+        } catch (@Suppress("SwallowedException") e: CancellationException) {
+            // expected — CE escape is the assertion target; nothing to do with `e`
         }
     }
 
@@ -476,8 +476,8 @@ class OffApiClientTest {
         try {
             sut.lookup("5449000000996")
             org.junit.Assert.fail("expected CancellationException from host 2")
-        } catch (e: CancellationException) {
-            // expected
+        } catch (@Suppress("SwallowedException") e: CancellationException) {
+            // expected — CE escape is the assertion target; nothing to do with `e`
         }
     }
 
