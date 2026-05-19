@@ -26,7 +26,7 @@ Fallbacks & undo milestone. All three feature items shipped:
 
 ### Security
 
-- **OFF response body cap (SR-24).** The HTTP client now rejects OFF responses larger than 256 KB before parse, bounding worst-case memory + latency on a hostile or malformed response. Missing `Content-Length` is also treated as failure (fail-closed) so a chunked-transfer or proxy-rewritten response can't bypass the cap.
+- **OFF response body cap (SR-24).** The HTTP client now rejects OFF responses advertising `Content-Length > 256 KB` before parse, bounding worst-case memory + latency on a malformed response. **Known limitation:** OFF's CDN uses chunked transfer encoding and omits `Content-Length` on real responses, so chunked / no-`Content-Length` responses currently pass through the cap. A streaming-bounded body read for proper defence-in-depth is tracked as a v1.2 follow-up.
 - **CancellationException contract preserved** across all new suspend code: every `try/catch` in `OffApiClient` + `HomeViewModel` rethrows CE explicitly. No `runCatching` introductions.
 
 ### Privacy
