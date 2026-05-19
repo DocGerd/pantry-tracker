@@ -1,7 +1,6 @@
 package de.docgerdsoft.pantrytracker.data.remote
 
 import de.docgerdsoft.pantrytracker.data.remote.OffApiClient.Companion.MAX_BODY_BYTES
-import de.docgerdsoft.pantrytracker.data.remote.OffApiClient.Companion.installOffBodyCap
 import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -568,7 +567,6 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 
@@ -603,7 +601,6 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 
@@ -635,13 +632,43 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
-            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 
         // Should NOT trip the validator (size == cap, not >); product parses.
         val result = sut.lookup("5449000000996")
         assertEquals(true, result?.productName?.isNotBlank() ?: false)
+    }
+
+    @Test
+    fun lookup_chunkedOversizedBody_failsFastAfterCapBytes() = runTest {
+        val captured = mutableListOf<HttpRequestData>()
+        // Valid OFF envelope JSON padded with trailing whitespace to exceed
+        // MAX_BODY_BYTES. JSON parsers tolerate trailing whitespace, so the
+        // BROKEN header-only-cap code would parse this and return a Found
+        // candidate (test would fail). The streaming cap throws
+        // OversizedResponseException after ~256 KB without reaching the parser.
+        val validEnvelope =
+            """{"status":1,"product":{"code":"0123456789","product_name":"Padded"}}"""
+        val padBytes = (MAX_BODY_BYTES.toInt() + 64 * 1024) - validEnvelope.length
+        val bodyBytes = (validEnvelope + " ".repeat(padBytes)).toByteArray()
+        // Deliberately NO Content-Length header — emulates OFF's chunked-encoding shape.
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            respond(
+                content = ByteReadChannel(bodyBytes),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("0123456789")
+
+        assertNull("Streamed body > MAX_BODY_BYTES must yield null", result)
+        assertEquals("Chain must not walk after OversizedResponseException", 1, captured.size)
     }
 
     @Test
@@ -660,7 +687,6 @@ class OffApiClientTest {
             )
         }) {
             install(ContentNegotiation) { json() }
-            installOffBodyCap()
         }
         val sut = OffApiClient(client)
 

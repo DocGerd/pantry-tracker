@@ -3,15 +3,13 @@ package de.docgerdsoft.pantrytracker.data.remote
 import de.docgerdsoft.pantrytracker.BuildConfig
 import de.docgerdsoft.pantrytracker.util.barcodeHint
 import io.ktor.client.HttpClient
-import io.ktor.client.HttpClientConfig
-import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
-import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.HttpHeaders
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
@@ -20,9 +18,11 @@ import io.ktor.http.isSuccess
 import io.ktor.http.takeFrom
 import io.ktor.serialization.JsonConvertException
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -180,7 +180,8 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             )
             return HostResult.Error
         }
-        val envelope = response.body<OffApiEnvelope>()
+        val bytes = readBoundedBody(response)
+        val envelope = OFF_JSON.decodeFromString<OffApiEnvelope>(bytes.decodeToString())
         if (envelope.status != OFF_STATUS_FOUND) return HostResult.NotFound
         val product = envelope.product
         if (product == null) {
@@ -195,6 +196,34 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             return HostResult.Error
         }
         return HostResult.Found(product)
+    }
+
+    /**
+     * Counting bodyAsChannel() read that enforces [MAX_BODY_BYTES] regardless
+     * of whether Content-Length was advertised. OFF's CDN ships product
+     * responses with chunked transfer encoding and no Content-Length header,
+     * so the previous header-only validator was effectively dead in production
+     * (see SR-24 follow-up in arc42 §11). This streaming read closes the gap:
+     * the cap fires on actual bytes received, not on a header that may never
+     * appear.
+     *
+     * Throws [OversizedResponseException] (extends IOException, caught by the
+     * existing IOException arm in [lookupOnce]) as soon as accumulated bytes
+     * exceed the cap — bounding peak memory at roughly the cap plus one chunk.
+     */
+    private suspend fun readBoundedBody(response: HttpResponse): ByteArray {
+        val channel = response.bodyAsChannel()
+        val buffer = ByteArrayOutputStream()
+        val chunk = ByteArray(BODY_READ_CHUNK_BYTES)
+        var total = 0L
+        while (!channel.isClosedForRead) {
+            val n = channel.readAvailable(chunk, 0, chunk.size)
+            if (n <= 0) break
+            total += n
+            if (total > MAX_BODY_BYTES) throw OversizedResponseException(total)
+            buffer.write(chunk, 0, n)
+        }
+        return buffer.toByteArray()
     }
 
     companion object {
@@ -214,6 +243,17 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         // the cap value instead of duplicating the literal, keeping the production
         // constant and the test boundary in lockstep.
         internal const val MAX_BODY_BYTES: Long = 256L * 1024L
+
+        // Read buffer for the streamed counting body read. 8 KiB matches the
+        // default OkHttp source buffer — large enough to keep syscall churn
+        // low, small enough that the over-read past the cap is bounded by
+        // one chunk (~8 KiB), not the whole response.
+        private const val BODY_READ_CHUNK_BYTES = 8 * 1024
+
+        // Hoisted from the inline Json instance inside ContentNegotiation so
+        // classifyResponse's manual decode reuses one configured instance.
+        // `internal` so tests can reference the same configured Json if needed.
+        internal val OFF_JSON: Json = Json { ignoreUnknownKeys = true }
 
         // Extends IOException deliberately — the existing `catch (e: IOException)`
         // arm in lookupOnce already maps it to HostResult.Error so no new catch
@@ -251,51 +291,19 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         private val BARCODE_PATTERN = Regex("^[0-9]{6,14}$")
 
         private fun defaultClient(): HttpClient = HttpClient(OkHttp) {
+            // ContentNegotiation is kept even though OFF decoding now goes
+            // through OFF_JSON inside classifyResponse — it's harmless for the
+            // single endpoint we hit today and leaves the door open for future
+            // non-OFF endpoints (e.g. an enrichment API) that may want
+            // automatic body<>() decoding.
             install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
             install(HttpTimeout) {
                 requestTimeoutMillis = TIMEOUT_MILLIS
                 connectTimeoutMillis = TIMEOUT_MILLIS
                 socketTimeoutMillis = TIMEOUT_MILLIS
             }
-            installOffBodyCap()
             defaultRequest {
                 headers.append(HttpHeaders.UserAgent, USER_AGENT)
-            }
-        }
-
-        // Ktor 3 exposes HttpResponseValidator as a top-level extension on
-        // HttpClientConfig — not via install(...) as Ktor 2 docs (and the v1.1
-        // plan) suggested. Do not rewrite to install(HttpResponseValidator) { ... }.
-        //
-        // Extracted as `internal` so the body-cap tests can wire the exact same
-        // validator into their MockEngine-backed clients — keeping the cap
-        // literal, the exception type, and the missing-Content-Length policy in
-        // one place. Without this extension the 3 boundary tests would inline
-        // copies of the validator and silently diverge from production
-        // (the original PR review caught exactly that).
-        internal fun HttpClientConfig<*>.installOffBodyCap() {
-            HttpResponseValidator {
-                // SR-24: reject responses whose advertised body exceeds the cap
-                // BEFORE any parse happens.
-                //
-                // The cap operates on the Content-Length header, NOT on the
-                // streamed body. Responses without Content-Length (OFF's actual
-                // production shape — its CDN uses chunked transfer encoding for
-                // the product API) pass through unchecked. This is a known
-                // SR-24 limitation: a hostile or buggy host returning a multi-MB
-                // chunked body could still OOM us before parse.
-                //
-                // History: an earlier attempt treated missing CL as failure
-                // (throw OversizedResponseException(-1L)) but that rejected
-                // every real OFF response — see release-prep retro / arc42 §11.
-                // True defence-in-depth requires a stream-bounded body read in
-                // classifyResponse, tracked as a v1.2 follow-up.
-                validateResponse { response ->
-                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
-                    if (contentLength != null && contentLength > MAX_BODY_BYTES) {
-                        throw OversizedResponseException(contentLength)
-                    }
-                }
             }
         }
     }
