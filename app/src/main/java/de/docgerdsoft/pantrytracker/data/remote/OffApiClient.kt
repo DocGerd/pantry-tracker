@@ -144,6 +144,14 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             classifyResponse(httpClient.get(url), barcode, baseUrl)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: OversizedResponseException) {
+            @Suppress("SwallowedException")
+            logger.log(
+                Level.WARNING,
+                "OFF lookup body-cap breach (${e.message}) for ${barcode.barcodeHint()} on $baseUrl",
+                e,
+            )
+            HostResult.Error
         } catch (e: IOException) {
             @Suppress("SwallowedException")
             logger.log(Level.WARNING, "OFF lookup network error for ${barcode.barcodeHint()} on $baseUrl", e)
@@ -207,9 +215,12 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
      * the cap fires on actual bytes received, not on a header that may never
      * appear.
      *
-     * Throws [OversizedResponseException] (extends IOException, caught by the
-     * existing IOException arm in [lookupOnce]) as soon as accumulated bytes
-     * exceed the cap — bounding peak memory at roughly the cap plus one chunk.
+     * Throws [OversizedResponseException] (caught by its own dedicated arm in
+     * [lookupOnce] — placed above the generic IOException arm so the cap
+     * breach gets a distinct WARNING log line, separating "we're being DoS'd
+     * by a hostile chunked response" from "user's wifi dropped" in logs) as
+     * soon as accumulated bytes exceed the cap — bounding peak memory at
+     * roughly the cap plus one chunk.
      */
     private suspend fun readBoundedBody(response: HttpResponse): ByteArray {
         val channel = response.bodyAsChannel()
@@ -255,9 +266,12 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         // `internal` so tests can reference the same configured Json if needed.
         internal val OFF_JSON: Json = Json { ignoreUnknownKeys = true }
 
-        // Extends IOException deliberately — the existing `catch (e: IOException)`
-        // arm in lookupOnce already maps it to HostResult.Error so no new catch
-        // arm is needed.
+        // Extends IOException deliberately so it composes with the existing
+        // IO-failure flow, but `lookupOnce` has a *dedicated* catch arm above
+        // the generic IOException arm so the cap breach gets its own WARNING
+        // log line — forensically separating "hostile oversized response" from
+        // "user wifi dropped" without grepping `e.toString()` for the subclass
+        // name (PR #58 silent-failure-hunter finding).
         // `internal` (and not nested in `companion`-private scope) so the
         // body-cap tests can `assertThrows`/catch this exact type rather than the
         // broader IOException supertype — a regression that re-throws a plain

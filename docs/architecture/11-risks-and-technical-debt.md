@@ -24,6 +24,7 @@
 | TD-7 | **No deletion confirmation copy mentions data loss is undoable** | User might delete by accident | Acceptable per spec (`DeleteConfirmDialog` says "Cannot be undone in v1"). Consider in-app undo (snackbar with UNDO) in v1.1. |
 | TD-8 | **No tests on real device CI** | Compose UI test compile-only via `assembleDebugAndroidTest`; emulator runs are manual | ADR-010 — explicit, not accidental. Revisit when reproducibility of UI tests becomes the bottleneck. |
 | TD-9 | **Two `FakeRepository` types share signature drift risk** | See TD-5 | Same as TD-5. |
+| TD-10 | **OFF response parse not bounded against algorithmic-complexity DoS** | The v1.2 streamed body cap (256 KB) protects bulk size only — `kotlinx.serialization`'s `decodeFromString` has no depth limit, so hostile JSON shapes within the cap (e.g. `[[[[…]]]]` 100k deep, or a single 200 KB field) can risk `StackOverflowError`. `StackOverflowError` is an `Error`, not an `Exception`, so it bypasses the existing catch arms in `lookupOnce` and crashes the coroutine. Surfaced by silent-failure-hunter review on PR #58. | Tracked as [#59](https://github.com/DocGerd/pantry-tracker/issues/59) for v1.3+. Spec §"Non-goals" explicitly defers wire-level DoS (gzip-bomb out of scope); algorithmic-complexity DoS is similarly out of scope for v1.2. |
 
 ## 11.3 Risks explicitly accepted
 
