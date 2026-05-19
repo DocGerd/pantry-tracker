@@ -12,6 +12,13 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+### Added
+
+- Offline cache for OFF lookups of non-pantry barcodes. Re-scanning a
+  product that was previewed (but not added) now resolves locally —
+  no network call, no 4-host fallback walk. 30-day TTL; cache row is
+  deleted when the barcode is committed to the pantry. (#48)
+
 ### Security
 
 - Replace header-only OFF response body cap with streamed enforcement.
