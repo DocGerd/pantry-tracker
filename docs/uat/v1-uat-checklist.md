@@ -206,20 +206,22 @@ scanning against real products).
 
 - **Date:** YYYY-MM-DD
 - **Device:** [model / Android version]
-- **APK:** `app-release.apk` (R8 minified + shrinkResources enabled)
+- **APK:** `app-release.apk` from `./gradlew :app:assembleRelease` — **must be the R8-minified release variant**, not the debug APK. R8 only runs on release; testing debug silently invalidates the pass.
 - **APK size:** 24,140,473 bytes (24.1 MB; 40.4% reduction vs v1.1.0's 40.5 MB)
+- **Order matters:** the migration test (#1) must run BEFORE the inventory tests, so the inventory items exercise a freshly-migrated v1.1.0 database (the realistic upgrade state). The airplane-mode test (#12) is last because it leaves the device offline.
 - **Scenarios — all must pass:**
-  - [ ] Scan known food product → OFF resolves → preview sheet appears
-  - [ ] Scan known beauty product (fallback chain → beauty-facts host)
-  - [ ] Scan known pet food (fallback chain → pet-food host)
-  - [ ] Scan known generic product (fallback chain → products-facts host)
-  - [ ] Scan unknown/garbage barcode → manual entry sheet appears
-  - [ ] Add scanned product → appears in inventory list
-  - [ ] Change quantity (+/-) → persists across cold-start
-  - [ ] Rename product → persists
-  - [ ] Delete product → undo snackbar restores
-  - [ ] Image loading from OFF (Coil) — image displays on detail screen
-  - [ ] **Upgrade-install from v1.1.0** — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top — verifies `MIGRATION_1_2` runs on a real device and pantry data is preserved
-  - [ ] **OFF lookup cache** — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
+  1. [ ] **Upgrade-install from v1.1.0** — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top (no uninstall). Verifies `MIGRATION_1_2` runs on a real device and v1.1.0 pantry data is preserved into v1.2.
+  2. [ ] Scan known food product → OFF resolves → preview sheet appears
+  3. [ ] Scan known beauty product (fallback chain → beauty-facts host)
+  4. [ ] Scan known pet food (fallback chain → pet-food host)
+  5. [ ] Scan known generic product (fallback chain → products-facts host)
+  6. [ ] Scan unknown/garbage barcode → manual entry sheet appears
+  7. [ ] Add scanned product → appears in inventory list
+  8. [ ] Change quantity (+/-) → persists across cold-start
+  9. [ ] Rename product → persists
+  10. [ ] Delete product → undo snackbar restores
+  11. [ ] Image loading from OFF (Coil) — image displays on detail screen
+  12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
 - **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
+- **Procedure for adding `-keep` rules mid-UAT:** if any item fails with a `ClassNotFoundException` / `NoSuchMethodException` / kotlinx.serialization "Serializer for class X is not found" in `adb logcat`: identify the stripped target, add the keep rule to `app/proguard-rules.pro`, document it in the line above, rebuild release (`./gradlew :app:assembleRelease`), reinstall, restart this checklist from item #1.
 - **Sign-off:** [signature/handle]

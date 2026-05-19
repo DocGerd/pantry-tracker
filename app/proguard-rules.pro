@@ -10,6 +10,11 @@
     *** Companion;
 }
 
+# Keep the Companion CLASS itself, not just the field accessor. Without this,
+# R8 may strip or rename the inner $Companion type, leaving the kept field
+# pointing at a missing class. Pin every $Companion under the app package.
+-keep class de.docgerdsoft.pantrytracker.**$Companion { *; }
+
 # Keep the @Serializable data classes themselves intact — their fields are read
 # reflectively by the generated KSerializer descriptor. `OffApiEnvelope` is
 # `internal` and would otherwise be a prime inline-and-rename target.
@@ -29,3 +34,11 @@
 -keep class de.docgerdsoft.pantrytracker.data.local.OffLookupCacheEntry { *; }
 -keep interface de.docgerdsoft.pantrytracker.data.local.ProductDao { *; }
 -keep interface de.docgerdsoft.pantrytracker.data.local.OffLookupCacheDao { *; }
+
+# Pin OffLookupCacheEntry's primary constructor. The data class has an
+# `init { require(name.isNotBlank()) }` invariant (PR C polish) — if R8
+# inlines or simplifies the constructor body, the IllegalArgumentException
+# may not unwind to the catch in ProductRepositoryImpl.lookupForPreview.
+-keepclassmembers class de.docgerdsoft.pantrytracker.data.local.OffLookupCacheEntry {
+    <init>(...);
+}
