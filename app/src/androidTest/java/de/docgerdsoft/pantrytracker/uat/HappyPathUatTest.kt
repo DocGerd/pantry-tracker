@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.uat
 import androidx.compose.material3.Surface
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -10,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import de.docgerdsoft.pantrytracker.PantryTrackerNavGraph
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.di.AppContainer
@@ -161,6 +163,86 @@ class HappyPathUatTest {
         }
         rule.onNodeWithText("Your pantry is empty").assertIsDisplayed()
         rule.onNodeWithText("Test Cola").assertDoesNotExist()
+    }
+
+    @Test
+    fun delete_thenUndo_restoresItem() {
+        val repo = InMemoryProductRepository()
+        val container = AppContainer(repo)
+
+        rule.setContent {
+            PantryTrackerTheme {
+                Surface { PantryTrackerNavGraph(container = container) }
+            }
+        }
+
+        // Add a product manually so we have a row to delete-then-undo.
+        rule.onNodeWithText("Add manually").performClick()
+        rule.onNodeWithText("Name").performTextInput("Soap")
+        // Two "Add" nodes exist in the empty-state ScanButtonsRow + sheet — the
+        // sheet's confirm is index 0 once the AddProductSheet is on top.
+        rule.onAllNodesWithText("Add")[0].performClick()
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("Soap").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("Soap").assertIsDisplayed()
+
+        // Long-press the row → DeleteConfirmDialog (project pattern).
+        rule.onNodeWithText("Soap").performTouchInput { longClick() }
+        rule.onNodeWithText("Delete").performClick()
+
+        // Snackbar fires after confirmDelete; assert the new copy + tap UNDO.
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("UNDO").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("UNDO").performClick()
+
+        // Item is back in the list — restore preserved the captured Product.
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("Soap").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("Soap").assertIsDisplayed()
+        // EmptyState must not re-appear: pins the assertion that undoDelete
+        // actually round-tripped through restore(), not just dismissed the
+        // snackbar.
+        rule.onNodeWithText("Your pantry is empty").assertDoesNotExist()
+    }
+
+    @Test
+    fun delete_thenSnackbarDismiss_keepsDeleted() {
+        val repo = InMemoryProductRepository()
+        val container = AppContainer(repo)
+
+        rule.setContent {
+            PantryTrackerTheme {
+                Surface { PantryTrackerNavGraph(container = container) }
+            }
+        }
+
+        rule.onNodeWithText("Add manually").performClick()
+        rule.onNodeWithText("Name").performTextInput("Soap")
+        rule.onAllNodesWithText("Add")[0].performClick()
+        rule.waitUntil(timeoutMillis = 2_000) {
+            rule.onAllNodesWithText("Soap").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        rule.onNodeWithText("Soap").performTouchInput { longClick() }
+        rule.onNodeWithText("Delete").performClick()
+
+        // Wait past Material's "Short" snackbar duration (~4 s) without
+        // tapping UNDO. The collector resumes after dismiss; the deletion
+        // stays final because UNDO was never invoked.
+        // mainClock controls Compose's virtual frame clock; the collector's
+        // showSnackbar suspension is what advancing it actually dismisses.
+        rule.mainClock.advanceTimeBy(5_000L)
+
+        // Row is gone (EmptyState re-renders) and the UNDO action is no
+        // longer findable on the snackbar.
+        rule.waitUntil(timeoutMillis = 5_000) {
+            rule.onAllNodesWithText("Your pantry is empty").fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNodeWithText("Your pantry is empty").assertIsDisplayed()
+        rule.onNodeWithText("Soap").assertDoesNotExist()
     }
 
     // --- helpers ---
