@@ -10,11 +10,34 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ---
 
-## [Unreleased]
+## [1.1.0] — 2026-05-19
+
+Fallbacks & undo milestone. All three feature items shipped:
+
+### Added
+
+- **Non-food product coverage.** OFF lookup now walks Open Food Facts → Open Beauty Facts → Open Pet Food Facts → Open Products Facts on `404`, so cosmetics, pet food, and household products that aren't on the food endpoint still resolve through their sibling databases (#44).
+- **Delete UNDO.** After confirming a delete, a snackbar offers UNDO for a few seconds. Restored items preserve their original id and every column (name, brand, image_url, quantity, createdAt, updatedAt); `restore()` is wrapped in `NonCancellable` so a backgrounded VM can't lose the row mid-write (#46).
+- **Surfaced failure feedback.** Both delete and undo paths now surface failures via `SnackbarEvent.DeleteFailed` / `RestoreFailed` instead of silently swallowing exceptions into `viewModelScope`'s `SupervisorJob`. The user sees *"Could not delete X"* / *"Could not undo delete of X"* if the DB rejects the operation.
+
+### Changed
+
+- **Dialog copy.** Confirmation dialog reads *"Delete {name}?"* / *"Delete {name} from your pantry?"* — the UNDO snackbar carries the reversibility message now, so the old *"Cannot be undone in v1"* apology is gone. Snackbar uses the matching verb (*"Deleted X"*) for consistency across dialog → button → snackbar.
+
+### Security
+
+- **OFF response body cap (SR-24).** The HTTP client now rejects OFF responses larger than 256 KB before parse, bounding worst-case memory + latency on a hostile or malformed response. Missing `Content-Length` is also treated as failure (fail-closed) so a chunked-transfer or proxy-rewritten response can't bypass the cap.
+- **CancellationException contract preserved** across all new suspend code: every `try/catch` in `OffApiClient` + `HomeViewModel` rethrows CE explicitly. No `runCatching` introductions.
 
 ### Privacy
 
-- **OFF lookup now walks up to four sister-project hosts on 404** (v1.0 used a single host). The chain is `world.openfoodfacts.org` (food) → `world.openbeautyfacts.org` (cosmetics) → `world.openpetfoodfacts.org` (pet food) → `world.openproductsfacts.org` (everything else). The happy path is still a single request to OFF; the chain only walks on `404` (every other failure mode — 5xx, timeout, network error — fails fast without walking further, so a sick OFF host can't multiply downtime by 4). Every request still carries only the scanned barcode plus the static `PantryTracker/<version> (<repo URL>)` User-Agent — no user identifier, no cookie, no device fingerprint.
+- **OFF lookup now walks up to four sister-project hosts on 404** (v1.0 used a single host). The chain is `world.openfoodfacts.org` (food) → `world.openbeautyfacts.org` (cosmetics) → `world.openpetfoodfacts.org` (pet food) → `world.openproductsfacts.org` (everything else). The happy path is still a single request to OFF; the chain only walks on `404` (5xx, timeout, network error, and a `status=1`-with-null-product OFF contract violation all fail fast — so a sick host can't multiply downtime by 4). Every request still carries only the scanned barcode plus the static `PantryTracker/1.1.0 (<repo URL>)` User-Agent — no user identifier, no cookie, no device fingerprint.
+
+### Tests / quality
+
+- 175 → 194 JVM unit tests (+19 over v1.0); `OffApiClientTest` grew from 32 → 45 cases (full chain matrix + body-cap boundary trio + chunked-bypass + first-and-second-host cancellation propagation + new `SnackbarEvent.{DeleteFailed,RestoreFailed}` emission pinning).
+- `HappyPathUatTest` (instrumented) gained 2 new walks: delete-then-undo and delete-then-snackbar-dismiss.
+- `SnackbarEvent` moved from `ui/home/` to `ui/common/` so v1.2 features can adopt the same channel pattern without churn.
 
 ---
 
