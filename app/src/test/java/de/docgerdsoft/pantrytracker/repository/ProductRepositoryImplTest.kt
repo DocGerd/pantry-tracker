@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
+import de.docgerdsoft.pantrytracker.data.local.OffLookupCacheEntry
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
@@ -22,14 +23,24 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
+// LargeClass: this is the canonical behavioural test fixture for
+// ProductRepositoryImpl — splitting it by feature area (CRUD vs preview vs
+// cache) would scatter the shared Room/clock setUp across files for no
+// readability gain. The 600-line threshold is calibrated for production
+// classes, not exhaustive test suites.
+@Suppress("LargeClass")
 class ProductRepositoryImplTest {
 
     private lateinit var db: AppDatabase
     private lateinit var clock: FakeClock
+    private lateinit var fakeOff: FakeOffLookup
     private lateinit var repo: ProductRepository
 
     @Before
@@ -43,7 +54,15 @@ class ProductRepositoryImplTest {
         clock = FakeClock(Instant.fromEpochMilliseconds(1_000_000L))
         // Tests that don't exercise lookupForPreview pass an empty FakeOffLookup;
         // any unexpected call would still record into lookupCallCount and could be asserted.
-        repo = ProductRepositoryImpl(db.productDao(), FakeOffLookup(), clock = clock)
+        // Hoisted to a class field so the C.4 cache tests can assert
+        // `fakeOff.lookupCallCount` against the repo wired into setUp.
+        fakeOff = FakeOffLookup()
+        repo = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
     }
 
     @After
@@ -213,7 +232,12 @@ class ProductRepositoryImplTest {
         val fakeOff = FakeOffLookup()
         // Seed via repo so Room assigns the real id
         val id = repo.addNew(name = "Local Coke", barcode = "111", initialQuantity = 5)
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("111")
 
@@ -228,7 +252,12 @@ class ProductRepositoryImplTest {
     fun lookupForPreview_localMiss_offHit_returnsFromOff() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("222", OffProduct(productName = "Sprite", brands = "Coca-Cola", imageUrl = "https://x"))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("222")
 
@@ -243,7 +272,12 @@ class ProductRepositoryImplTest {
     @Test
     fun lookupForPreview_localMiss_offMiss_returnsNull() = runTest {
         val fakeOff = FakeOffLookup()
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("333")
 
@@ -256,7 +290,12 @@ class ProductRepositoryImplTest {
         // We can't preview without a name, so treat as miss → manual entry.
         val fakeOff = FakeOffLookup()
         fakeOff.stub("444", OffProduct(productName = null, brands = "Brand only"))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("444")
 
@@ -266,10 +305,200 @@ class ProductRepositoryImplTest {
     @Test
     fun lookupForPreview_blankBarcode_returnsNull_withoutHittingNetwork() = runTest {
         val fakeOff = FakeOffLookup()
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
         assertNull(sut.lookupForPreview(""))
         assertNull(sut.lookupForPreview("   "))
         assertEquals(0, fakeOff.lookupCallCount)
+    }
+
+    // --- #48 / C.4: OFF lookup cache (cache hit, miss + write, stale refresh,
+    // TTL boundary, pantry-supersedes, addNew evicts, null-barcode no-op) ---
+
+    @Test
+    fun lookupForPreview_cacheHit_returnsFromOff_withoutCallingOff() = runTest {
+        val cacheDao = db.offLookupCacheDao()
+        val now = clock.now()
+        cacheDao.upsert(
+            OffLookupCacheEntry(
+                barcode = "0123456789",
+                name = "Cached Cookies",
+                brand = "CacheBrand",
+                imageUrl = "https://images.openfoodfacts.org/cookies.jpg",
+                resolvingHost = "https://world.openfoodfacts.org/",
+                fetchedAt = now.minus(1.seconds), // 1 second old, well within TTL
+            ),
+        )
+
+        val candidate = repo.lookupForPreview("0123456789") as ScanCandidate.FromOff
+
+        assertEquals("Cached Cookies", candidate.name)
+        assertEquals("CacheBrand", candidate.brand)
+        assertEquals("https://images.openfoodfacts.org/cookies.jpg", candidate.imageUrl)
+        assertEquals("Cache hit must not call OFF", 0, fakeOff.lookupCallCount)
+    }
+
+    @Test
+    fun lookupForPreview_cacheMiss_callsOff_andUpsertsCacheRow() = runTest {
+        fakeOff.stub(
+            code = "0123456789",
+            product = OffProduct(
+                code = "0123456789",
+                productName = "Fresh Cookies",
+                brands = "FreshBrand",
+                imageUrl = "https://images.openfoodfacts.org/x.jpg",
+            ),
+            host = "https://world.openpetfoodfacts.org/",
+        )
+
+        val candidate = repo.lookupForPreview("0123456789") as ScanCandidate.FromOff
+
+        assertEquals("Fresh Cookies", candidate.name)
+        val written = db.offLookupCacheDao().findByBarcode("0123456789")!!
+        assertEquals("0123456789", written.barcode)
+        assertEquals("Fresh Cookies", written.name)
+        assertEquals("FreshBrand", written.brand)
+        assertEquals("https://images.openfoodfacts.org/x.jpg", written.imageUrl)
+        assertEquals("https://world.openpetfoodfacts.org/", written.resolvingHost)
+        assertEquals(clock.now(), written.fetchedAt)
+    }
+
+    @Test
+    fun lookupForPreview_cacheStale_refreshesFromOff() = runTest {
+        val cacheDao = db.offLookupCacheDao()
+        val now = clock.now()
+        cacheDao.upsert(
+            OffLookupCacheEntry(
+                barcode = "0123456789",
+                name = "Old Cookies",
+                brand = null,
+                imageUrl = null,
+                resolvingHost = "https://world.openfoodfacts.org/",
+                fetchedAt = now.minus(30.days).minus(1.milliseconds), // just past TTL
+            ),
+        )
+        fakeOff.stub(
+            code = "0123456789",
+            product = OffProduct(
+                code = "0123456789",
+                productName = "New Cookies",
+                brands = "NewBrand",
+                imageUrl = null,
+            ),
+        )
+
+        val candidate = repo.lookupForPreview("0123456789") as ScanCandidate.FromOff
+
+        assertEquals("New Cookies", candidate.name)
+        val written = cacheDao.findByBarcode("0123456789")!!
+        assertEquals("New Cookies", written.name)
+        assertEquals(now, written.fetchedAt)
+    }
+
+    @Test
+    fun lookupForPreview_cacheExactlyAtTTL_stillFresh() = runTest {
+        val cacheDao = db.offLookupCacheDao()
+        val now = clock.now()
+        cacheDao.upsert(
+            OffLookupCacheEntry(
+                barcode = "0123456789",
+                name = "Boundary Cookies",
+                brand = null,
+                imageUrl = null,
+                resolvingHost = "https://world.openfoodfacts.org/",
+                fetchedAt = now.minus(30.days), // exactly TTL old
+            ),
+        )
+
+        val candidate = repo.lookupForPreview("0123456789") as ScanCandidate.FromOff
+        assertEquals("Boundary Cookies", candidate.name)
+        assertEquals("Cache hit at TTL boundary must not call OFF", 0, fakeOff.lookupCallCount)
+    }
+
+    @Test
+    fun lookupForPreview_pantryRow_supersedesCache() = runTest {
+        repo.addNew(
+            name = "PantryName",
+            brand = null,
+            barcode = "0123456789",
+            imageUrl = null,
+            initialQuantity = 5,
+        )
+        // addNew evicts the cache row by design (see addNew_evictsCacheRow test), so
+        // upsert the cache row AFTER addNew to set up the precondition for this test.
+        db.offLookupCacheDao().upsert(
+            OffLookupCacheEntry(
+                barcode = "0123456789",
+                name = "CacheName",
+                brand = null,
+                imageUrl = null,
+                resolvingHost = "https://world.openfoodfacts.org/",
+                fetchedAt = clock.now(),
+            ),
+        )
+
+        val candidate = repo.lookupForPreview("0123456789")
+        assertTrue(candidate is ScanCandidate.Persisted)
+        assertEquals("PantryName", (candidate as ScanCandidate.Persisted).product.name)
+        assertEquals("Pantry hit must not consult OFF", 0, fakeOff.lookupCallCount)
+    }
+
+    @Test
+    fun addNew_withCachedBarcode_evictsCacheRow() = runTest {
+        val cacheDao = db.offLookupCacheDao()
+        cacheDao.upsert(
+            OffLookupCacheEntry(
+                barcode = "0123456789",
+                name = "StaleCache",
+                brand = null,
+                imageUrl = null,
+                resolvingHost = "https://world.openfoodfacts.org/",
+                fetchedAt = clock.now(),
+            ),
+        )
+
+        repo.addNew(
+            name = "User Override Name",
+            brand = null,
+            barcode = "0123456789",
+            imageUrl = null,
+            initialQuantity = 1,
+        )
+
+        assertNull(
+            "Cache row must be evicted on addNew with same barcode",
+            cacheDao.findByBarcode("0123456789"),
+        )
+    }
+
+    @Test
+    fun addNew_withNullBarcode_doesNotCrash_andUnrelatedCacheRowUntouched() = runTest {
+        val cacheDao = db.offLookupCacheDao()
+        cacheDao.upsert(
+            OffLookupCacheEntry(
+                barcode = "9999",
+                name = "Unrelated",
+                brand = null,
+                imageUrl = null,
+                resolvingHost = "https://world.openfoodfacts.org/",
+                fetchedAt = clock.now(),
+            ),
+        )
+
+        repo.addNew(
+            name = "Manual Entry",
+            brand = null,
+            barcode = null,
+            imageUrl = null,
+            initialQuantity = 1,
+        )
+
+        // The pre-existing row for an unrelated barcode is untouched.
+        assertNotNull(cacheDao.findByBarcode("9999"))
     }
 
     // --- #32 / SR-14, SR-15: response-field size caps + image_url scheme gate ---
@@ -280,7 +509,12 @@ class ProductRepositoryImplTest {
         // 1_000_000 chars — a buggy/hostile OFF response would otherwise stream
         // straight into Compose Text and Room (SR-14: unbounded String fields).
         fakeOff.stub("777", OffProduct(productName = "x".repeat(1_000_000)))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("777") as ScanCandidate.FromOff
         assertEquals(256, result.name.length)
@@ -293,7 +527,12 @@ class ProductRepositoryImplTest {
             "778",
             OffProduct(productName = "Coke", brands = "y".repeat(10_000)),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("778") as ScanCandidate.FromOff
         assertEquals(256, result.brand?.length)
@@ -306,7 +545,12 @@ class ProductRepositoryImplTest {
             "779",
             OffProduct(productName = "Sprite", imageUrl = "https://images.openfoodfacts.org/sprite.jpg"),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("779") as ScanCandidate.FromOff
         assertEquals("https://images.openfoodfacts.org/sprite.jpg", result.imageUrl)
@@ -319,7 +563,12 @@ class ProductRepositoryImplTest {
             "780",
             OffProduct(productName = "Sprite", imageUrl = "http://insecure.example/x.jpg"),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("780") as ScanCandidate.FromOff
         assertNull(result.imageUrl)
@@ -334,7 +583,12 @@ class ProductRepositoryImplTest {
             "781",
             OffProduct(productName = "Sprite", imageUrl = "file:///etc/passwd"),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("781") as ScanCandidate.FromOff
         assertNull(result.imageUrl)
@@ -350,7 +604,12 @@ class ProductRepositoryImplTest {
             "782",
             OffProduct(productName = "Sprite", imageUrl = "content://com.evil/data"),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("782") as ScanCandidate.FromOff
         assertNull(result.imageUrl)
@@ -366,7 +625,12 @@ class ProductRepositoryImplTest {
             "783",
             OffProduct(productName = "Sprite", imageUrl = longUrl),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("783") as ScanCandidate.FromOff
         assertNull(result.imageUrl)
@@ -379,7 +643,12 @@ class ProductRepositoryImplTest {
         val fakeOff = FakeOffLookup()
         val name256 = "x".repeat(256)
         fakeOff.stub("784", OffProduct(productName = name256))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("784") as ScanCandidate.FromOff
         // length 256 is below take(256) — preserved unchanged.
@@ -391,7 +660,12 @@ class ProductRepositoryImplTest {
     fun lookupForPreview_offHitNameExactly257Chars_truncatesTo256() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("785", OffProduct(productName = "x".repeat(257)))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("785") as ScanCandidate.FromOff
         // Pins the boundary so a typo to .take(255) or MAX_OFF_TEXT_LENGTH=257 fails.
@@ -405,7 +679,12 @@ class ProductRepositoryImplTest {
         val url = "https://" + "x".repeat(2039)
         assertEquals(2047, url.length)
         fakeOff.stub("786", OffProduct(productName = "Sprite", imageUrl = url))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("786") as ScanCandidate.FromOff
         assertEquals(url, result.imageUrl)
@@ -418,7 +697,12 @@ class ProductRepositoryImplTest {
         val url = "https://" + "x".repeat(2040)
         assertEquals(2048, url.length)
         fakeOff.stub("787", OffProduct(productName = "Sprite", imageUrl = url))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("787") as ScanCandidate.FromOff
         // Pins the boundary so a typo to MAX_IMAGE_URL_LENGTH_EXCLUSIVE=20480
@@ -433,7 +717,12 @@ class ProductRepositoryImplTest {
     fun lookupForPreview_offHitBrandNull_returnsNullBrand() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("788", OffProduct(productName = "Sprite", brands = null))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("788") as ScanCandidate.FromOff
         assertNull(result.brand)
@@ -446,7 +735,12 @@ class ProductRepositoryImplTest {
         // blank to "  " here and no test currently fails.
         val fakeOff = FakeOffLookup()
         fakeOff.stub("789", OffProduct(productName = "Sprite", brands = "   "))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("789") as ScanCandidate.FromOff
         assertNull(result.brand)
@@ -461,7 +755,12 @@ class ProductRepositoryImplTest {
         // this legitimate (if unusual) shape.
         val fakeOff = FakeOffLookup()
         fakeOff.stub("790", OffProduct(productName = "Sprite", imageUrl = "HTTPS://images.openfoodfacts.org/x.jpg"))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("790") as ScanCandidate.FromOff
         assertEquals("HTTPS://images.openfoodfacts.org/x.jpg", result.imageUrl)
@@ -471,7 +770,12 @@ class ProductRepositoryImplTest {
     fun lookupForPreview_offHitImageUrlMixedCaseHttps_preserved() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("791", OffProduct(productName = "Sprite", imageUrl = "Https://images.openfoodfacts.org/x.jpg"))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         val result = sut.lookupForPreview("791") as ScanCandidate.FromOff
         assertEquals("Https://images.openfoodfacts.org/x.jpg", result.imageUrl)
@@ -483,7 +787,12 @@ class ProductRepositoryImplTest {
     fun lookupForPreview_offHitNameTruncated_logsInfoWithLengthsAndHint() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("792", OffProduct(productName = "x".repeat(500)))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         JulLogCapture("ProductRepositoryImpl").use { capture ->
             sut.lookupForPreview("792")
@@ -501,7 +810,12 @@ class ProductRepositoryImplTest {
     fun lookupForPreview_offHitImageUrlSchemeRejected_logsFineCategoricalReason() = runTest {
         val fakeOff = FakeOffLookup()
         fakeOff.stub("793", OffProduct(productName = "Sprite", imageUrl = "file:///etc/passwd"))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         JulLogCapture("ProductRepositoryImpl").use { capture ->
             sut.lookupForPreview("793")
@@ -518,7 +832,12 @@ class ProductRepositoryImplTest {
         val fakeOff = FakeOffLookup()
         val long = "https://images.openfoodfacts.org/" + "y".repeat(3_000)
         fakeOff.stub("794", OffProduct(productName = "Sprite", imageUrl = long))
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         JulLogCapture("ProductRepositoryImpl").use { capture ->
             sut.lookupForPreview("794")
@@ -541,7 +860,12 @@ class ProductRepositoryImplTest {
             "5449000000996",
             OffProduct(productName = null, brands = "Coca-Cola Company"),
         )
-        val sut = ProductRepositoryImpl(db.productDao(), fakeOff, clock)
+        val sut = ProductRepositoryImpl(
+            dao = db.productDao(),
+            offLookup = fakeOff,
+            offLookupCacheDao = db.offLookupCacheDao(),
+            clock = clock,
+        )
 
         JulLogCapture("ProductRepositoryImpl").use { capture ->
             assertNull(sut.lookupForPreview("5449000000996"))

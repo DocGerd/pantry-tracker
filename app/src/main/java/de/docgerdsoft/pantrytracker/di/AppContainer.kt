@@ -28,7 +28,13 @@ class AppContainer(val productRepository: ProductRepository) {
                 .addMigrations(MIGRATION_1_2)
                 .build()
             val offLookup: OffLookup = OffApiClient()
-            return AppContainer(ProductRepositoryImpl(db.productDao(), offLookup))
+            return AppContainer(
+                ProductRepositoryImpl(
+                    dao = db.productDao(),
+                    offLookup = offLookup,
+                    offLookupCacheDao = db.offLookupCacheDao(),
+                ),
+            )
         }
     }
 }
