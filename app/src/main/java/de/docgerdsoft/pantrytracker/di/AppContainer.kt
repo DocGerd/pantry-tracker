@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.di
 import android.content.Context
 import androidx.room.Room
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
+import de.docgerdsoft.pantrytracker.data.local.MIGRATION_1_2
 import de.docgerdsoft.pantrytracker.data.remote.OffApiClient
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
@@ -23,9 +24,17 @@ class AppContainer(val productRepository: ProductRepository) {
                 context.applicationContext,
                 AppDatabase::class.java,
                 AppDatabase.DB_NAME,
-            ).build()
+            )
+                .addMigrations(MIGRATION_1_2)
+                .build()
             val offLookup: OffLookup = OffApiClient()
-            return AppContainer(ProductRepositoryImpl(db.productDao(), offLookup))
+            return AppContainer(
+                ProductRepositoryImpl(
+                    dao = db.productDao(),
+                    offLookup = offLookup,
+                    offLookupCacheDao = db.offLookupCacheDao(),
+                ),
+            )
         }
     }
 }

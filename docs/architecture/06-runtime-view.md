@@ -64,6 +64,14 @@ final repository call is `applyDelta(productId, pendingQuantity)` rather
 than `addNew(...)`. In both cases the post-call transition is the same
 `Phase.Idle`.
 
+Cache short-circuit: when `findLocalByBarcode` misses, the repository
+consults `OffLookupCacheDao.findByBarcode` before calling `OFF.lookup`.
+A fresh cache hit (≤ 30 days old) skips the network entirely; the OFF
+arrow in the diagram is elided and `FromOff(...)` is constructed from
+the cached row. On confirm, the cache row for that barcode is deleted
+(`addNew(...)` does the eviction) so the product lives in `products`
+only.
+
 ## 6.2 Scenario — Scan to remove, item not in inventory
 
 ```

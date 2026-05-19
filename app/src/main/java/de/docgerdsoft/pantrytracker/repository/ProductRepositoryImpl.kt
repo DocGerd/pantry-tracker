@@ -1,22 +1,32 @@
 package de.docgerdsoft.pantrytracker.repository
 
+import de.docgerdsoft.pantrytracker.data.local.OffLookupCacheDao
+import de.docgerdsoft.pantrytracker.data.local.OffLookupCacheEntry
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.local.ProductDao
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.util.barcodeHint
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 
 // java.util.logging works in both Android (forwarded to logcat) and plain JVM
 // unit tests. Matches the project's logging convention (DetailViewModel,
 // ScanViewModel, OffApiClient, CameraPreview).
 private val logger: Logger = Logger.getLogger("ProductRepositoryImpl")
 
+// 30-day TTL bounds cache growth + the staleness window for OFF community edits.
+// Spec calls for lazy eviction on read; no scheduled cleanup job.
+private val OFF_CACHE_TTL: Duration = 30.days
+
 class ProductRepositoryImpl(
     private val dao: ProductDao,
     private val offLookup: OffLookup,
+    private val offLookupCacheDao: OffLookupCacheDao,
     private val clock: Clock = Clock.System,
 ) : ProductRepository {
 
@@ -38,7 +48,7 @@ class ProductRepositoryImpl(
         initialQuantity: Int,
     ): Long {
         val now = clock.now()
-        return dao.upsert(
+        val id = dao.upsert(
             Product(
                 barcode = barcode,
                 name = name,
@@ -49,6 +59,30 @@ class ProductRepositoryImpl(
                 updatedAt = now,
             ),
         )
+        // A barcode that just landed in the pantry must never read back from the
+        // OFF cache — the pantry row is the source of truth and may carry a
+        // user-edited name/brand. Skip on null barcode (manual entry).
+        //
+        // Cache delete is best-effort: the pantry row above is the source of
+        // truth, and `findLocalByBarcode` runs before any cache read on the
+        // next preview, so a stale cache row is shadowed and harmless. A
+        // throw here would surface as "Couldn't save: …" to the user despite
+        // the pantry write having committed — see PR #60 finding I3.
+        if (barcode != null) {
+            try {
+                offLookupCacheDao.delete(barcode)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                @Suppress("SwallowedException")
+                logger.log(
+                    Level.WARNING,
+                    "OFF lookup cache evict-on-addNew failed for ${barcode.barcodeHint()} — stale row will be shadowed by pantry row",
+                    e,
+                )
+            }
+        }
+        return id
     }
 
     override suspend fun applyDelta(productId: Long, delta: Int) {
@@ -75,10 +109,50 @@ class ProductRepositoryImpl(
         dao.upsert(product)
     }
 
+    // ReturnCount: the function is intentionally guard-clause heavy — blank
+    // input, pantry hit, fresh-cache hit, OFF miss, OFF-hit-without-name each
+    // get their own early return. Folding any of them into nested branches
+    // would be less readable than the linear "check, return, else continue"
+    // shape. The cache check (added in #48 / C.4) raised the count from 5
+    // to 6; the underlying complexity hasn't changed.
+    @Suppress("ReturnCount")
     override suspend fun lookupForPreview(code: String): ScanCandidate? {
         if (code.isBlank()) return null
         findLocalByBarcode(code)?.let { return ScanCandidate.Persisted(it) }
-        val off = offLookup.lookup(code) ?: return null
+        val now = clock.now()
+        // Cache lookup sits BETWEEN the pantry check and the OFF call so a
+        // committed pantry row always wins over a stale cached preview.
+        // Read failure is best-effort: a throw here (schema corruption,
+        // locked DB, type-converter failure) would short-circuit the OFF
+        // network call and turn a transient cache-table problem into "all
+        // scans fail" — see PR #60 finding I2. Treat as cache miss instead.
+        val cached: OffLookupCacheEntry? = try {
+            offLookupCacheDao.findByBarcode(code)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            @Suppress("SwallowedException")
+            logger.log(
+                Level.WARNING,
+                "OFF lookup cache read failed for ${code.barcodeHint()} — treating as miss",
+                e,
+            )
+            null
+        }
+        // `fetchedAt <= now` guards against clock-skew: a future `fetchedAt`
+        // (clock that ran fast then was corrected, or DB tampering) would
+        // otherwise make `(now - fetchedAt)` negative — always `<= TTL`, so
+        // the row would be treated as fresh forever (PR #60 finding M1).
+        if (cached != null && cached.fetchedAt <= now && (now - cached.fetchedAt) <= OFF_CACHE_TTL) {
+            return ScanCandidate.FromOff(
+                barcode = cached.barcode,
+                name = cached.name,
+                brand = cached.brand,
+                imageUrl = cached.imageUrl,
+            )
+        }
+        val result = offLookup.lookup(code) ?: return null
+        val off = result.product
         val name = off.productName?.takeIf { it.isNotBlank() }
         if (name == null) {
             // C6: OFF returned a status=1 envelope but product_name was blank/absent.
@@ -89,12 +163,41 @@ class ProductRepositoryImpl(
             logger.log(Level.INFO, "OFF hit for ${code.barcodeHint()} discarded — name blank")
             return null
         }
-        return ScanCandidate.FromOff(
+        val candidate = ScanCandidate.FromOff(
             barcode = code,
             name = capOffText(code, "name", name),
             brand = off.brands?.takeIf { it.isNotBlank() }?.let { capOffText(code, "brand", it) },
             imageUrl = gateImageUrl(code, off.imageUrl),
         )
+        // Cache the post-gating shape so re-scans return the same capped /
+        // filtered values without re-running the OFF host-fallback chain.
+        // Upsert failure is best-effort: the OFF lookup ALREADY succeeded
+        // and the candidate is what we owe the caller. A throw here would
+        // surface as `Phase.Error("Couldn't read inventory: …")` despite
+        // the resolve being successful — see PR #60 finding I1. Same
+        // log-and-continue pattern as `capOffText` / `gateImageUrl`.
+        try {
+            offLookupCacheDao.upsert(
+                OffLookupCacheEntry(
+                    barcode = candidate.barcode,
+                    name = candidate.name,
+                    brand = candidate.brand,
+                    imageUrl = candidate.imageUrl,
+                    resolvingHost = result.resolvingHost,
+                    fetchedAt = now,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            @Suppress("SwallowedException")
+            logger.log(
+                Level.WARNING,
+                "OFF lookup cache upsert failed for ${code.barcodeHint()} — cache miss next time",
+                e,
+            )
+        }
+        return candidate
     }
 }
 

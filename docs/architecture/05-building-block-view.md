@@ -29,6 +29,8 @@ four conventional layers:
               │   — Room database   │ │   — Ktor + OFF      │
               │   — Product entity  │ │     JSON envelope   │
               │   — ProductDao      │ │   — OffLookup port  │
+              │   — OffLookupCache- │ │                     │
+              │     Entry + Dao     │ │                     │
               │   — Converters      │ │                     │
               └─────────────────────┘ └─────────────────────┘
 
@@ -57,7 +59,7 @@ directly (see [HappyPathUatTest](../../app/src/androidTest/java/de/docgerdsoft/p
 |---------|---------|-----------|
 | `de.docgerdsoft.pantrytracker` | App entry points | `PantryTrackerApp` (Application), `MainActivity`, `PantryTrackerNavGraph`, `Routes` |
 | `…di` | Manual dependency injection | `AppContainer` |
-| `…data.local` | Room persistence | `AppDatabase`, `Product`, `ProductDao`, `Converters` |
+| `…data.local` | Room persistence | `AppDatabase`, `Product`, `ProductDao`, `OffLookupCacheEntry`, `OffLookupCacheDao`, `Converters` |
 | `…data.remote` | OFF HTTP client | `OffApiClient`, `OffLookup` (interface), `OffProductResponse` (DTO) |
 | `…repository` | Repository layer | `ProductRepository` (interface), `ProductRepositoryImpl`, `ScanCandidate` (sealed: `Persisted` / `FromOff`) |
 | `…ui.home` | Home screen | `HomeScreen`, `HomeViewModel`, `HomeUiState`, `AddProductSheet` |
@@ -90,12 +92,16 @@ interface ProductRepository {
 
 `ProductRepositoryImpl` composes:
 - a `ProductDao` (Room) for all local reads/writes
+- an `OffLookupCacheDao` (Room) for the 30-day local cache of OFF
+  responses for non-pantry barcodes
 - an `OffLookup` (interface, default impl `OffApiClient`) for the one
   network call inside `lookupForPreview`
 
 `lookupForPreview` is the only method that touches the network. It is
 local-first: hits Room for the barcode, returns `ScanCandidate.Persisted`
-on a hit; otherwise calls OFF, returns `ScanCandidate.FromOff` on a hit,
+on a hit; otherwise consults the OFF cache and returns
+`ScanCandidate.FromOff` on a fresh hit; otherwise calls OFF, returns
+`ScanCandidate.FromOff` on a hit (and writes through to the cache),
 `null` on miss/failure (per [solution strategy](04-solution-strategy.md#41-local-first-inventory-network-optional-enrichment)).
 
 ## 5.4 Level 2 — `ui.scan` package

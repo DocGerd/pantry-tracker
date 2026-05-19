@@ -38,9 +38,9 @@ class OffApiClientTest {
         // Assert presence + non-empty rather than exact strings — OFF community-edits
         // values, so the test should remain green if "Coca-Cola" becomes "Coca-Cola®"
         // or similar minor wording changes.
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
-        assertEquals(true, result?.brands?.isNotBlank() ?: false)
-        assertEquals(true, result?.imageUrl?.startsWith("https://") ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.brands?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.imageUrl?.startsWith("https://") ?: false)
     }
 
     @Test
@@ -50,9 +50,9 @@ class OffApiClientTest {
 
         val result = sut.lookup("1234567890123")
 
-        assertNull(result?.productName)
-        assertNull(result?.brands)
-        assertNull(result?.imageUrl)
+        assertNull(result?.product?.productName)
+        assertNull(result?.product?.brands)
+        assertNull(result?.product?.imageUrl)
     }
 
     // -- I5: parameterized IOException subclasses --
@@ -242,7 +242,8 @@ class OffApiClientTest {
 
         val result = sut.lookup("5449000000996")
 
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
+        assertEquals("https://world.openfoodfacts.org/", result?.resolvingHost)
         assertEquals(1, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
@@ -257,7 +258,8 @@ class OffApiClientTest {
 
         val result = sut.lookup("5449000000996")
 
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
+        assertEquals("https://world.openbeautyfacts.org/", result?.resolvingHost)
         assertEquals(2, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
         assertEquals("world.openbeautyfacts.org", captured[1].url.host)
@@ -273,7 +275,8 @@ class OffApiClientTest {
 
         val result = sut.lookup("5449000000996")
 
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
+        assertEquals("https://world.openpetfoodfacts.org/", result?.resolvingHost)
         assertEquals(3, captured.size)
         assertEquals(
             listOf(
@@ -299,7 +302,8 @@ class OffApiClientTest {
 
         val result = sut.lookup("5449000000996")
 
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
+        assertEquals("https://world.openproductsfacts.org/", result?.resolvingHost)
         assertEquals(
             listOf(
                 "world.openfoodfacts.org",
@@ -433,7 +437,7 @@ class OffApiClientTest {
 
         val result = sut.lookup("0000000000000")
 
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
         assertEquals(2, captured.size)
     }
 
@@ -581,7 +585,7 @@ class OffApiClientTest {
 
         // Response is processed normally: a valid OFF envelope without
         // Content-Length is NOT a "sick host", it's just chunked transfer.
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
         assertEquals("missing CL must not trigger the chain walk", 1, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
@@ -609,7 +613,7 @@ class OffApiClientTest {
 
         // Should NOT trip the streaming cap (total == cap, not >); product parses.
         val result = sut.lookup("5449000000996")
-        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+        assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
     }
 
     @Test
