@@ -1,24 +1,18 @@
-# Add project-specific ProGuard rules here.
-
 # kotlinx.serialization belt-and-braces rules for @Serializable types in this app.
-# kotlinx-serialization-runtime ships consumer-rules.pro that *should* cover these,
-# but explicit -keep guards against runtime surprises when R8 chooses an aggressive
-# optimization pass (this is a first-time R8 enable in v1.2).
+# kotlinx-serialization-runtime ships consumer-rules.pro that *should* cover the
+# generated KSerializer plumbing, but explicit -keep guards against runtime
+# surprises when R8 chooses an aggressive optimization pass on a first-time enable.
 #
-# Pin the @Serializable companion-object .serializer() static accessor and the
-# class members the generated serializer reads at runtime.
+# Pin the @Serializable companion-object accessor on the outer class (the field
+# that kotlinx.serialization reads via getDeclaredField at descriptor build time).
 -if @kotlinx.serialization.Serializable class de.docgerdsoft.pantrytracker.**
 -keepclassmembers class <1> {
     *** Companion;
-    kotlinx.serialization.KSerializer serializer(...);
-}
--if @kotlinx.serialization.Serializable class de.docgerdsoft.pantrytracker.**$Companion
--keepclassmembers class <1> {
-    kotlinx.serialization.KSerializer serializer(...);
 }
 
 # Keep the @Serializable data classes themselves intact — their fields are read
-# reflectively by the generated KSerializer descriptor.
+# reflectively by the generated KSerializer descriptor. `OffApiEnvelope` is
+# `internal` and would otherwise be a prime inline-and-rename target.
 -keep,includedescriptorclasses class de.docgerdsoft.pantrytracker.data.remote.OffProduct { *; }
 -keep,includedescriptorclasses class de.docgerdsoft.pantrytracker.data.remote.OffApiEnvelope { *; }
 

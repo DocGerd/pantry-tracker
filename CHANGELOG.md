@@ -22,8 +22,8 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 ### Changed
 
 - Release builds now use R8 minify + `shrinkResources`. APK size
-  reduced from 40,523,977 bytes (~38.65 MB) at v1.1.0 to 24,140,473
-  bytes (~23.02 MB) at v1.2.0 — a 40.4% reduction. (SR-9, refs #36)
+  reduced from 40,523,977 bytes (~40.5 MB) at v1.1.0 to 24,140,473
+  bytes (~24.1 MB) at v1.2.0 — a 40.4% reduction. (SR-9, refs #36)
 
 ### Security
 
