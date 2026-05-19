@@ -1,10 +1,22 @@
 # Pantry Tracker — Claude operating notes
 
 Standalone Android Kotlin/Compose app for whole-number kitchen inventory.
-Single `:app` module. v1.0.0 shipped 2026-05-18 as a signed sideload APK.
+Single `:app` module. v1.0.0 shipped 2026-05-18; v1.1.0 (Fallbacks & undo)
+shipped 2026-05-19, both as signed sideload APKs on GitHub Releases.
 
 This file is loaded into every Claude Code session in this repo. Keep it
 high-signal — pointers, not duplication of the source-of-truth docs.
+
+## Hard governance rule: only humans merge to main
+
+**Every change reaching `main` MUST go through a PR that the human merges.**
+Claude may open PRs, push to feature branches, dispatch review subagents,
+post + resolve inline threads, create tags, build APKs, and create GitHub
+Releases — but MUST NOT invoke `gh pr merge` or `git push origin main` (or
+any equivalent that lands code on main). No exceptions for one-line reverts,
+"UAT-verified" hotfixes, wrap-up phases, or ambiguous "do the rest" /
+"continue" instructions. When in doubt, ASK before merging. The audit-trail
+gate is the human's explicit click on "Merge pull request".
 
 ## Commands
 
@@ -162,3 +174,25 @@ convention has been encoded as a detekt / lint rule.*
 - **Control characters in Kotlin test source**: write them as `\uXXXX` escapes
   (six visible source characters), not literal control bytes. Tooling that
   reads the file otherwise faithfully writes whatever byte landed there.
+- **Real-device UAT is non-negotiable for HTTP-client changes.** v1.1's SR-24
+  body cap passed all 45 JVM tests but failed step 2 of UAT on a known-OFF
+  barcode: OFF's CDN uses chunked transfer encoding and omits
+  `Content-Length`, so a "fail-closed on missing CL" policy bricked every
+  lookup. The fix (commit 7599bb2) had to revert to "silently pass when CL
+  absent". Lesson: anything that touches request/response headers needs a
+  real-network smoke test, not just `MockEngine`.
+- **`GRADLE_USER_HOME=/tmp/gradle-user-home` masks `~/.gradle/gradle.properties`.**
+  The WSL sandbox config redirects Gradle's user home to a tmp dir, so the
+  four `PANTRY_TRACKER_RELEASE_*` props in your real `~/.gradle/gradle.properties`
+  are invisible to `assembleRelease`. Bridge them with
+  `grep '^PANTRY_TRACKER_RELEASE_' ~/.gradle/gradle.properties > /tmp/gradle-user-home/gradle.properties`
+  before invoking release builds, or `assembleRelease` produces
+  `app-release-UNSIGNED.apk`.
+- **`Closes #N` vs `Refs #N` in PR bodies**: only `Closes` (or `Fixes` /
+  `Resolves`) auto-closes the issue on merge. `Refs` does not. Bit us when
+  merging PR #47 left #44/#45/#46 open despite shipping their features.
+- **`gh release create` 422 "ReleaseAsset.name already exists" is a false
+  negative.** The CLI returns 422 even when the APK upload actually
+  succeeded. Always verify via `gh release view <tag>` before retrying —
+  retrying will create a phantom duplicate release that gets rolled back
+  but consumes a release ID.
