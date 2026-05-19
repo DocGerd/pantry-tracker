@@ -30,11 +30,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -57,9 +63,12 @@ fun HomeScreen(
     onProductClick: (Long) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    SnackbarEventCollector(viewModel, snackbarHostState)
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Pantry Tracker") }) },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { viewModel.openAddSheet() }) {
                 Icon(Icons.Filled.Add, contentDescription = "Add manually")
@@ -233,10 +242,13 @@ private fun DeleteConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    // Copy intentionally lean: the UNDO snackbar that fires on confirm
+    // carries the reversibility message, so the dialog no longer needs to
+    // apologise for an irreversible delete (spec §Item 3).
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete ${product.name}?") },
-        text = { Text("This removes it from your inventory. Cannot be undone in v1.") },
+        title = { Text("Remove ${product.name}?") },
+        text = { Text("Remove ${product.name} from your pantry?") },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text("Delete") }
         },
@@ -244,4 +256,40 @@ private fun DeleteConfirmDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+/**
+ * Extracted from [HomeScreen] to keep that composable under detekt's
+ * `LongMethod` threshold. Collects [HomeViewModel.snackbarEvents] for the
+ * lifetime of the host composable and shows a Material 3 snackbar per
+ * event — single-collector semantics via `LaunchedEffect(viewModel)` plus
+ * the channel-backed flow (see [SnackbarEvent] KDoc).
+ *
+ * `showSnackbar` suspends until dismiss/action, which serialises back-to-back
+ * delete events naturally — a second delete during the snackbar window
+ * dismisses the previous snackbar (spec §Item 3 "Edge case — second delete
+ * during snackbar window"); the first UNDO closure is then unreachable and
+ * the first deletion stays final, matching Gmail / Drive UX.
+ */
+@Composable
+private fun SnackbarEventCollector(
+    viewModel: HomeViewModel,
+    snackbarHostState: SnackbarHostState,
+) {
+    LaunchedEffect(viewModel) {
+        viewModel.snackbarEvents.collect { event ->
+            when (event) {
+                is SnackbarEvent.Deleted -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = "Removed ${event.product.name}",
+                        actionLabel = "UNDO",
+                        duration = SnackbarDuration.Short,
+                    )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.undoDelete(event.product)
+                    }
+                }
+            }
+        }
+    }
 }
