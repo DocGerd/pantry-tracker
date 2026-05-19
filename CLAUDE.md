@@ -64,6 +64,25 @@ Workflow:
    `subprocess` instead.)
 6. Only then declare ready-to-merge.
 
+### Subagent & worktree hygiene
+
+When dispatching subagents into git worktrees for parallel work:
+
+- **Pass the absolute worktree path** in the agent prompt, not a relative one.
+  A subagent's cwd is the worktree root, but relative paths in the prompt are
+  resolved against the parent's cwd and have caused re-dispatch in past
+  Sprint-style sessions.
+- **The agent verifies `pwd` and `git branch --show-current`** match the
+  expected worktree before touching files. Cheap insurance against the agent
+  landing in the wrong tree.
+- **Stage by name, never `git add -A`** inside a subagent. A subagent commit
+  that swept up unrelated working-tree changes has happened before and needs
+  a soft-reset to recover; explicit `git add <file> <file>` makes the commit
+  scope auditable from the prompt alone.
+
+These extend (don't duplicate) the global `~/.claude/CLAUDE.md` rules on
+`git -C` vs bare `git` inside worktrees.
+
 ### Hooks (repo-specific notes)
 
 The global `~/.claude/CLAUDE.md` already forbids skipping hooks and

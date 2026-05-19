@@ -9,6 +9,14 @@
 #   -n on git commit      (= --no-verify shorthand; tolerates `git -c x=y commit -n`)
 #   -f on git push        (= --force shorthand; tolerates `git -c x=y push -f`)
 #
+# Governance-enforced blocks (CLAUDE.md hard rule: "only humans merge to main"):
+#   git push <...>:main   any push whose destination is `main` (incl. `HEAD:main`,
+#                         `:main` delete, bare `main`). Tolerates branch names that
+#                         merely *contain* "main" (e.g. `feature/main-cleanup`)
+#                         because the dst-token must be word-boundaried by space
+#                         or `:` (refspec separator).
+#   gh pr merge           the other path that lands code on main.
+#
 # Fail-closed: if JSON parsing fails (python3 missing, malformed input, schema
 # changed), the hook exits 2 with a diagnostic — refusing the action is the
 # only safe default for a guard hook. A guard that silently allows when it
@@ -41,6 +49,27 @@
 # Expected: exit=0 (-f without `git push` lead-in is fine).
 #   echo 'not json' | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
 # Expected: exit=2 (fail-closed on parse failure).
+#   echo '{"tool_input":{"command":"git push origin main"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (governance: only humans merge to main).
+#   echo '{"tool_input":{"command":"git push origin HEAD:main"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (refspec dst = main).
+#   echo '{"tool_input":{"command":"git push origin :main"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (delete-refspec, dst still main).
+#   echo '{"tool_input":{"command":"gh pr merge 47 --squash"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=2 (governance: only humans merge to main).
+#   echo '{"tool_input":{"command":"git push origin main:foo"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=0 (main is SRC, not dst — pushing local main to remote foo).
+#   echo '{"tool_input":{"command":"git push origin feature/main-cleanup"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=0 (branch name merely contains "main").
+#   echo '{"tool_input":{"command":"gh pr view 47"}}' \
+#     | bash .claude/hooks/block-dangerous-bash.sh ; echo "exit=$?"
+# Expected: exit=0 (gh pr view is not gh pr merge).
 set -euo pipefail
 
 input="$(cat)"
@@ -95,6 +124,25 @@ MSG
     exit 2
 }
 
+reject_governance() {
+    cat >&2 <<MSG
+Refusing to run this command: it would land code on main without a human merge.
+
+Detected: $1
+Full command: $command
+
+This repository's hard governance rule (CLAUDE.md "only humans merge to main")
+forbids Claude from invoking any of:
+    git push <...>:main         (incl. \`git push origin main\`, \`HEAD:main\`, \`:main\`)
+    gh pr merge <n>             (any flavor)
+
+The audit-trail gate is the human's explicit click on "Merge pull request".
+No exceptions for one-line reverts, "UAT-verified" hotfixes, wrap-up phases,
+or ambiguous "do the rest" / "continue" instructions. When in doubt, ASK.
+MSG
+    exit 2
+}
+
 # Word-boundaried matches via bash regex with [[:space:]] (catches spaces, tabs,
 # newlines, etc.). The trailing class also accepts `=` so `--force=value` and
 # `--force-with-lease=ref:expected_sha` (documented git syntax) can't slip past.
@@ -117,6 +165,25 @@ fi
 if [[ "$command" =~ ${git_lead}push[[:space:]] ]] && \
    [[ " $command " =~ (^|[[:space:]])-f([[:space:]=]|$) ]]; then
     reject "git push -f"
+fi
+
+# Governance: only humans merge to main (CLAUDE.md hard rule).
+#
+# Pattern: any `git push` whose destination ref is `main`. `main` must be
+# preceded by either whitespace (bare ref form: `git push origin main`) or `:`
+# (refspec dst form: `HEAD:main`, `:main` delete, `abc123:main`) and followed
+# by whitespace or end-of-string. This intentionally does NOT match `main` when
+# it appears as the SRC of a refspec like `main:foo` (colon AFTER main, not
+# before), nor branch names that merely contain "main" like `feature/main-x`
+# (slash before main, not space or colon).
+if [[ "$command" =~ ${git_lead}push[[:space:]] ]] && \
+   [[ " $command " =~ (^|[[:space:]:])main([[:space:]]|$) ]]; then
+    reject_governance "git push to main"
+fi
+
+# Governance: `gh pr merge` is the other path that lands code on main.
+if [[ "$command" =~ (^|[[:space:]\;\|\&])gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$) ]]; then
+    reject_governance "gh pr merge"
 fi
 
 exit 0
