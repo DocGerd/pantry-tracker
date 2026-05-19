@@ -5,6 +5,7 @@ import de.docgerdsoft.pantrytracker.util.barcodeHint
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
@@ -204,6 +205,18 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             "PantryTracker/${BuildConfig.VERSION_NAME} (https://github.com/DocGerd/pantry-tracker)"
         private const val TIMEOUT_MILLIS = 8_000L
 
+        // SR-24: hard cap on OFF response body size. Defence-in-depth against a
+        // hostile or accidentally-huge response. OFF single-product JSON observed
+        // at 5-20 KB; 256 KB is a 10x safety factor. The cap is strict-greater-
+        // than — a Content-Length of exactly MAX_BODY_BYTES is allowed.
+        private const val MAX_BODY_BYTES: Long = 256L * 1024L
+
+        // Extends IOException deliberately — the existing `catch (e: IOException)`
+        // arm in lookupOnce already maps it to HostResult.Error so no new catch
+        // arm is needed.
+        private class OversizedResponseException(size: Long) :
+            IOException("OFF response body exceeds cap: $size bytes")
+
         private val OFF_HOSTS: List<String> = listOf(
             "https://world.openfoodfacts.org/",
             "https://world.openbeautyfacts.org/",
@@ -235,6 +248,18 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
                 requestTimeoutMillis = TIMEOUT_MILLIS
                 connectTimeoutMillis = TIMEOUT_MILLIS
                 socketTimeoutMillis = TIMEOUT_MILLIS
+            }
+            HttpResponseValidator {
+                // SR-24: reject responses whose advertised body exceeds the cap
+                // before any parse happens. Bodies without Content-Length (chunked)
+                // are not size-checked at the header stage — acceptable for v1.1
+                // because OFF's CDN sends Content-Length for product responses.
+                validateResponse { response ->
+                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+                    if (contentLength != null && contentLength > MAX_BODY_BYTES) {
+                        throw OversizedResponseException(contentLength)
+                    }
+                }
             }
             defaultRequest {
                 headers.append(HttpHeaders.UserAgent, USER_AGENT)

@@ -4,6 +4,7 @@ import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.HttpResponseValidator
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
@@ -541,6 +542,120 @@ class OffApiClientTest {
         // SEVERE so a future refactor that drops the SEVERE designation also
         // trips this test.
         assertCatchArmRedactsBarcode(IllegalArgumentException("bad URL"))
+    }
+
+    // -- v1.1 Item 2: SR-24 body-size cap --
+
+    @Test
+    fun lookup_oversizedContentLength_returnsNull_failsFastWithoutParse() = runTest {
+        // A 1 MB response advertised via Content-Length must be rejected at
+        // the validator BEFORE parse — both for memory and to surface DoS-shaped
+        // server behaviour as a fast null rather than a slow timeout.
+        // Ktor 3's SaveBody enforces body-size == Content-Length, so the body
+        // size matches the header; the validator is what fails the response.
+        val oversizedSize = 1_048_576 // 1 MB
+        val client = HttpClient(MockEngine { _ ->
+            respond(
+                content = ByteReadChannel("x".repeat(oversizedSize)),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf("application/json"),
+                    HttpHeaders.ContentLength to listOf(oversizedSize.toString()),
+                ),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            HttpResponseValidator {
+                validateResponse { response ->
+                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+                    if (contentLength != null && contentLength > 256L * 1024L) {
+                        throw IOException("OFF response body exceeds cap: $contentLength bytes")
+                    }
+                }
+            }
+        }
+        val sut = OffApiClient(client)
+
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    @Test
+    fun lookup_atExactly256KBContentLength_isAllowed() = runTest {
+        // The cap is strict-greater-than (> 256KB), so exactly 256 KB is allowed.
+        // Build a body of exactly 256 KB of valid JSON by padding the
+        // product_name field with filler — Ktor 3's SaveBody enforces
+        // body-size == Content-Length, so the body actually has to match.
+        val capBytes = 256 * 1024
+        val body = paddedProductJson(capBytes)
+        val client = HttpClient(MockEngine { _ ->
+            respond(
+                content = ByteReadChannel(body),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf("application/json"),
+                    HttpHeaders.ContentLength to listOf(capBytes.toString()),
+                ),
+            )
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+            HttpResponseValidator {
+                validateResponse { response ->
+                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+                    if (contentLength != null && contentLength > capBytes.toLong()) {
+                        throw IOException("body exceeds cap")
+                    }
+                }
+            }
+        }
+        val sut = OffApiClient(client)
+
+        // Should NOT trip the validator (size == cap, not >); product parses.
+        val result = sut.lookup("5449000000996")
+        assertEquals(true, result?.productName?.isNotBlank() ?: false)
+    }
+
+    @Test
+    fun lookup_atCapPlusOneByteContentLength_isRejected() = runTest {
+        val capBytes = 256 * 1024
+        val advertised = capBytes + 1
+        val body = paddedProductJson(advertised)
+        val client = HttpClient(MockEngine { _ ->
+            respond(
+                content = ByteReadChannel(body),
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType to listOf("application/json"),
+                    HttpHeaders.ContentLength to listOf(advertised.toString()),
+                ),
+            )
+        }) {
+            install(ContentNegotiation) { json() }
+            HttpResponseValidator {
+                validateResponse { response ->
+                    val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+                    if (contentLength != null && contentLength > capBytes.toLong()) {
+                        throw IOException("body exceeds cap")
+                    }
+                }
+            }
+        }
+        val sut = OffApiClient(client)
+
+        assertNull(sut.lookup("5449000000996"))
+    }
+
+    /**
+     * Returns a valid OFF envelope JSON of exactly [targetBytes] length by
+     * padding the product_name field with repeated filler. Used only by the
+     * boundary tests above; the body shape mirrors `off/coke_330ml.json`.
+     */
+    private fun paddedProductJson(targetBytes: Int): String {
+        val prefix = """{"code":"5449000000996","product":{"brands":"Coca-Cola",""" +
+            """"code":"5449000000996","product_name":""""
+        val suffix = """"},"status":1,"status_verbose":"product found"}"""
+        val padLen = targetBytes - prefix.length - suffix.length
+        require(padLen >= 0) { "targetBytes $targetBytes too small for envelope frame" }
+        return prefix + "x".repeat(padLen) + suffix
     }
 
     private suspend fun assertCatchArmRedactsBarcode(thrown: Throwable) {
