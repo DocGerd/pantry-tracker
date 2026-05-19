@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.ui.common.SnackbarEvent
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 
@@ -244,11 +245,14 @@ private fun DeleteConfirmDialog(
 ) {
     // Copy intentionally lean: the UNDO snackbar that fires on confirm
     // carries the reversibility message, so the dialog no longer needs to
-    // apologise for an irreversible delete (spec §Item 3).
+    // apologise for an irreversible delete (see arc42 §11 TD-7). Verb is
+    // "Delete" everywhere — title, body, button, and the post-action
+    // snackbar — to avoid the "Remove" / "Delete" mixed signal flagged in
+    // the multi-agent review.
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Remove ${product.name}?") },
-        text = { Text("Remove ${product.name} from your pantry?") },
+        title = { Text("Delete ${product.name}?") },
+        text = { Text("Delete ${product.name} from your pantry?") },
         confirmButton = {
             TextButton(onClick = onConfirm) { Text("Delete") }
         },
@@ -267,9 +271,14 @@ private fun DeleteConfirmDialog(
  *
  * `showSnackbar` suspends until dismiss/action, which serialises back-to-back
  * delete events naturally — a second delete during the snackbar window
- * dismisses the previous snackbar (spec §Item 3 "Edge case — second delete
- * during snackbar window"); the first UNDO closure is then unreachable and
- * the first deletion stays final, matching Gmail / Drive UX.
+ * dismisses the previous snackbar (see arc42 §11 TD-7 "Edge case — second
+ * delete during snackbar window"); the first UNDO closure is then unreachable
+ * and the first deletion stays final, matching Gmail / Drive UX.
+ *
+ * The `when` is exhaustive over three variants: [SnackbarEvent.Deleted] is
+ * the success path that offers UNDO; [SnackbarEvent.DeleteFailed] and
+ * [SnackbarEvent.RestoreFailed] are the explicit failure paths so the UI
+ * never silently lies that a deletion or restore succeeded.
  */
 @Composable
 private fun SnackbarEventCollector(
@@ -281,13 +290,25 @@ private fun SnackbarEventCollector(
             when (event) {
                 is SnackbarEvent.Deleted -> {
                     val result = snackbarHostState.showSnackbar(
-                        message = "Removed ${event.product.name}",
+                        message = "Deleted ${event.product.name}",
                         actionLabel = "UNDO",
                         duration = SnackbarDuration.Short,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
                         viewModel.undoDelete(event.product)
                     }
+                }
+                is SnackbarEvent.DeleteFailed -> {
+                    snackbarHostState.showSnackbar(
+                        message = "Could not delete ${event.name}",
+                        duration = SnackbarDuration.Short,
+                    )
+                }
+                is SnackbarEvent.RestoreFailed -> {
+                    snackbarHostState.showSnackbar(
+                        message = "Could not undo delete of ${event.name}",
+                        duration = SnackbarDuration.Short,
+                    )
                 }
             }
         }
