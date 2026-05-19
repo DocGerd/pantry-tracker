@@ -30,4 +30,19 @@ data class OffLookupCacheEntry(
     val imageUrl: String?,
     val resolvingHost: String,
     val fetchedAt: Instant,
-)
+) {
+    init {
+        // Defensive against upstream regressions. The production write site
+        // at ProductRepositoryImpl.lookupForPreview already discards
+        // name-blank OFF responses BEFORE the upsert (see the C6 / "name
+        // null" branch), so this check should never fire in practice. It
+        // runs on both writes and Room row materialization, so a row that
+        // somehow landed in the table with a blank name (manual DB edit,
+        // future migration bug) surfaces here instead of silently
+        // previewing a no-name candidate.
+        require(name.isNotBlank()) {
+            "OffLookupCacheEntry.name must be non-blank — production gate at " +
+                "ProductRepositoryImpl.lookupForPreview should filter this before upsert."
+        }
+    }
+}
