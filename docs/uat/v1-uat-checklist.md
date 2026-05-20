@@ -223,32 +223,27 @@ sign-off record is not disturbed.
 
 ---
 
-## v1.2 additional scenarios
+## v1.2 minified-APK pass (PENDING — to be filled at merge time)
 
-v1.2 adds the `off_lookup_cache` table (MIGRATION_1_2). Run these scenarios
-in addition to the v1.0 checklist above when signing off a v1.2 release.
-
-### v1.2 Scenario #1 — Upgrade-install migration verification `[automated by SR-81]`
-
-The emulator-driven script `scripts/uat/verify-migration-1-2.sh` automates this
-scenario. Run it first; if it exits 0, this scenario passes:
-
-```bash
-BOOT_EMULATOR=1 scripts/uat/verify-migration-1-2.sh
-```
-
-Manual checklist (required for real-device sign-off even after automated pass):
-
-- [ ] Sideload v1.1.0 release APK onto a real device (or use the emulator)
-- [ ] Add ≥ 2 products (one via scan, one via manual entry) — note the product
-      names and quantities
-- [ ] Sideload v1.2 APK on top — **do NOT uninstall** (this triggers MIGRATION_1_2)
-- [ ] App opens without crashing; the Home screen shows your existing products
-      with their original quantities
-- [ ] Quantities and names unchanged after upgrade
-- [ ] Scan a barcode — the OFF lookup completes normally (verifies the new
-      `off_lookup_cache` table is accessible by v1.2 code)
-- [ ] No crash observed during the whole session; logcat shows no
-      `FATAL` or `AndroidRuntime` entries
-
-**Signed off by:** ________________  **Date:** ________________
+- **Date:** YYYY-MM-DD
+- **Device:** [model / Android version]
+- **APK:** `app-release.apk` from `./gradlew :app:assembleRelease` — **must be the R8-minified release variant**, not the debug APK. R8 only runs on release; testing debug silently invalidates the pass.
+- **APK size:** 24,140,473 bytes (24.1 MB; 40.4% reduction vs v1.1.0's 40.5 MB)
+- **Pre-flight (automated):** before starting the manual walkthrough, run `scripts/uat/verify-r8-keep-rules.sh` (SR-80) — confirms all `@Serializable` / `@Entity` / `@Dao` / `@Database` classes survived R8 stripping. Now that R8 is enabled (SR-9, this PR), this check is the canonical first gate.
+- **Order matters:** the migration test (#1) must run BEFORE the inventory tests, so the inventory items exercise a freshly-migrated v1.1.0 database (the realistic upgrade state). The airplane-mode test (#12) is last because it leaves the device offline.
+- **Scenarios — all must pass:**
+  1. [ ] **Upgrade-install from v1.1.0** `[automated by SR-81 — run scripts/uat/verify-migration-1-2.sh first; if exit 0 the migration path is verified on an emulator. Real-device sign-off below still required for the v1.2 R8 release.]` — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top (no uninstall). Verifies `MIGRATION_1_2` runs on a real device and v1.1.0 pantry data is preserved into v1.2.
+  2. [ ] Scan known food product → OFF resolves → preview sheet appears
+  3. [ ] Scan known beauty product (fallback chain → beauty-facts host)
+  4. [ ] Scan known pet food (fallback chain → pet-food host)
+  5. [ ] Scan known generic product (fallback chain → products-facts host)
+  6. [ ] Scan unknown/garbage barcode → manual entry sheet appears
+  7. [ ] Add scanned product → appears in inventory list
+  8. [ ] Change quantity (+/-) → persists across cold-start
+  9. [ ] Rename product → persists
+  10. [ ] Delete product → undo snackbar restores
+  11. [ ] Image loading from OFF (Coil) — image displays on detail screen `[render automated by SR-74's CoilImageScreenshotTest; real-device check still verifies actual network fetch through R8'd Coil]`
+  12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
+- **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
+- **Procedure for adding `-keep` rules mid-UAT:** if any item fails with a `ClassNotFoundException` / `NoSuchMethodException` / kotlinx.serialization "Serializer for class X is not found" in `adb logcat`: identify the stripped target, add the keep rule to `app/proguard-rules.pro`, document it in the line above, rebuild release (`./gradlew :app:assembleRelease`), reinstall, restart this checklist from item #1.
+- **Sign-off:** [signature/handle]
