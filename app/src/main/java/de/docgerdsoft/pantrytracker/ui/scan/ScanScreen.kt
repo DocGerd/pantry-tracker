@@ -34,9 +34,12 @@ import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 fun ScanScreen(
     viewModel: ScanViewModel,
     onNavigateBack: () -> Unit,
+    cameraSource: CameraSource? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val view = LocalView.current
+
+    BindTestCameraSource(cameraSource, viewModel)
 
     val topBarColor = if (state.mode == ScanMode.Add) AddGreen else RemoveRed
     val topBarTitle = if (state.mode == ScanMode.Add) "Scan to Add" else "Scan to Remove"
@@ -72,13 +75,22 @@ fun ScanScreen(
         },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            CameraPreview(
-                onBarcode = viewModel::onBarcodeDecoded,
-                onCameraError = { e ->
-                    viewModel.onCameraError(e.message ?: "camera unavailable")
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+            // Skip the real CameraX/ML Kit binding when a test [CameraSource]
+            // is wired — the test drives `onBarcodeDecoded` via the
+            // `LaunchedEffect` above. Binding CameraX in a Compose UI test on
+            // an emulator without a back camera surfaces as
+            // `IllegalArgumentException` (no compatible camera) and routes the
+            // screen straight to `Phase.Error`, which would prevent any of
+            // the scan-flow assertions from ever firing.
+            if (cameraSource == null) {
+                CameraPreview(
+                    onBarcode = viewModel::onBarcodeDecoded,
+                    onCameraError = { e ->
+                        viewModel.onCameraError(e.message ?: "camera unavailable")
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
 
             when (val phase = state.phase) {
                 ScanUiState.Phase.Idle -> Unit
@@ -111,6 +123,32 @@ fun ScanScreen(
                     onDismiss = viewModel::dismissPreview,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Test-only seam: when a [CameraSource] is injected (via
+ * `AppContainer.cameraSource`, only set in instrumented Compose UI tests),
+ * collect barcodes from its flow and forward them to the same
+ * `onBarcodeDecoded` entry point a real ML Kit decode would call.
+ * Production passes `null` and the real `CameraPreview` composable in
+ * [ScanScreen] drives the callback the same way it always has. The collect
+ * is keyed on the source identity so a future "swap source at runtime"
+ * wouldn't leak a stale collector. See `CameraSource` KDoc for rationale.
+ *
+ * Extracted from [ScanScreen]'s body to keep that function under detekt's
+ * LongMethod / CyclomaticComplexMethod thresholds.
+ */
+@Composable
+private fun BindTestCameraSource(
+    cameraSource: CameraSource?,
+    viewModel: ScanViewModel,
+) {
+    if (cameraSource == null) return
+    LaunchedEffect(cameraSource) {
+        cameraSource.barcodes.collect { barcode ->
+            viewModel.onBarcodeDecoded(barcode)
         }
     }
 }
