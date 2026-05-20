@@ -221,3 +221,14 @@ restructured to make the lesson load-bearing on its own.*
   [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
   consult that table before debugging a release-build or release-publish
   failure.
+- **Android emulator needs `libpulse0` even with `-no-audio`.** `/dev/kvm`
+  permissions + `emulator -accel-check` returning "KVM installed and usable"
+  are NECESSARY but NOT SUFFICIENT — the `qemu-system-x86_64` binary
+  dynamically links `libpulse.so.0` regardless of `-no-audio`, so on a fresh
+  host it fails to load with `error while loading shared libraries:
+  libpulse.so.0`. Canonical "is the emulator actually usable" check is
+  `emulator -version` (proves the binary's shared libs all resolve), not
+  `ls /dev/kvm`. Fix on the user's host: `sudo apt install -y libpulse0`.
+  Bitten while validating issue #81's emulator-drive prereqs. Evict once
+  the lesson lands in `docs/release/SHIPPING.md` or `scripts/uat/README.md`
+  via issue #81.
