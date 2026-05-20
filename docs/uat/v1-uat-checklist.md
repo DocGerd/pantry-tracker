@@ -199,3 +199,35 @@ scanning against real products).
 - If `Test Product` (from test 3) is still in your test pantry after the
   full walkthrough, clear it with `adb shell pm clear ...` before signing
   off the v1.0 release APK.
+
+---
+
+## v1.2 additional scenarios
+
+v1.2 adds the `off_lookup_cache` table (MIGRATION_1_2). Run these scenarios
+in addition to the v1.0 checklist above when signing off a v1.2 release.
+
+### v1.2 Scenario #1 — Upgrade-install migration verification `[automated by SR-81]`
+
+The emulator-driven script `scripts/uat/verify-migration-1-2.sh` automates this
+scenario. Run it first; if it exits 0, this scenario passes:
+
+```bash
+BOOT_EMULATOR=1 scripts/uat/verify-migration-1-2.sh
+```
+
+Manual checklist (required for real-device sign-off even after automated pass):
+
+- [ ] Sideload v1.1.0 release APK onto a real device (or use the emulator)
+- [ ] Add ≥ 2 products (one via scan, one via manual entry) — note the product
+      names and quantities
+- [ ] Sideload v1.2 APK on top — **do NOT uninstall** (this triggers MIGRATION_1_2)
+- [ ] App opens without crashing; the Home screen shows your existing products
+      with their original quantities
+- [ ] Quantities and names unchanged after upgrade
+- [ ] Scan a barcode — the OFF lookup completes normally (verifies the new
+      `off_lookup_cache` table is accessible by v1.2 code)
+- [ ] No crash observed during the whole session; logcat shows no
+      `FATAL` or `AndroidRuntime` entries
+
+**Signed off by:** ________________  **Date:** ________________

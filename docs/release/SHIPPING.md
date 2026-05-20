@@ -238,6 +238,40 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 10. [ ] Install the release APK on your daily-driver device.
 
+---
+
+## v1.2 release-cut checklist
+
+v1.2 introduces a Room schema migration (MIGRATION_1_2: adds the `off_lookup_cache`
+table). The upgrade-install path must be verified before tagging.
+
+1. [ ] `app/build.gradle.kts`: bump `versionCode`, `versionName = "1.2.0"`.
+2. [ ] Bridge signing properties (if `GRADLE_USER_HOME` is redirected — see
+       Common gotchas):
+       ```bash
+       grep '^PANTRY_TRACKER_RELEASE_' ~/.gradle/gradle.properties \
+         > "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+       ```
+3. [ ] `./gradlew :app:assembleRelease` — verify `app-release.apk` exists
+       (not `app-release-unsigned.apk`).
+4. [ ] **Run the emulator-driven migration verification script** (SR-81):
+       ```bash
+       # Emulator already running:
+       scripts/uat/verify-migration-1-2.sh
+
+       # Or let the script boot the AVD automatically:
+       BOOT_EMULATOR=1 scripts/uat/verify-migration-1-2.sh
+       ```
+       The script downloads v1.1.0, seeds 2 rows, installs v1.2 on top, and
+       asserts rows survived + `off_lookup_cache` table exists. It exits
+       non-zero on any failure. See [`scripts/uat/README.md`](../../scripts/uat/README.md)
+       for AVD setup and prerequisites (including the `libpulse0` requirement).
+5. [ ] Walk the [UAT checklist](../uat/v1-uat-checklist.md) v1.2 upgrade-install
+       scenario on a real device (scenario #1, annotated `[automated by SR-81]`).
+6. [ ] **Lock dependencies for the tag** (same procedure as v1.0 — see below).
+7. [ ] Tag: `git tag -a v1.2.0 -m "v1.2.0 release" && git push origin v1.2.0`
+8. [ ] Create GitHub Release: `gh release create v1.2.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
+
 ### Release-tag dependency-lock procedure
 
 Day-to-day, `app/gradle.lockfile` is **gitignored** — it's regenerated each
