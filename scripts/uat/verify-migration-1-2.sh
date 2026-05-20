@@ -80,9 +80,25 @@ trap cleanup EXIT
 # 0. Boot emulator if requested
 # ---------------------------------------------------------------------------
 
+# Discover the emulator binary. Bare `emulator` is rarely on PATH — typical
+# Android SDK installs put adb in $ANDROID_HOME/platform-tools (commonly on
+# PATH) but leave $ANDROID_HOME/emulator/ off PATH. Without explicit
+# discovery, `emulator &` silently fails and the subsequent
+# `adb wait-for-device` hangs forever waiting for a device that was never
+# spawned.
 if [[ "${BOOT_EMULATOR}" == "1" ]]; then
-  log "Booting AVD: ${EMULATOR_AVD} (headless)..."
-  emulator -avd "${EMULATOR_AVD}" -no-window -no-audio -gpu swiftshader_indirect &
+  if [[ -n "${EMULATOR_BIN:-}" ]]; then
+    : # honour explicit override
+  elif command -v emulator >/dev/null 2>&1; then
+    EMULATOR_BIN="emulator"
+  elif [[ -x "${ANDROID_HOME:-$HOME/Android/Sdk}/emulator/emulator" ]]; then
+    EMULATOR_BIN="${ANDROID_HOME:-$HOME/Android/Sdk}/emulator/emulator"
+  else
+    die "emulator binary not found. Set EMULATOR_BIN, add \$ANDROID_HOME/emulator to PATH, or boot manually and re-run with BOOT_EMULATOR=0."
+  fi
+
+  log "Booting AVD: ${EMULATOR_AVD} (headless) via ${EMULATOR_BIN}..."
+  "${EMULATOR_BIN}" -avd "${EMULATOR_AVD}" -no-window -no-audio -gpu swiftshader_indirect &
   EMULATOR_PID=$!
   log "Emulator PID: ${EMULATOR_PID}. Waiting for boot (up to 120 s)..."
   adb wait-for-device
@@ -117,10 +133,13 @@ adb uninstall "${PKG}" 2>/dev/null || true
 # ---------------------------------------------------------------------------
 
 V11_APK=$(mktemp --suffix=.apk)
+# `mktemp` creates the file empty; `gh release download --output` refuses
+# to overwrite an existing file. --clobber tells it to.
 log "Downloading v1.1.0 APK to ${V11_APK}..."
 gh release download v1.1.0 \
   --pattern '*.apk' \
   --repo DocGerd/pantry-tracker \
+  --clobber \
   --output "${V11_APK}"
 log "v1.1.0 APK size: $(wc -c < "${V11_APK}") bytes"
 
@@ -249,7 +268,15 @@ fi
 # ---------------------------------------------------------------------------
 
 log "Scanning logcat for crashes..."
-CRASHES=$(adb logcat -d | grep -iE 'FATAL|AndroidRuntime' || true)
+# Match canonical crash signatures only:
+#   - "FATAL EXCEPTION" — the standard Android crash banner
+#   - "E AndroidRuntime" — error-level messages from the AndroidRuntime tag
+#     (the only severity that means "the runtime is crashing", as opposed to
+#     D/I messages which are routine zygote/lifecycle noise)
+# Broad patterns like `grep -i AndroidRuntime` produce false positives on
+# every boot — D-level "START Zygote" and I-level "VM exiting result code 0"
+# are not crashes.
+CRASHES=$(adb logcat -d -v brief | grep -E 'FATAL EXCEPTION|^E/AndroidRuntime' || true)
 if [[ -n "${CRASHES}" ]]; then
   echo "--------- CRASH LOG ---------"
   echo "${CRASHES}"
