@@ -5,12 +5,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 
 /**
- * Test double for the SR-75 [CameraSource] seam. Backed by a
- * `MutableSharedFlow<String>` with `replay = 1` so a barcode emitted before
- * the screen is mounted is still delivered when `ScanScreen` starts
- * collecting in its `LaunchedEffect(cameraSource)`. This matches the
- * "scan-already-happened" semantics ML Kit can produce in production
- * (a frame can decode before the screen is fully composed).
+ * Test double for the [CameraSource] seam. Backed by a
+ * `MutableSharedFlow<String>` with `replay = 0` (no replay-on-resubscribe)
+ * — emissions before a collector attaches are dropped, matching ML Kit's
+ * production behaviour (a freshly-started camera session does not re-deliver
+ * the last decode from a prior session). Tests must `waitUntil` for the
+ * scan screen UI before calling [emit].
  *
  * Usage in a Compose UI test:
  *
@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
  * val container = AppContainer(productRepository = repo, cameraSource = camera)
  * rule.setContent { PantryTrackerNavGraph(container = container) }
  *
- * // ...navigate to Scan to Add...
+ * // ...navigate to Scan to Add, then waitUntil for the scan top bar...
  * camera.emit("5449000000996") // fire one synthetic barcode
  * ```
  *
@@ -29,23 +29,30 @@ import kotlinx.coroutines.flow.MutableSharedFlow
  */
 class FakeCameraSource : CameraSource {
 
-    // replay = 1 so emissions before the LaunchedEffect attaches are still
-    // delivered. extraBufferCapacity = 64 is intentionally large so a test
-    // burst-emitting (e.g. simulating ML Kit's rapid repeat decodes) never
-    // suspends — tryEmit() can't return false for collectors that haven't
-    // started yet.
+    // No replay (replay = 0) — tests must `waitUntil` for the scan screen
+    // to mount before emitting. extraBufferCapacity = 64 absorbs realistic
+    // ML-Kit repeat-decode bursts without suspending tryEmit.
     private val _barcodes = MutableSharedFlow<String>(
-        replay = 1,
+        replay = 0,
         extraBufferCapacity = BUFFER_CAPACITY,
     )
 
     override val barcodes: Flow<String> = _barcodes
 
-    /** Fire one barcode through the source. Non-suspending — see the
-     *  buffer comment above for why this is safe to call from a test
-     *  thread without awaiting subscription. */
+    /**
+     * Fire one barcode through the source. Non-suspending. Fails the test
+     * loudly if the buffer is full (which never happens in single-emit tests,
+     * but a stress test exceeding [BUFFER_CAPACITY] would otherwise silently
+     * drop the barcode and produce a 5s-timeout test hang with no clear
+     * cause).
+     */
     fun emit(barcode: String) {
-        _barcodes.tryEmit(barcode)
+        check(_barcodes.tryEmit(barcode)) {
+            "FakeCameraSource.emit($barcode) returned false — buffer full " +
+                "($BUFFER_CAPACITY slots). Either no collector is attached " +
+                "(call rule.waitUntil for the scan screen first) or the test " +
+                "is emitting faster than the ViewModel can drain."
+        }
     }
 
     private companion object {

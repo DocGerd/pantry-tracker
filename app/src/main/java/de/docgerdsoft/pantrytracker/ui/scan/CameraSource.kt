@@ -16,19 +16,20 @@ import kotlinx.coroutines.flow.Flow
  * composable otherwise. The default `AppContainer.real(context)` wires
  * `cameraSource = null`, so production behaviour is unchanged.
  *
- * This is the smallest seam that admits a double — there is no full DI
- * rewrite, no `CameraPreview` refactor. SR-75 introduces this; the same
- * shape is referenced by 4 downstream Wave 3 tickets (#76, #77, #78, #82
- * androidTest counterparts), so the API is intentionally small.
+ * The API is intentionally minimal — a single `Flow<String>` — so the
+ * production source tree carries no test-only abstractions beyond the
+ * barest seam needed to inject a double.
  */
 interface CameraSource {
     /**
-     * Cold flow of decoded barcode strings. Tests typically back this with a
-     * `MutableSharedFlow<String>` and call `emit(barcode)` to fire a single
-     * scan event. Each emission is forwarded to
-     * `ScanViewModel.onBarcodeDecoded(barcode)` exactly the way a real ML
-     * Kit decode callback would be — the same sanitize / de-dup / resolve
-     * pipeline runs.
+     * Flow of decoded barcode strings. Each emission represents one decode
+     * event; the same string fires repeatedly for the same physical scan
+     * (ML Kit decodes per frame). Implementations are expected to be hot
+     * (shared across subscribers) — see [FakeCameraSource] for the test
+     * double that wraps a `MutableSharedFlow`. Each emission is forwarded
+     * to `ScanViewModel.onBarcodeDecoded(barcode)` exactly the way a real
+     * ML Kit decode callback would be — the same sanitize / de-dup /
+     * resolve pipeline runs.
      */
     val barcodes: Flow<String>
 }

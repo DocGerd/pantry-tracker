@@ -76,12 +76,13 @@ class FakeProductRepository : ProductRepository {
     // --- test-double knobs ---------------------------------------------------
 
     /**
-     * Pre-canned responses for [lookupForPreview], keyed by barcode. If a
-     * barcode key is present, the mapped value (which may be `null` to model
-     * an OFF miss) is returned. If a barcode is NOT present, the fake falls
-     * back to its seeded rows (`ScanCandidate.Persisted` if a row with that
-     * barcode exists; otherwise `null`). This dual behaviour mirrors the
-     * production "local-first, OFF-second" contract of [lookupForPreview].
+     * Pre-canned responses for [lookupForPreview], keyed by barcode. The
+     * mapped value may be `null` to model an OFF miss with no local row.
+     * Calling [lookupForPreview] with a barcode that is NOT in this map
+     * fails loudly with an `IllegalStateException` — tests must seed
+     * every barcode they intend to resolve, which makes lookup outcomes
+     * unambiguous and prevents accidental dependency on the seeded-row
+     * fallback that used to be implicit.
      */
     val lookupResponses: MutableMap<String, ScanCandidate?> = mutableMapOf()
 
@@ -145,15 +146,13 @@ class FakeProductRepository : ProductRepository {
     override suspend fun lookupForPreview(code: String): ScanCandidate? {
         lookupCalls += code
         lookupShouldThrow?.let { throw it }
-        // Explicit response map takes priority — including an explicit `null`
-        // mapping (OFF miss) so a test can seed a barcode-mapped-to-null and
-        // override any incidentally-seeded local row.
-        if (lookupResponses.containsKey(code)) return lookupResponses[code]
-        // Fall back to seeded local row, matching production's local-first
-        // behaviour. Useful in §11 (Scan to Remove, in-inventory) where the
-        // test only seeds rows and doesn't bother with a lookupResponses entry.
-        val local = rows.value.values.firstOrNull { it.barcode == code }
-        return local?.let { ScanCandidate.Persisted(it) }
+        check(lookupResponses.containsKey(code)) {
+            "FakeProductRepository.lookupForPreview($code): no entry in " +
+                "lookupResponses. Seed explicitly — set " +
+                "lookupResponses[$code] to a ScanCandidate (hit) or null " +
+                "(OFF miss). Seeded keys: ${lookupResponses.keys}."
+        }
+        return lookupResponses[code]
     }
 
     override suspend fun addNew(
@@ -183,8 +182,11 @@ class FakeProductRepository : ProductRepository {
 
     override suspend fun applyDelta(productId: Long, delta: Int) {
         applyDeltaShouldThrow?.let { throw it }
+        val existing = checkNotNull(rows.value[productId]) {
+            "FakeProductRepository.applyDelta: no row id=$productId — " +
+                "seeded ids: ${rows.value.keys}"
+        }
         deltaCalls += productId to delta
-        val existing = rows.value[productId] ?: return
         val newQty = (existing.quantity + delta).coerceAtLeast(0)
         if (newQty == existing.quantity) return
         rows.value = rows.value + (productId to existing.copy(
@@ -193,8 +195,11 @@ class FakeProductRepository : ProductRepository {
     }
 
     override suspend fun rename(productId: Long, newName: String) {
+        val existing = checkNotNull(rows.value[productId]) {
+            "FakeProductRepository.rename: no row id=$productId — " +
+                "seeded ids: ${rows.value.keys}"
+        }
         renamedProducts += productId to newName
-        val existing = rows.value[productId] ?: return
         if (existing.name == newName) return
         rows.value = rows.value + (productId to existing.copy(
             name = newName, updatedAt = Clock.System.now(),

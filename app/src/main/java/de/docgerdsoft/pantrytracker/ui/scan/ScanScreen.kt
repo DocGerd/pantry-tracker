@@ -28,6 +28,7 @@ import de.docgerdsoft.pantrytracker.ui.scan.components.NotInInventorySheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.ScanPreviewSheet
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
+import kotlinx.coroutines.CancellationException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -137,6 +138,13 @@ fun ScanScreen(
  * is keyed on the source identity so a future "swap source at runtime"
  * wouldn't leak a stale collector. See `CameraSource` KDoc for rationale.
  *
+ * Exceptions from the upstream flow are routed to `viewModel.onCameraError`
+ * — the same channel real `CameraPreview` failures use — so a misbehaving
+ * source surfaces as `Phase.Error` rather than silently killing the
+ * `LaunchedEffect` and leaving the screen stuck in `Phase.Idle`.
+ * `CancellationException` is explicitly rethrown so structured concurrency
+ * still tears down on screen exit.
+ *
  * Extracted from [ScanScreen]'s body to keep that function under detekt's
  * LongMethod / CyclomaticComplexMethod thresholds.
  */
@@ -147,8 +155,14 @@ private fun BindTestCameraSource(
 ) {
     if (cameraSource == null) return
     LaunchedEffect(cameraSource) {
-        cameraSource.barcodes.collect { barcode ->
-            viewModel.onBarcodeDecoded(barcode)
+        try {
+            cameraSource.barcodes.collect { barcode ->
+                viewModel.onBarcodeDecoded(barcode)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+            viewModel.onCameraError(e.message ?: "camera source error")
         }
     }
 }
