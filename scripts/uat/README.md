@@ -149,7 +149,10 @@ to this directory when their issues are implemented:
 | Script (planned) | Issue | Description |
 |---|---|---|
 | `verify-permission-real-prompt.sh` | #77 | Drive the real Android permission prompt flow on emulator |
-| `verify-r8-keep-rules.sh` | #80 | Verify R8 shrinking keeps the required classes for ML Kit |
+
+(`verify-r8-keep-rules.sh` for issue #80 ships in PR #86 — it will be added to
+the "## Scripts" section above once that PR merges; mention it here only if
+this PR merges first and #86 is still open at that point.)
 
 ---
 
