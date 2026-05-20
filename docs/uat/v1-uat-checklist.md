@@ -20,9 +20,9 @@ scanning against real products).
 ## 0. Install
 
 - [ ] APK installs without errors
-- [ ] Launcher shows the **three-jars-on-a-shelf icon** on a fern (green) background
-- [ ] Icon renders correctly in **both** the home-screen grid and the app drawer
-- [ ] On a launcher with circular icons, the icon is **centered and not clipped**
+- [ ] Launcher shows the **three-jars-on-a-shelf icon** on a fern (green) background — [automated by SR-74]
+- [ ] Icon renders correctly in **both** the home-screen grid and the app drawer — [automated by SR-74]
+- [ ] On a launcher with circular icons, the icon is **centered and not clipped** — [automated by SR-74]
 
 ## 1. First launch — empty pantry
 
@@ -40,10 +40,10 @@ scanning against real products).
 
 ## 2. Theme + visual sanity
 
-- [ ] Switch device to **dark mode** → app re-renders in dark scheme without restart
-- [ ] Primary colour (visible on buttons, top app bar) is fern green in both modes
+- [ ] Switch device to **dark mode** → app re-renders in dark scheme without restart — [automated by SR-74]
+- [ ] Primary colour (visible on buttons, top app bar) is fern green in both modes — [automated by SR-74]
 - [ ] Status bar / nav bar contrast is acceptable (no white-on-white)
-- [ ] No clipped text on the smallest font size, no overflow on the largest
+- [ ] No clipped text on the smallest font size, no overflow on the largest — [automated by SR-74]
 
 ## 3. Manual entry path (no camera needed)
 
@@ -89,32 +89,32 @@ scanning against real products).
 
 (Need an actual product with a barcode. A bottle of mineral water, a packaged snack, anything with an EAN-13 barcode. The product must already be in Open Food Facts — if you scan something obscure you'll fall through to manual entry, which is also a valid test path.)
 
-- [ ] Tap "Scan to Add" → camera preview visible
-- [ ] Top app bar is green ("Scan to Add" mode)
+- [ ] Tap "Scan to Add" → camera preview visible [automated by SR-75]
+- [ ] Top app bar is green ("Scan to Add" mode) [automated by SR-75]
 - [ ] Point at the barcode — within ~1 second it auto-detects
-- [ ] Bottom sheet appears showing:
-  - [ ] Product **name** (from OFF)
-  - [ ] **Brand** (if OFF has it)
-  - [ ] Product **image** (if OFF has it; falls back gracefully if not)
-  - [ ] Quantity stepper showing **1**
-  - [ ] **Confirm** + **Cancel** buttons
-- [ ] Increase quantity to 3 → tap Confirm
-- [ ] Sheet dismisses → camera preview returns to live state
-- [ ] Press device Back → Home shows the product with **×3**
+- [ ] Bottom sheet appears showing: [automated by SR-75]
+  - [ ] Product **name** (from OFF) [automated by SR-75]
+  - [ ] **Brand** (if OFF has it) [automated by SR-75]
+  - [ ] Product **image** (if OFF has it; falls back gracefully if not) [automated by SR-75]
+  - [ ] Quantity stepper showing **1** [automated by SR-75]
+  - [ ] **Confirm** + **Cancel** buttons [automated by SR-75]
+- [ ] Increase quantity to 3 → tap Confirm [automated by SR-75]
+- [ ] Sheet dismisses → camera preview returns to live state [automated by SR-75]
+- [ ] Press device Back → Home shows the product with **×3** [automated by SR-75]
 
 ## 8. Scan to Add — OFF miss (manual entry fallback)
 
 (Pick an unusual product not in OFF, or temporarily put the phone in airplane mode.)
 
-- [ ] Tap "Scan to Add" → grant if prompted → camera preview
+- [ ] Tap "Scan to Add" → grant if prompted → camera preview [automated by SR-75]
 - [ ] Scan the barcode
-- [ ] After ~8 seconds (timeout), bottom sheet opens with **manual entry** layout:
-  - [ ] Pre-filled with the barcode
-  - [ ] Name field is **empty + focused**
-  - [ ] Quantity stepper at 1
-  - [ ] **Add** + **Cancel** buttons
-- [ ] Type "Local Brand Cookies" → tap Add → product is saved
-- [ ] Home shows "Local Brand Cookies ×1"
+- [ ] After ~8 seconds (timeout), bottom sheet opens with **manual entry** layout: [automated by SR-75]
+  - [ ] Pre-filled with the barcode [automated by SR-75]
+  - [ ] Name field is **empty + focused** [automated by SR-75, focus check stays manual]
+  - [ ] Quantity stepper at 1 [automated by SR-75]
+  - [ ] **Add** + **Cancel** buttons [automated by SR-75]
+- [ ] Type "Local Brand Cookies" → tap Add → product is saved [automated by SR-75]
+- [ ] Home shows "Local Brand Cookies ×1" [automated by SR-75]
 
 ## 9. Search
 
@@ -137,18 +137,18 @@ scanning against real products).
 
 ## 11. Scan to Remove — in-inventory path
 
-- [ ] Tap "Scan to Remove" (red top bar) → permission flow if needed → camera preview
-- [ ] Scan a barcode of a product currently in your inventory at quantity > 0
-- [ ] Bottom sheet shows the product + quantity stepper clamped to **max = current quantity**
-- [ ] Decrease (or accept default 1) → tap Confirm
-- [ ] Home shows the row with the **new lower quantity**
-- [ ] Repeat until the row hits **0** — the row stays in the list but **greyed at 45% opacity**
+- [ ] Tap "Scan to Remove" (red top bar) → permission flow if needed → camera preview [automated by SR-75]
+- [ ] Scan a barcode of a product currently in your inventory at quantity > 0 [automated by SR-75]
+- [ ] Bottom sheet shows the product + quantity stepper clamped to **max = current quantity** [automated by SR-75]
+- [ ] Decrease (or accept default 1) → tap Confirm [automated by SR-75]
+- [ ] Home shows the row with the **new lower quantity** [automated by SR-75]
+- [ ] Repeat until the row hits **0** — the row stays in the list but **greyed at 45% opacity** [row-stays automated by SR-75; 45%-opacity pixel check automated by SR-74 (`GreyedRowScreenshotTest`)]
 
 ## 12. Scan to Remove — not-in-inventory path
 
-- [ ] Scan a barcode for a product NOT in your inventory
-- [ ] Bottom sheet shows **"Not in inventory"** message with the barcode and a **"Switch to Add"** button
-- [ ] Tap "Switch to Add" → top bar flips to green ("Scan to Add" mode), the same barcode re-resolves through the Add flow (OFF lookup if needed)
+- [ ] Scan a barcode for a product NOT in your inventory [automated by SR-75]
+- [ ] Bottom sheet shows **"Not in inventory"** message with the barcode and a **"Switch to Add"** button [automated by SR-75]
+- [ ] Tap "Switch to Add" → top bar flips to green ("Scan to Add" mode), the same barcode re-resolves through the Add flow (OFF lookup if needed) [automated by SR-75]
 
 ## 13. Delete
 
@@ -173,6 +173,14 @@ scanning against real products).
 
 ---
 
+## Pre-flight static checks (run before installing the APK)
+
+- [ ] R8 keep-rule survival: `scripts/uat/verify-r8-keep-rules.sh` exits 0
+      — all `@Serializable` / `@Entity` / `@Dao` / `@Database` classes are
+      present in the post-R8 DEX. [automated by SR-80]
+
+---
+
 ## Sign-off
 
 - [ ] All required boxes above are checked
@@ -183,6 +191,19 @@ scanning against real products).
 **Signed off by:** ________________
 **Date:** ________________
 **Decision:** ☐ ready to tag v1.0 ☐ block; deferrals: ________________
+
+---
+
+## v1.2 appendix — candidate regression checks
+
+These rows track UAT items introduced by v1.2 development.  They are
+appended here rather than renumbered into the main sections so the v1.0
+sign-off record is not disturbed.
+
+- [ ] **#11 — Coil image loads from OFF on Detail screen.** Navigate to the
+  Detail screen of any product that has an image URL (from an OFF scan).  The
+  product photo renders within ~2 seconds; tapping the image does nothing (no
+  crash).  — [automated by SR-74]
 
 ---
 
@@ -208,9 +229,10 @@ scanning against real products).
 - **Device:** [model / Android version]
 - **APK:** `app-release.apk` from `./gradlew :app:assembleRelease` — **must be the R8-minified release variant**, not the debug APK. R8 only runs on release; testing debug silently invalidates the pass.
 - **APK size:** 24,140,473 bytes (24.1 MB; 40.4% reduction vs v1.1.0's 40.5 MB)
+- **Pre-flight (automated):** before starting the manual walkthrough, run `scripts/uat/verify-r8-keep-rules.sh` (SR-80) — confirms all `@Serializable` / `@Entity` / `@Dao` / `@Database` classes survived R8 stripping. Now that R8 is enabled (SR-9, this PR), this check is the canonical first gate.
 - **Order matters:** the migration test (#1) must run BEFORE the inventory tests, so the inventory items exercise a freshly-migrated v1.1.0 database (the realistic upgrade state). The airplane-mode test (#12) is last because it leaves the device offline.
 - **Scenarios — all must pass:**
-  1. [ ] **Upgrade-install from v1.1.0** — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top (no uninstall). Verifies `MIGRATION_1_2` runs on a real device and v1.1.0 pantry data is preserved into v1.2.
+  1. [ ] **Upgrade-install from v1.1.0** `[automated by SR-81 — run scripts/uat/verify-migration-1-2.sh first; if exit 0 the migration path is verified on an emulator. Real-device sign-off below still required for the v1.2 R8 release.]` — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top (no uninstall). Verifies `MIGRATION_1_2` runs on a real device and v1.1.0 pantry data is preserved into v1.2.
   2. [ ] Scan known food product → OFF resolves → preview sheet appears
   3. [ ] Scan known beauty product (fallback chain → beauty-facts host)
   4. [ ] Scan known pet food (fallback chain → pet-food host)
@@ -220,7 +242,7 @@ scanning against real products).
   8. [ ] Change quantity (+/-) → persists across cold-start
   9. [ ] Rename product → persists
   10. [ ] Delete product → undo snackbar restores
-  11. [ ] Image loading from OFF (Coil) — image displays on detail screen
+  11. [ ] Image loading from OFF (Coil) — image displays on detail screen `[render automated by SR-74's CoilImageScreenshotTest; real-device check still verifies actual network fetch through R8'd Coil]`
   12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
 - **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
 - **Procedure for adding `-keep` rules mid-UAT:** if any item fails with a `ClassNotFoundException` / `NoSuchMethodException` / kotlinx.serialization "Serializer for class X is not found" in `adb logcat`: identify the stripped target, add the keep rule to `app/proguard-rules.pro`, document it in the line above, rebuild release (`./gradlew :app:assembleRelease`), reinstall, restart this checklist from item #1.

@@ -14,18 +14,11 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import de.docgerdsoft.pantrytracker.PantryTrackerNavGraph
-import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.di.AppContainer
-import de.docgerdsoft.pantrytracker.repository.ProductRepository
-import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.testfixtures.FakeProductRepository
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import org.junit.Rule
 import org.junit.Test
-import kotlin.time.Clock
 
 /**
  * End-to-end UAT happy path. Drives the **real** [PantryTrackerNavGraph] with
@@ -57,7 +50,7 @@ class HappyPathUatTest {
 
     @Test
     fun fullV1UserFlow_addRenameRemove() {
-        val repo = InMemoryProductRepository()
+        val repo = FakeProductRepository()
         val container = AppContainer(repo)
 
         rule.setContent {
@@ -168,7 +161,7 @@ class HappyPathUatTest {
 
     @Test
     fun delete_thenUndo_restoresItem() {
-        val repo = InMemoryProductRepository()
+        val repo = FakeProductRepository()
         val container = AppContainer(repo)
 
         rule.setContent {
@@ -217,7 +210,7 @@ class HappyPathUatTest {
 
     @Test
     fun delete_thenSnackbarDismiss_keepsDeleted() {
-        val repo = InMemoryProductRepository()
+        val repo = FakeProductRepository()
         val container = AppContainer(repo)
 
         rule.setContent {
@@ -250,98 +243,5 @@ class HappyPathUatTest {
         }
         rule.onNodeWithText("Your pantry is empty").assertIsDisplayed()
         rule.onNodeWithText("Soap").assertDoesNotExist()
-    }
-
-    // --- helpers ---
-
-    /**
-     * In-memory [ProductRepository] backed by a `MutableStateFlow<Map<Long, Product>>`.
-     * Mirrors the production [de.docgerdsoft.pantrytracker.repository.ProductRepositoryImpl]
-     * semantics that the screens depend on (sorted observation, unique-by-id,
-     * search-by-substring, observeById flow that reflects updates) without
-     * touching Room or OFF.
-     */
-    private class InMemoryProductRepository : ProductRepository {
-        private val rows = MutableStateFlow<Map<Long, Product>>(emptyMap())
-        private var nextId: Long = 1
-
-        override fun observeProducts(): Flow<List<Product>> =
-            rows.map { it.values.sortedBy { row -> row.name.lowercase() } }
-
-        override fun search(query: String): Flow<List<Product>> =
-            rows.map { snap ->
-                snap.values
-                    .filter { it.name.contains(query, ignoreCase = true) }
-                    .sortedBy { row -> row.name.lowercase() }
-            }
-
-        override suspend fun findById(id: Long): Product? = rows.value[id]
-
-        // `distinctUntilChanged` matches production Room semantics: a per-row
-        // observable only fires when *this* row changes, not when other rows
-        // in the table mutate. Without it, the bare `rows.map { it[id] }`
-        // would re-emit on every map mutation (other rows added/deleted),
-        // and Flow.map drops StateFlow's built-in distinct-until-changed —
-        // both differences would mask production bugs where another row's
-        // update could clobber the DetailScreen's in-flight edit.
-        override fun observeById(id: Long): Flow<Product?> =
-            rows.map { it[id] }.distinctUntilChanged()
-
-        override suspend fun findLocalByBarcode(code: String): Product? =
-            rows.value.values.firstOrNull { it.barcode == code }
-
-        // OFF never reached in this test — manual entry path covers add.
-        override suspend fun lookupForPreview(code: String): ScanCandidate? = null
-
-        override suspend fun addNew(
-            name: String,
-            brand: String?,
-            barcode: String?,
-            imageUrl: String?,
-            initialQuantity: Int,
-        ): Long {
-            val id = nextId++
-            val now = Clock.System.now()
-            val row = Product(
-                id = id,
-                barcode = barcode,
-                name = name,
-                brand = brand,
-                imageUrl = imageUrl,
-                quantity = initialQuantity.coerceAtLeast(0),
-                createdAt = now,
-                updatedAt = now,
-            )
-            rows.value = rows.value + (id to row)
-            return id
-        }
-
-        override suspend fun applyDelta(productId: Long, delta: Int) {
-            val existing = rows.value[productId] ?: return
-            val newQty = (existing.quantity + delta).coerceAtLeast(0)
-            if (newQty == existing.quantity) return
-            rows.value = rows.value + (productId to existing.copy(
-                quantity = newQty, updatedAt = Clock.System.now(),
-            ))
-        }
-
-        override suspend fun rename(productId: Long, newName: String) {
-            val existing = rows.value[productId] ?: return
-            if (existing.name == newName) return
-            rows.value = rows.value + (productId to existing.copy(
-                name = newName, updatedAt = Clock.System.now(),
-            ))
-        }
-
-        override suspend fun delete(productId: Long) {
-            rows.value = rows.value - productId
-        }
-
-        override suspend fun restore(product: Product) {
-            // Mirror production: upsert by id preserves the captured row
-            // (id + createdAt + updatedAt) so the post-undo observation is
-            // identity-equal to the pre-delete one.
-            rows.value = rows.value + (product.id to product)
-        }
     }
 }

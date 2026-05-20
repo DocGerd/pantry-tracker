@@ -54,15 +54,41 @@ Workflow:
    Claude-invokable local equivalent is the `pr-review-toolkit:review-pr`
    skill, or dispatch individual `pr-review-toolkit:*` subagents in parallel.
 3. Post each finding as an **inline review thread** on the diff (not a single
-   summary comment) so each one can be resolved independently. The
-   `post-finding` skill at `.claude/skills/post-finding/` encodes the
-   `gh api -X POST .../pulls/<n>/comments` recipe.
+   summary comment) so each one can be resolved independently. The `pr-review`
+   skill at `.claude/skills/pr-review/` is the canonical end-to-end recipe
+   for this whole workflow — it wraps `pr-review-toolkit:review-pr` from
+   step 2 and covers posting, fixing, resolving, and hand-off. For this step
+   specifically it batches findings into a single pending review via the
+   GitHub MCP's `pull_request_review_write`. The older `post-finding` skill
+   at `.claude/skills/post-finding/` is a `gh api`-based fallback for sessions
+   without the GitHub MCP installed.
 4. Fix all findings on the same branch.
-5. After each fix lands, **resolve the corresponding inline thread** via the
-   GraphQL `resolveReviewThread` mutation. (`gh api graphql` mangles `!` in
-   GraphQL syntax even inside quoted heredocs — call `gh` from Python
-   `subprocess` instead.)
+5. After each fix lands, **resolve the corresponding inline thread** via
+   `pull_request_review_write method=resolve_thread` (the MCP handles the
+   resolve call; thread IDs are still discovered via GraphQL — see the
+   `pr-review` skill §3d). Fallback when the GitHub MCP isn't available:
+   the GraphQL `resolveReviewThread` mutation called from Python `subprocess`
+   (`gh api graphql` mangles `!` even inside quoted heredocs).
 6. Only then declare ready-to-merge.
+
+### Subagent & worktree hygiene
+
+When dispatching subagents into git worktrees for parallel work:
+
+- **Pass the absolute worktree path** in the agent prompt, not a relative one.
+  A subagent's cwd is the worktree root, but relative paths in the prompt are
+  resolved against the parent's cwd and have caused re-dispatch in past
+  Sprint-style sessions.
+- **The agent verifies `pwd` and `git branch --show-current`** match the
+  expected worktree before touching files. Cheap insurance against the agent
+  landing in the wrong tree.
+- **Stage by name, never `git add -A`** inside a subagent. A subagent commit
+  that swept up unrelated working-tree changes has happened before and needs
+  a soft-reset to recover; explicit `git add <file> <file>` makes the commit
+  scope auditable from the prompt alone.
+
+These extend (don't duplicate) the global `~/.claude/CLAUDE.md` rules on
+`git -C` vs bare `git` inside worktrees.
 
 ### Hooks (repo-specific notes)
 
@@ -195,3 +221,17 @@ restructured to make the lesson load-bearing on its own.*
   [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
   consult that table before debugging a release-build or release-publish
   failure.
+- **Android emulator needs `libpulse0` even with `-no-audio`.** `/dev/kvm`
+  permissions + `emulator -accel-check` returning "KVM installed and usable"
+  are NECESSARY but NOT SUFFICIENT — the `qemu-system-x86_64` binary
+  dynamically links `libpulse.so.0` as a build-time `DT_NEEDED` dep (no
+  runtime flag, including `-no-audio`, suppresses it), so on a fresh host
+  it fails to load with `error while loading shared libraries:
+  libpulse.so.0`. First runnable check beyond `/dev/kvm` is
+  `emulator -version` (proves the binary's shared libs all resolve); the
+  canonical "actually usable" check is booting a throwaway AVD headless —
+  see issue #81's `verify-migration-1-2.sh` once it lands. Fix on the
+  user's host: `sudo apt install -y libpulse0`. Bitten while validating
+  issue #81's emulator-drive prereqs. Evict once `grep -l libpulse
+  docs/release/SHIPPING.md scripts/uat/README.md` returns a match (i.e.
+  #81 has documented the prereq where a fresh-host installer will see it).
