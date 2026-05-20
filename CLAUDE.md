@@ -224,11 +224,14 @@ restructured to make the lesson load-bearing on its own.*
 - **Android emulator needs `libpulse0` even with `-no-audio`.** `/dev/kvm`
   permissions + `emulator -accel-check` returning "KVM installed and usable"
   are NECESSARY but NOT SUFFICIENT — the `qemu-system-x86_64` binary
-  dynamically links `libpulse.so.0` regardless of `-no-audio`, so on a fresh
-  host it fails to load with `error while loading shared libraries:
-  libpulse.so.0`. Canonical "is the emulator actually usable" check is
-  `emulator -version` (proves the binary's shared libs all resolve), not
-  `ls /dev/kvm`. Fix on the user's host: `sudo apt install -y libpulse0`.
-  Bitten while validating issue #81's emulator-drive prereqs. Evict once
-  the lesson lands in `docs/release/SHIPPING.md` or `scripts/uat/README.md`
-  via issue #81.
+  dynamically links `libpulse.so.0` as a build-time `DT_NEEDED` dep (no
+  runtime flag, including `-no-audio`, suppresses it), so on a fresh host
+  it fails to load with `error while loading shared libraries:
+  libpulse.so.0`. First runnable check beyond `/dev/kvm` is
+  `emulator -version` (proves the binary's shared libs all resolve); the
+  canonical "actually usable" check is booting a throwaway AVD headless —
+  see issue #81's `verify-migration-1-2.sh` once it lands. Fix on the
+  user's host: `sudo apt install -y libpulse0`. Bitten while validating
+  issue #81's emulator-drive prereqs. Evict once `grep -l libpulse
+  docs/release/SHIPPING.md scripts/uat/README.md` returns a match (i.e.
+  #81 has documented the prereq where a fresh-host installer will see it).
