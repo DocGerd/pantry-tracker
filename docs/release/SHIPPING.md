@@ -137,6 +137,19 @@ ls -lh app/build/outputs/apk/release/app-release.apk
 # keystore properties weren't picked up. Re-check ~/.gradle/gradle.properties.
 ```
 
+**Run the R8 keep-rule survival check** (SR-80) before signing the UAT pass:
+```bash
+scripts/uat/verify-r8-keep-rules.sh
+# Exit 0 = all @Serializable / @Entity / @Dao / @Database classes are in the DEX.
+# Exit 1 = one or more classes were stripped — follow the printed -keep hints.
+```
+
+Alternatively, pass `-PverifyR8=true` to run the check automatically as part
+of the build:
+```bash
+./gradlew :app:assembleRelease -PverifyR8=true
+```
+
 If signing succeeded, `apksigner verify` should pass:
 ```bash
 $ANDROID_HOME/build-tools/<latest>/apksigner verify \
@@ -228,6 +241,9 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
 4. [ ] Populate the four `PANTRY_TRACKER_RELEASE_*` properties in
        `~/.gradle/gradle.properties`. **Do not commit them.**
 5. [ ] `./gradlew :app:assembleRelease` and verify with `apksigner verify`.
+5a. [ ] Run `scripts/uat/verify-r8-keep-rules.sh` (SR-80) — confirms all
+        `@Serializable` / `@Entity` / `@Dao` / `@Database` classes survived R8
+        before starting the UAT pass.
 6. [ ] Walk the [v1.0 UAT checklist](../uat/v1-uat-checklist.md) on a real
        device using the release APK. Sign off when all green.
 7. [ ] **Lock dependencies for the tag** — see

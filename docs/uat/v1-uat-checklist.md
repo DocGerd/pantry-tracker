@@ -173,6 +173,14 @@ scanning against real products).
 
 ---
 
+## Pre-flight static checks (run before installing the APK)
+
+- [ ] R8 keep-rule survival: `scripts/uat/verify-r8-keep-rules.sh` exits 0
+      — all `@Serializable` / `@Entity` / `@Dao` / `@Database` classes are
+      present in the post-R8 DEX. [automated by SR-80]
+
+---
+
 ## Sign-off
 
 - [ ] All required boxes above are checked
