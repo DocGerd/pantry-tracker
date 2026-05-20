@@ -221,17 +221,23 @@ restructured to make the lesson load-bearing on its own.*
   [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
   consult that table before debugging a release-build or release-publish
   failure.
-- **Android emulator needs `libpulse0` even with `-no-audio`.** `/dev/kvm`
-  permissions + `emulator -accel-check` returning "KVM installed and usable"
-  are NECESSARY but NOT SUFFICIENT — the `qemu-system-x86_64` binary
-  dynamically links `libpulse.so.0` as a build-time `DT_NEEDED` dep (no
-  runtime flag, including `-no-audio`, suppresses it), so on a fresh host
-  it fails to load with `error while loading shared libraries:
-  libpulse.so.0`. First runnable check beyond `/dev/kvm` is
-  `emulator -version` (proves the binary's shared libs all resolve); the
-  canonical "actually usable" check is booting a throwaway AVD headless —
-  see issue #81's `verify-migration-1-2.sh` once it lands. Fix on the
-  user's host: `sudo apt install -y libpulse0`. Bitten while validating
-  issue #81's emulator-drive prereqs. Evict once `grep -l libpulse
-  docs/release/SHIPPING.md scripts/uat/README.md` returns a match (i.e.
-  #81 has documented the prereq where a fresh-host installer will see it).
+- **UAT scripts and bash automation: fresh-host end-to-end execution
+  is non-negotiable before declaring ready.** `bash -n` + `:app:detekt`
+  + the implementer subagent's "BUILD SUCCESSFUL" self-report are
+  necessary but not sufficient — the implementer's shell typically
+  has `$ANDROID_HOME/emulator/` and `gh` on PATH; a non-interactive
+  fresh shell (CI runner, a different agent, a colleague's dev box)
+  typically does NOT. SR-81's `scripts/uat/verify-migration-1-2.sh`
+  shipped with three bugs that none of those gates caught, surfacing
+  only on a re-run in a fresh shell: (1) bare `emulator -avd …` assumed
+  `$PATH` contained the SDK's `emulator/` directory — silent hang on
+  `adb wait-for-device` when only `platform-tools` was on PATH;
+  (2) `mktemp` + `gh release download --output` race — gh refuses to
+  overwrite the empty file `mktemp` created, needs `--clobber`;
+  (3) `grep -iE 'AndroidRuntime'` matched benign D/I-level Zygote-start
+  and VM-exit lines on every clean boot — script would have reported
+  `FAIL` on every successful migration. Pattern: any script with
+  PATH-resolved binaries, gh-CLI invocations, or logcat regex scanning
+  needs an actual run in a non-interactive shell on a fresh host
+  before merge. Evict once a "before-PR end-to-end" checklist for new
+  scripts lands in `scripts/uat/README.md`.
