@@ -61,6 +61,7 @@ fun PantryTrackerNavGraph(container: AppContainer) {
                 ScanScreen(
                     viewModel = vm,
                     onNavigateBack = { navController.popBackStack() },
+                    cameraSource = container.cameraSource,
                 )
             }
         }
@@ -75,6 +76,7 @@ fun PantryTrackerNavGraph(container: AppContainer) {
                 ScanScreen(
                     viewModel = vm,
                     onNavigateBack = { navController.popBackStack() },
+                    cameraSource = container.cameraSource,
                 )
             }
         }

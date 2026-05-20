@@ -193,6 +193,47 @@ androidComponents {
         project.tasks.matching {
             it.name == "assemble$capitalizedVariant" || it.name == "bundle$capitalizedVariant"
         }.configureEach { dependsOn(verifyTask) }
+
+        // SR-80: optional R8 keep-rule survival check, gated on -PverifyR8=true.
+        // Shells out to scripts/uat/verify-r8-keep-rules.sh after the APK is built.
+        // Kept opt-in so dev builds (assembleDebug) and regular assembleRelease are
+        // not slowed down — the check is only needed before a release UAT pass.
+        //
+        // Usage:
+        //   ./gradlew :app:assembleRelease -PverifyR8=true
+        if (providers.gradleProperty("verifyR8").orNull == "true") {
+            val verifyR8Task = project.tasks.register("verifyR8KeepRules") {
+                // Depend on the APK being built — the script reads it.
+                dependsOn("assemble$capitalizedVariant")
+                outputs.upToDateWhen { false }
+                doLast {
+                    val scriptPath = rootProject.file("scripts/uat/verify-r8-keep-rules.sh").absolutePath
+                    if (!file(scriptPath).exists()) {
+                        throw GradleException(
+                            "SR-80: verify-r8-keep-rules.sh not found at $scriptPath. " +
+                                "Check that the scripts/uat/ directory is present.",
+                        )
+                    }
+                    val process = ProcessBuilder("bash", scriptPath)
+                        .inheritIO()
+                        .start()
+                    val exitCode = process.waitFor()
+                    if (exitCode != 0) {
+                        throw GradleException(
+                            "SR-80: verifyR8KeepRules failed — one or more annotated classes " +
+                                "are missing from the DEX. See the output above for remediation hints.",
+                        )
+                    }
+                }
+            }
+            // Wire verifyR8KeepRules to run after assembleRelease completes.
+            // We cannot use dependsOn here because assembleRelease already owns
+            // the build graph; instead we register verifyR8KeepRules as a
+            // finalizer so it runs immediately after the APK task finishes.
+            project.tasks.matching {
+                it.name == "assemble$capitalizedVariant"
+            }.configureEach { finalizedBy(verifyR8Task) }
+        }
     }
 }
 

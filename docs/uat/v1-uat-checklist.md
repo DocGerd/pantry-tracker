@@ -89,32 +89,32 @@ scanning against real products).
 
 (Need an actual product with a barcode. A bottle of mineral water, a packaged snack, anything with an EAN-13 barcode. The product must already be in Open Food Facts — if you scan something obscure you'll fall through to manual entry, which is also a valid test path.)
 
-- [ ] Tap "Scan to Add" → camera preview visible
-- [ ] Top app bar is green ("Scan to Add" mode)
+- [ ] Tap "Scan to Add" → camera preview visible [automated by SR-75]
+- [ ] Top app bar is green ("Scan to Add" mode) [automated by SR-75]
 - [ ] Point at the barcode — within ~1 second it auto-detects
-- [ ] Bottom sheet appears showing:
-  - [ ] Product **name** (from OFF)
-  - [ ] **Brand** (if OFF has it)
-  - [ ] Product **image** (if OFF has it; falls back gracefully if not)
-  - [ ] Quantity stepper showing **1**
-  - [ ] **Confirm** + **Cancel** buttons
-- [ ] Increase quantity to 3 → tap Confirm
-- [ ] Sheet dismisses → camera preview returns to live state
-- [ ] Press device Back → Home shows the product with **×3**
+- [ ] Bottom sheet appears showing: [automated by SR-75]
+  - [ ] Product **name** (from OFF) [automated by SR-75]
+  - [ ] **Brand** (if OFF has it) [automated by SR-75]
+  - [ ] Product **image** (if OFF has it; falls back gracefully if not) [automated by SR-75]
+  - [ ] Quantity stepper showing **1** [automated by SR-75]
+  - [ ] **Confirm** + **Cancel** buttons [automated by SR-75]
+- [ ] Increase quantity to 3 → tap Confirm [automated by SR-75]
+- [ ] Sheet dismisses → camera preview returns to live state [automated by SR-75]
+- [ ] Press device Back → Home shows the product with **×3** [automated by SR-75]
 
 ## 8. Scan to Add — OFF miss (manual entry fallback)
 
 (Pick an unusual product not in OFF, or temporarily put the phone in airplane mode.)
 
-- [ ] Tap "Scan to Add" → grant if prompted → camera preview
+- [ ] Tap "Scan to Add" → grant if prompted → camera preview [automated by SR-75]
 - [ ] Scan the barcode
-- [ ] After ~8 seconds (timeout), bottom sheet opens with **manual entry** layout:
-  - [ ] Pre-filled with the barcode
-  - [ ] Name field is **empty + focused**
-  - [ ] Quantity stepper at 1
-  - [ ] **Add** + **Cancel** buttons
-- [ ] Type "Local Brand Cookies" → tap Add → product is saved
-- [ ] Home shows "Local Brand Cookies ×1"
+- [ ] After ~8 seconds (timeout), bottom sheet opens with **manual entry** layout: [automated by SR-75]
+  - [ ] Pre-filled with the barcode [automated by SR-75]
+  - [ ] Name field is **empty + focused** [automated by SR-75, focus check stays manual]
+  - [ ] Quantity stepper at 1 [automated by SR-75]
+  - [ ] **Add** + **Cancel** buttons [automated by SR-75]
+- [ ] Type "Local Brand Cookies" → tap Add → product is saved [automated by SR-75]
+- [ ] Home shows "Local Brand Cookies ×1" [automated by SR-75]
 
 ## 9. Search
 
@@ -137,18 +137,18 @@ scanning against real products).
 
 ## 11. Scan to Remove — in-inventory path
 
-- [ ] Tap "Scan to Remove" (red top bar) → permission flow if needed → camera preview
-- [ ] Scan a barcode of a product currently in your inventory at quantity > 0
-- [ ] Bottom sheet shows the product + quantity stepper clamped to **max = current quantity**
-- [ ] Decrease (or accept default 1) → tap Confirm
-- [ ] Home shows the row with the **new lower quantity**
-- [ ] Repeat until the row hits **0** — the row stays in the list but **greyed at 45% opacity** — [automated by SR-74]
+- [ ] Tap "Scan to Remove" (red top bar) → permission flow if needed → camera preview [automated by SR-75]
+- [ ] Scan a barcode of a product currently in your inventory at quantity > 0 [automated by SR-75]
+- [ ] Bottom sheet shows the product + quantity stepper clamped to **max = current quantity** [automated by SR-75]
+- [ ] Decrease (or accept default 1) → tap Confirm [automated by SR-75]
+- [ ] Home shows the row with the **new lower quantity** [automated by SR-75]
+- [ ] Repeat until the row hits **0** — the row stays in the list but **greyed at 45% opacity** [row-stays automated by SR-75; 45%-opacity pixel check automated by SR-74 (`GreyedRowScreenshotTest`)]
 
 ## 12. Scan to Remove — not-in-inventory path
 
-- [ ] Scan a barcode for a product NOT in your inventory
-- [ ] Bottom sheet shows **"Not in inventory"** message with the barcode and a **"Switch to Add"** button
-- [ ] Tap "Switch to Add" → top bar flips to green ("Scan to Add" mode), the same barcode re-resolves through the Add flow (OFF lookup if needed)
+- [ ] Scan a barcode for a product NOT in your inventory [automated by SR-75]
+- [ ] Bottom sheet shows **"Not in inventory"** message with the barcode and a **"Switch to Add"** button [automated by SR-75]
+- [ ] Tap "Switch to Add" → top bar flips to green ("Scan to Add" mode), the same barcode re-resolves through the Add flow (OFF lookup if needed) [automated by SR-75]
 
 ## 13. Delete
 
@@ -170,6 +170,14 @@ scanning against real products).
 ## 15. Error tone audit
 
 - [ ] During any of the above, if an error appeared (failed scan, failed save, settings deep-link unavailable on this device), the user-facing message starts with **"Couldn't <verb>: ..."** and not a raw stack trace or "java.lang.Exception" string
+
+---
+
+## Pre-flight static checks (run before installing the APK)
+
+- [ ] R8 keep-rule survival: `scripts/uat/verify-r8-keep-rules.sh` exits 0
+      — all `@Serializable` / `@Entity` / `@Dao` / `@Database` classes are
+      present in the post-R8 DEX. [automated by SR-80]
 
 ---
 
@@ -212,3 +220,35 @@ sign-off record is not disturbed.
 - If `Test Product` (from test 3) is still in your test pantry after the
   full walkthrough, clear it with `adb shell pm clear ...` before signing
   off the v1.0 release APK.
+
+---
+
+## v1.2 additional scenarios
+
+v1.2 adds the `off_lookup_cache` table (MIGRATION_1_2). Run these scenarios
+in addition to the v1.0 checklist above when signing off a v1.2 release.
+
+### v1.2 Scenario #1 — Upgrade-install migration verification `[automated by SR-81]`
+
+The emulator-driven script `scripts/uat/verify-migration-1-2.sh` automates this
+scenario. Run it first; if it exits 0, this scenario passes:
+
+```bash
+BOOT_EMULATOR=1 scripts/uat/verify-migration-1-2.sh
+```
+
+Manual checklist (required for real-device sign-off even after automated pass):
+
+- [ ] Sideload v1.1.0 release APK onto a real device (or use the emulator)
+- [ ] Add ≥ 2 products (one via scan, one via manual entry) — note the product
+      names and quantities
+- [ ] Sideload v1.2 APK on top — **do NOT uninstall** (this triggers MIGRATION_1_2)
+- [ ] App opens without crashing; the Home screen shows your existing products
+      with their original quantities
+- [ ] Quantities and names unchanged after upgrade
+- [ ] Scan a barcode — the OFF lookup completes normally (verifies the new
+      `off_lookup_cache` table is accessible by v1.2 code)
+- [ ] No crash observed during the whole session; logcat shows no
+      `FATAL` or `AndroidRuntime` entries
+
+**Signed off by:** ________________  **Date:** ________________

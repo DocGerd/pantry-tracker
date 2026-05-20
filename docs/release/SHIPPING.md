@@ -137,6 +137,19 @@ ls -lh app/build/outputs/apk/release/app-release.apk
 # keystore properties weren't picked up. Re-check ~/.gradle/gradle.properties.
 ```
 
+**Run the R8 keep-rule survival check** (SR-80) before signing the UAT pass:
+```bash
+scripts/uat/verify-r8-keep-rules.sh
+# Exit 0 = all @Serializable / @Entity / @Dao / @Database classes are in the DEX.
+# Exit 1 = one or more classes were stripped — follow the printed -keep hints.
+```
+
+Alternatively, pass `-PverifyR8=true` to run the check automatically as part
+of the build:
+```bash
+./gradlew :app:assembleRelease -PverifyR8=true
+```
+
 If signing succeeded, `apksigner verify` should pass:
 ```bash
 $ANDROID_HOME/build-tools/<latest>/apksigner verify \
@@ -228,6 +241,9 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
 4. [ ] Populate the four `PANTRY_TRACKER_RELEASE_*` properties in
        `~/.gradle/gradle.properties`. **Do not commit them.**
 5. [ ] `./gradlew :app:assembleRelease` and verify with `apksigner verify`.
+5a. [ ] Run `scripts/uat/verify-r8-keep-rules.sh` (SR-80) — confirms all
+        `@Serializable` / `@Entity` / `@Dao` / `@Database` classes survived R8
+        before starting the UAT pass.
 6. [ ] Walk the [v1.0 UAT checklist](../uat/v1-uat-checklist.md) on a real
        device using the release APK. Sign off when all green.
 7. [ ] **Lock dependencies for the tag** — see
@@ -237,6 +253,40 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
 9. [ ] Create a GitHub Release attaching `app-release.apk`:
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 10. [ ] Install the release APK on your daily-driver device.
+
+---
+
+## v1.2 release-cut checklist
+
+v1.2 introduces a Room schema migration (MIGRATION_1_2: adds the `off_lookup_cache`
+table). The upgrade-install path must be verified before tagging.
+
+1. [ ] `app/build.gradle.kts`: bump `versionCode`, `versionName = "1.2.0"`.
+2. [ ] Bridge signing properties (if `GRADLE_USER_HOME` is redirected — see
+       Common gotchas):
+       ```bash
+       grep '^PANTRY_TRACKER_RELEASE_' ~/.gradle/gradle.properties \
+         > "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+       ```
+3. [ ] `./gradlew :app:assembleRelease` — verify `app-release.apk` exists
+       (not `app-release-unsigned.apk`).
+4. [ ] **Run the emulator-driven migration verification script** (SR-81):
+       ```bash
+       # Emulator already running:
+       scripts/uat/verify-migration-1-2.sh
+
+       # Or let the script boot the AVD automatically:
+       BOOT_EMULATOR=1 scripts/uat/verify-migration-1-2.sh
+       ```
+       The script downloads v1.1.0, seeds 2 rows, installs v1.2 on top, and
+       asserts rows survived + `off_lookup_cache` table exists. It exits
+       non-zero on any failure. See [`scripts/uat/README.md`](../../scripts/uat/README.md)
+       for AVD setup and prerequisites (including the `libpulse0` requirement).
+5. [ ] Walk the [UAT checklist](../uat/v1-uat-checklist.md) v1.2 upgrade-install
+       scenario on a real device (scenario #1, annotated `[automated by SR-81]`).
+6. [ ] **Lock dependencies for the tag** (same procedure as v1.0 — see below).
+7. [ ] Tag: `git tag -a v1.2.0 -m "v1.2.0 release" && git push origin v1.2.0`
+8. [ ] Create GitHub Release: `gh release create v1.2.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 
 ### Release-tag dependency-lock procedure
 
