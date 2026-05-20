@@ -1,0 +1,2 @@
+# Treat PNG files as binary to prevent line-ending normalisation and diff noise.
+*.png binary

@@ -319,6 +319,12 @@ dependencies {
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.ktor.client.mock)
+    // Compose UI test APIs (createComposeRule, captureToImage, onRoot) used by
+    // RNG screenshot tests under src/test. The androidTestImplementation line
+    // below is kept for instrumentation tests; this line enables the same APIs
+    // for pure-JVM Robolectric tests (SR-74).
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

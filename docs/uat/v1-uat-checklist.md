@@ -20,9 +20,9 @@ scanning against real products).
 ## 0. Install
 
 - [ ] APK installs without errors
-- [ ] Launcher shows the **three-jars-on-a-shelf icon** on a fern (green) background
-- [ ] Icon renders correctly in **both** the home-screen grid and the app drawer
-- [ ] On a launcher with circular icons, the icon is **centered and not clipped**
+- [ ] Launcher shows the **three-jars-on-a-shelf icon** on a fern (green) background — [automated by SR-74]
+- [ ] Icon renders correctly in **both** the home-screen grid and the app drawer — [automated by SR-74]
+- [ ] On a launcher with circular icons, the icon is **centered and not clipped** — [automated by SR-74]
 
 ## 1. First launch — empty pantry
 
@@ -40,10 +40,10 @@ scanning against real products).
 
 ## 2. Theme + visual sanity
 
-- [ ] Switch device to **dark mode** → app re-renders in dark scheme without restart
-- [ ] Primary colour (visible on buttons, top app bar) is fern green in both modes
+- [ ] Switch device to **dark mode** → app re-renders in dark scheme without restart — [automated by SR-74]
+- [ ] Primary colour (visible on buttons, top app bar) is fern green in both modes — [automated by SR-74]
 - [ ] Status bar / nav bar contrast is acceptable (no white-on-white)
-- [ ] No clipped text on the smallest font size, no overflow on the largest
+- [ ] No clipped text on the smallest font size, no overflow on the largest — [automated by SR-74]
 
 ## 3. Manual entry path (no camera needed)
 
@@ -142,7 +142,7 @@ scanning against real products).
 - [ ] Bottom sheet shows the product + quantity stepper clamped to **max = current quantity** [automated by SR-75]
 - [ ] Decrease (or accept default 1) → tap Confirm [automated by SR-75]
 - [ ] Home shows the row with the **new lower quantity** [automated by SR-75]
-- [ ] Repeat until the row hits **0** — the row stays in the list but **greyed at 45% opacity** [automated by SR-75, opacity check stays manual]
+- [ ] Repeat until the row hits **0** — the row stays in the list but **greyed at 45% opacity** [row-stays automated by SR-75; 45%-opacity pixel check automated by SR-74 (`GreyedRowScreenshotTest`)]
 
 ## 12. Scan to Remove — not-in-inventory path
 
@@ -191,6 +191,19 @@ scanning against real products).
 **Signed off by:** ________________
 **Date:** ________________
 **Decision:** ☐ ready to tag v1.0 ☐ block; deferrals: ________________
+
+---
+
+## v1.2 appendix — candidate regression checks
+
+These rows track UAT items introduced by v1.2 development.  They are
+appended here rather than renumbered into the main sections so the v1.0
+sign-off record is not disturbed.
+
+- [ ] **#11 — Coil image loads from OFF on Detail screen.** Navigate to the
+  Detail screen of any product that has an image URL (from an OFF scan).  The
+  product photo renders within ~2 seconds; tapping the image does nothing (no
+  crash).  — [automated by SR-74]
 
 ---
 
