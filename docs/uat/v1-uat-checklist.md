@@ -57,33 +57,34 @@ scanning against real products).
 
 (Reset permission first if you've already granted: Settings → Apps → Pantry Tracker → Permissions → Camera → Don't allow.)
 
-- [ ] Tap "Scan to Add" → **rationale dialog** appears titled "Camera access"
-- [ ] Body text: "We scan barcodes to find products. Nothing leaves your device."
-- [ ] Buttons: **Continue** (filled) + **Cancel** (text)
-- [ ] Tap Cancel → returns to Home without opening the system prompt
-- [ ] Tap "Scan to Add" again → rationale dialog reappears
-- [ ] Tap Continue → **system permission prompt** appears
+- [ ] Tap "Scan to Add" → **rationale dialog** appears titled "Camera access" — [automated by SR-77: `CameraPermissionGateTest.unknown_showsRationaleDialog_andContinueInvokesCallback`]
+- [ ] Body text: "We scan barcodes to find products. Nothing leaves your device." — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Buttons: **Continue** (filled) + **Cancel** (text) — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap Cancel → returns to Home without opening the system prompt — [automated by SR-77: `CameraPermissionGateTest.unknown_cancelInvokesOnNavigateBack`]
+- [ ] Tap "Scan to Add" again → rationale dialog reappears — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap Continue → **system permission prompt** appears — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario A; real OS dialog stays human-only]
 
 ## 5. Permission flow — SoftDenied
 
-- [ ] At the system prompt, tap **Deny** (NOT "Don't ask again")
-- [ ] App shows **"Camera access needed"** screen with body "Pantry Tracker uses the camera to scan barcodes. Nothing leaves your device."
-- [ ] **"Try again"** button (filled) + **"Go back"** button (outlined)
-- [ ] Tap "Go back" → returns to Home
-- [ ] Tap "Scan to Add" → returns directly to **"Camera access needed"** (no rationale dialog this round)
-- [ ] Tap **Try again** → system permission prompt reappears
-- [ ] Tap **Allow** → camera preview renders
+- [ ] At the system prompt, tap **Deny** (NOT "Don't ask again") — [human-only: real OS system prompt]
+- [ ] App shows **"Camera access needed"** screen with body "Pantry Tracker uses the camera to scan barcodes. Nothing leaves your device." — [automated by SR-77: `CameraPermissionGateTest.softDenied_showsRetryAffordance_hidesContent_andTryAgainInvokesContinue`]
+- [ ] **"Try again"** button (filled) + **"Go back"** button (outlined) — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap "Go back" → returns to Home — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap "Scan to Add" → returns directly to **"Camera access needed"** (no rationale dialog this round) — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap **Try again** → system permission prompt reappears — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario B; real OS dialog stays human-only]
+- [ ] Tap **Allow** → camera preview renders — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario B verifies permission granted; camera-preview rendering stays human-only (real camera hardware)]
 
 ## 6. Permission flow — HardDenied recovery
 
-- [ ] Settings → Apps → Pantry Tracker → Permissions → Camera → **Don't allow** (or revoke + re-deny with "don't ask again" if Android 11+)
+- [ ] Settings → Apps → Pantry Tracker → Permissions → Camera → **Don't allow** (or revoke + re-deny with "don't ask again" if Android 11+) — [human-only: real device Settings navigation]
 - [ ] Return to app → tap "Scan to Add"
-- [ ] App shows **"Camera access blocked"** screen with body "Open Settings and allow camera access for Pantry Tracker, then come back."
-- [ ] **"Open settings"** (filled) + **"Go back"** (outlined)
-- [ ] Tap "Open settings" → **system Settings app opens directly to the Pantry Tracker permission page**
-  - [ ] **OEM-fail fallback path** (Xiaomi/MIUI, some Huawei builds may land on a generic settings screen, or the Settings activity may be disabled entirely): if Open settings does NOT reach the permission page, the app must surface a "Couldn't open settings on this device" Toast — not silently fail
-- [ ] Toggle Camera to Allow → press device Back to return to the app
-- [ ] App **automatically transitions to the camera preview** (no extra tap needed) — this is the M6-caught regression
+- [ ] App shows **"Camera access blocked"** screen with body "Open Settings and allow camera access for Pantry Tracker, then come back." — [automated by SR-77: `CameraPermissionDeepLinkTest.hardDenied_showsBlockedHeadline` + `hardDenied_showsSettingsBody`]
+- [ ] **"Open settings"** (filled) + **"Go back"** (outlined) — [automated by SR-77: `CameraPermissionDeepLinkTest.hardDenied_showsOpenSettingsButton`]
+- [ ] Tap "Open settings" → **system Settings app opens directly to the Pantry Tracker permission page** — [automated by SR-77: `CameraPermissionDeepLinkTest.openSettings_tapFiresDeepLinkIntent` (asserts `ACTION_APPLICATION_DETAILS_SETTINGS` + `package:de.docgerdsoft.pantrytracker`)]
+  - [ ] **OEM-fail fallback path** (Xiaomi/MIUI, some Huawei builds may land on a generic settings screen, or the Settings activity may be disabled entirely): if Open settings does NOT reach the permission page, the app must surface a "Couldn't open settings on this device" Toast — not silently fail — [automated by SR-77: `CameraPermissionDeepLinkTest.openSettings_activityNotFound_showsToast`; OEM-specific Settings UI variations stay **human-only** — see §6 row 5 note below]
+  - **§6 row 5 — OEM-specific Settings navigation (human-only):** Xiaomi MIUI, Huawei HiSilicon, and Samsung One UI each redirect the `ACTION_APPLICATION_DETAILS_SETTINGS` intent to a different Settings sub-screen. Verifying the user lands on the *correct* permission toggle page on these OEM builds requires a real device running the OEM firmware. This row is explicitly **out of scope for instrumented and emulator automation** — only the toast fallback path (above) can be verified automatically.
+- [ ] Toggle Camera to Allow → press device Back to return to the app — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario C verifies permission granted + app resumed]
+- [ ] App **automatically transitions to the camera preview** (no extra tap needed) — this is the M6-caught regression — [automated by SR-77: `CameraPermissionOnResumeTest.onResume_afterPermissionGranted_transitionsToGrantedWithoutExtraTap`; camera-preview rendering stays human-only (real camera hardware)]
 
 ## 7. Scan to Add — OFF hit
 

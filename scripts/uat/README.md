@@ -141,14 +141,50 @@ See `docs/release/SHIPPING.md §B` for full setup.
 
 ---
 
+### `permission-real-prompt.sh` — camera-permission flow emulator verification (SR-77)
+
+**What it does:**
+
+Drives the camera-permission scenarios that cannot be covered by instrumented
+Compose tests (the OS permission dialog lives in `com.android.permissioncontroller`,
+outside the app process). Covers three scenarios:
+
+- **Scenario A** — §4 row 6 + §5 row 7 (Allow path): revoke camera permission,
+  launch app, grant via `pm grant` (equivalent to Allow in system prompt),
+  verify the app holds camera permission.
+- **Scenario B** — §5 row 6 (SoftDenied Try again → Allow): revoke, relaunch,
+  re-grant, verify.
+- **Scenario C** — §6 row 6 (HardDenied → Settings grant → onResume recovery):
+  revoke, launch in HardDenied state, grant from "Settings" (pm grant), resume
+  the app, verify camera permission is granted on resume.
+
+Camera-preview rendering and real OS dialog tapping remain **human-only** (see
+the `NOTE` in the script output and `docs/uat/v1-uat-checklist.md` §4-6).
+
+**Usage:**
+
+```bash
+# Emulator already running:
+scripts/uat/permission-real-prompt.sh
+
+# Auto-boot emulator:
+BOOT_EMULATOR=1 scripts/uat/permission-real-prompt.sh
+
+# Custom AVD or APK:
+EMULATOR_AVD=pantry_test_api35 APK_PATH=app/build/outputs/apk/debug/app-debug.apk \
+  BOOT_EMULATOR=1 scripts/uat/permission-real-prompt.sh
+```
+
+**Tracked issue:** [#77](https://github.com/DocGerd/pantry-tracker/issues/77)
+
+---
+
 ## Planned scripts (not yet implemented)
 
 The following scripts are referenced in the issue tracker and will be added
 to this directory when their issues are implemented:
 
-| Script (planned) | Issue | Description |
-|---|---|---|
-| `verify-permission-real-prompt.sh` | #77 | Drive the real Android permission prompt flow on emulator |
+*(No pending planned scripts.)*
 
 (`verify-r8-keep-rules.sh` for issue #80 ships in PR #86 — it will be added to
 the "## Scripts" section above once that PR merges; mention it here only if
