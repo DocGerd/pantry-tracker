@@ -5,7 +5,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import de.docgerdsoft.pantrytracker.di.AppContainer
 
-class PantryTrackerApp : Application() {
+open class PantryTrackerApp : Application() {
     lateinit var container: AppContainer
         private set
 

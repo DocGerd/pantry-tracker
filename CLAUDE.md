@@ -1,8 +1,10 @@
 # Pantry Tracker — Claude operating notes
 
 Standalone Android Kotlin/Compose app for whole-number kitchen inventory.
-Single `:app` module. v1.0.0 shipped 2026-05-18; v1.1.0 (Fallbacks & undo)
-shipped 2026-05-19, both as signed sideload APKs on GitHub Releases.
+Two Gradle modules: `:app` (the Android app) and `:detekt-rules` (a pure-JVM
+module holding the custom detekt rule set — see the ErrorTone note below).
+v1.0.0 shipped 2026-05-18; v1.1.0 (Fallbacks & undo) shipped 2026-05-19, both
+as signed sideload APKs on GitHub Releases.
 
 This file is loaded into every Claude Code session in this repo. Keep it
 high-signal — pointers, not duplication of the source-of-truth docs.
@@ -166,7 +168,10 @@ section B (sideload of release APK). Two non-obvious bits:
 ## Layout
 
 ```
-app/                            # the single :app module
+detekt-rules/                   # pure-JVM module: custom detekt rules (ErrorTone)
+  src/main/kotlin/.../detekt/   # ErrorToneRule + PantryRuleSetProvider
+  src/test/kotlin/.../detekt/   # ErrorToneRuleTest — proof the rule fires
+app/                            # the Android :app module
   src/main/java/de/docgerdsoft/pantrytracker/
     data/local/                 # Room entities, DAOs, AppDatabase
     data/remote/                # Ktor client for Open Food Facts (OffApiClient)
@@ -227,6 +232,44 @@ restructured to make the lesson load-bearing on its own.*
   [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
   consult that table before debugging a release-build or release-publish
   failure.
+- **User-facing error messages must start with `"Couldn't <verb>: ..."`.**
+  Every snackbar, ErrorSheet, or Toast that surfaces a repository or system
+  failure must use this prefix — NOT "Could not ...", "Error: ...", or a raw
+  `java.lang.Exception` string. The `<reason>` is typically
+  `e.message ?: "unknown error"` — never a stack trace. Violation example
+  found and fixed: `HomeScreen.kt` once used `"Could not delete ..."`.
+
+  This is partly enforced statically by `ErrorToneRule` (SR-78), living in the
+  standalone **`:detekt-rules`** module and wired into `:app:detekt` via
+  `detektPlugins(project(":detekt-rules"))`. The rule is **PSI-only** (no type
+  resolution) and deliberately conservative. What it catches:
+  - `ScanUiState.Phase.Error("...")` (an error-ONLY sink) — any literal not
+    starting with `"Couldn't "` fails the build.
+  - `showSnackbar(message = "...")` / `Toast.makeText(..., "...", ...)` (SHARED
+    sinks that also carry success copy like `"Deleted X"`) — flagged ONLY when
+    the literal opens with a recognised wrong-tone phrase ("Could not", "Error",
+    "Failed", "Unable to", "Cannot", "Can't", "Couldnt"). This is what keeps the
+    success-snackbar from being a false positive.
+
+  Known **blind spots** (NOT caught — still a human responsibility): a message
+  passed as a `val` reference rather than an inline literal (e.g. `DetailViewModel`
+  builds `error = "Couldn't $op: …"` and `DetailScreen` passes that `String` to
+  `showSnackbar` — one hop away); string concatenation; `getString(R.string.…)`
+  resource lookups; interpolation-first templates (`"${e.message}"`); and a
+  wrong-tone error in a shared sink with an unrecognised opener.
+
+  Two non-obvious detekt gotchas that bit while building this rule: (1) **detekt
+  SILENTLY swallows per-file rule-execution exceptions by default** — a rule that
+  throws produces BUILD SUCCESSFUL with zero findings, looking exactly like a
+  passing run. Surface them with `debug = true` on the `Detekt` task (it then
+  fails loud) or rely on the proof test below. (2) **A stale Gradle daemon can
+  pin an old `detektPlugins(project(...))` jar** mid-iteration — after editing the
+  rule, `./gradlew --stop` before re-running `:app:detekt` or you may be testing
+  the previous rule build. The regression guard is `:detekt-rules:test`
+  (`ErrorToneRuleTest`), which lints sample snippets directly and asserts exact
+  finding counts (fire on violations, silent on conforming + success copy) — run
+  it whenever you touch the rule. Eviction criterion: when `ErrorToneRuleTest`
+  is deleted or the `pantry.ErrorTone` entry leaves `detekt-config.yml`.
 - **UAT scripts and bash automation: fresh-host end-to-end execution
   is non-negotiable before declaring ready.** `bash -n` + `:app:detekt`
   + the implementer subagent's "BUILD SUCCESSFUL" self-report are

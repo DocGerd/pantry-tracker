@@ -19,7 +19,13 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "1.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Custom runner (extends AndroidJUnitRunner) that forces the test
+        // Application class via newApplication() — the reliable on-device
+        // mechanism to swap PantryTrackerApp → TestPantryTrackerApp. The
+        // androidTest-manifest `android:name` override is NOT reliable for this
+        // because the runtime Application comes from the target (app) manifest.
+        // See PantryTestRunner.kt for the full rationale.
+        testInstrumentationRunner = "de.docgerdsoft.pantrytracker.testfixtures.PantryTestRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -262,6 +268,20 @@ detekt {
     autoCorrect = false
     ignoreFailures = false
     config.setFrom(files("$rootDir/detekt-config.yml"))
+}
+
+// SR-78: wire the custom detekt rule set as a normal detektPlugins artifact.
+// The rules live in the standalone :detekt-rules JVM module; detekt loads the
+// produced jar (classes + META-INF/services RuleSetProvider) via ServiceLoader.
+//
+// History: the original SR-78 wiring compiled the rules into :app's unit-test
+// source set and pointed detektPlugins(files(...)) at AGP's internal
+// `intermediates/` dirs. That was both fragile (paths are AGP-version-internal)
+// and INERT — detekt loaded nothing and the rule never fired. A real Gradle
+// module avoids both problems; the :detekt-rules:test proof test guarantees it
+// keeps firing.
+dependencies {
+    detektPlugins(project(":detekt-rules"))
 }
 
 ksp {

@@ -165,12 +165,12 @@ scanning against real products).
 - [ ] Force-stop the app (Settings → Apps → Pantry Tracker → Force stop)
 - [ ] Re-launch → all your products are still there, with the right quantities
 - [ ] Reboot the device → re-launch → still there
-- [ ] **Configuration change** — open the Detail screen of any product, edit the Name field but do NOT tap Save / lose focus yet. Rotate the device (or change dark/light mode, or system font scale): the app must rebuild the Activity cleanly, the row still exists with its committed state, the nav backstack is preserved. (The typed-but-uncommitted edit is currently NOT preserved — that's a known v1 limitation; this step verifies nothing CRASHES during the rebuild.)
+- [ ] **Configuration change** — open the Detail screen of any product, edit the Name field but do NOT tap Save / lose focus yet. Rotate the device (or change dark/light mode, or system font scale): the app must rebuild the Activity cleanly, the row still exists with its committed state, the nav backstack is preserved. (The typed-but-uncommitted edit is currently NOT preserved — that's a known v1 limitation; this step verifies nothing CRASHES during the rebuild.) — [automated by SR-78: ConfigChangeRotationTest]
 - [ ] (Bonus, only on a dev install you don't mind losing data on:) `adb shell pm clear de.docgerdsoft.pantrytracker` → re-launch → pantry is empty (clean slate)
 
 ## 15. Error tone audit
 
-- [ ] During any of the above, if an error appeared (failed scan, failed save, settings deep-link unavailable on this device), the user-facing message starts with **"Couldn't <verb>: ..."** and not a raw stack trace or "java.lang.Exception" string
+- [ ] During any of the above, if an error appeared (failed scan, failed save, settings deep-link unavailable on this device), the user-facing message starts with **"Couldn't <verb>: ..."** and not a raw stack trace or "java.lang.Exception" string — [automated by SR-78: ErrorToneRule (detekt) + ErrorToneSemanticsTest]
 
 ---
 
