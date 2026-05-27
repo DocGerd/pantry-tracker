@@ -26,12 +26,12 @@ anything that shapes the system — is recorded in the
   [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/). Discussion happens on the
   issue.
 - **Accepting a change.** Work is done on a short-lived
-  `<type>/<tracker-id>-<slug>` feature branch off `main`, opened as a pull
-  request that links its issue with `Closes #N`. Every PR is reviewed before it
-  merges (see [Code review in `CONTRIBUTING.md`](CONTRIBUTING.md#code-review));
+  `<type>/<tracker-id>-<slug>` branch off `develop`, opened as a pull request
+  into `develop` that links its issue with `Closes #N`. Every PR is reviewed
+  before it merges (see [Code review in `CONTRIBUTING.md`](CONTRIBUTING.md#code-review));
   the maintainer is the only approver and merger. The full branching model is
-  **trunk-based**, documented in
-  [`CONTRIBUTING.md`](CONTRIBUTING.md#workflow-trunk-based-on-main).
+  **GitFlow**, documented in
+  [`CONTRIBUTING.md`](CONTRIBUTING.md#workflow-gitflow).
 - **Architectural decisions.** Choices that shape the system are written up in
   the arc42 docs in [`docs/architecture/`](docs/architecture/), with the design
   rationale captured alongside the design specs under
@@ -43,23 +43,35 @@ anything that shapes the system — is recorded in the
 
 ## Branch and merge model
 
-Pantry Tracker is **trunk-based**: `main` is the single long-lived branch.
-There is no `develop` branch and no release branch — feature work branches off
-`main`, is opened as a PR back into `main`, and is merged there after review.
-Releases are cut directly from `main` by tagging it (see
-[`docs/release/SHIPPING.md`](docs/release/SHIPPING.md)).
+Pantry Tracker follows **GitFlow** with two long-lived branches: `develop` is
+the integration branch and the repository default, and `main` is release-tagged
+and production. Neither is ever pushed to directly — all work lands via pull
+request. Day-to-day `<type>/<tracker-id>-<slug>` branches (`feat`, `fix`,
+`chore`, `docs`, `security`) are cut off `develop` and PR'd back into `develop`.
+A `release/<version>` branch is cut off `develop` and PR'd into **both** `main`
+and `develop`; `main` is then tagged. An urgent `hotfix/<slug>` branches off
+`main` and is back-merged into `develop`. The full convention lives in
+[`CONTRIBUTING.md`](CONTRIBUTING.md#workflow-gitflow); the release procedure is
+in [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md).
 
-### Only humans merge to `main`
+Branch protection (forward-looking, tracked in #100) covers **both `develop`
+and `main`** once the repo is public. Note: the classic
+`required_linear_history` rule must **not** be enabled — GitFlow's release flow
+PRs `release/*` into both `main` and `develop`, which creates merge commits the
+classic rule forbids with no bypass. The aim is a clean first-parent mainline
+instead.
 
-The project's single hardest rule: **every change reaching `main` must go
-through a pull request that the human maintainer merges.** No automated agent —
-including any Claude Code session working in this repository — runs `gh pr
-merge` or pushes to `main`, for any reason. There are no exceptions for one-line
-reverts, "verified" hotfixes, or wrap-up phases. The audit trail is the
-maintainer's explicit click on "Merge pull request"; once the repository is
-public, branch protection on `main` enforces this mechanically (require a PR,
-require review, block direct pushes). This rule is restated in
-[`CLAUDE.md`](CLAUDE.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+### Only humans merge to `develop` and `main`
+
+The project's single hardest rule: **every change reaching `develop` or `main`
+must go through a pull request that the human maintainer merges.** No automated
+agent — including any Claude Code session working in this repository — runs `gh
+pr merge` or pushes to `develop` or `main`, for any reason. There are no
+exceptions for one-line reverts, "verified" hotfixes, or wrap-up phases. The
+audit trail is the maintainer's explicit click on "Merge pull request"; once the
+repository is public, branch protection on both `develop` and `main` enforces
+this mechanically (require a PR, require review, block direct pushes). This rule
+is restated in [`CLAUDE.md`](CLAUDE.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Key roles and current holders
 
@@ -71,7 +83,7 @@ the list stays meaningful if the project ever grows.
 |---|---|---|
 | **Maintainer / project lead** | Final say on scope, design, and releases; reviews and merges all PRs. | [@DocGerd](https://github.com/DocGerd) |
 | **Security contact** | Receives and triages vulnerability reports; see [`SECURITY.md`](SECURITY.md). Reports go through GitHub [private security advisories](https://github.com/DocGerd/pantry-tracker/security/advisories/new). | [@DocGerd](https://github.com/DocGerd) |
-| **Release manager** | Cuts releases by tagging `main`, builds the signed APK, and publishes the GitHub Release (see [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md)). | [@DocGerd](https://github.com/DocGerd) |
+| **Release manager** | Cuts releases via the GitFlow `release/*` flow (off `develop`, PR'd into `main` + `develop`, then tags `main`), builds the signed APK, and publishes the GitHub Release (see [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md)). | [@DocGerd](https://github.com/DocGerd) |
 | **Code-of-Conduct enforcement** | Handles conduct reports per [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). | [@DocGerd](https://github.com/DocGerd) |
 
 ## Becoming a maintainer
@@ -84,7 +96,7 @@ direction is a well-argued issue or a clean pull request.
 
 ## Related documents
 
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute, the trunk-based
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute, the GitFlow
   workflow, PR requirements, and the code-review process.
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — expected behaviour and how to
   report conduct issues.

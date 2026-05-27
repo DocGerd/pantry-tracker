@@ -21,7 +21,7 @@ opening the *code and its history*, not a new distribution channel.
 | License | **Apache-2.0** | Android-ecosystem standard (AOSP), explicit patent grant; matches hangarfit |
 | Sequencing | **Flip early, polish in the open** | The flip unblocks free CI + CodeQL + secret-scanning immediately, which directly helps the in-flight Wave 3 test PRs |
 | Maturity level | **Full hangarfit parity** | CodeQL + OpenSSF Scorecard + Best Practices badge + ADR backfill + security-posture doc + `.editorconfig` |
-| Branch model | **Keep trunk-based on `main`** (NOT hangarfit's GitFlow) | pantry-tracker's entire CLAUDE.md workflow assumes `main` + feature branches + PR. Importing `develop` would be a regression |
+| Branch model | **GitFlow** — `develop` integration branch + `main` for tagged releases, matching hangarfit (supersedes the initial trunk-based assumption, 2026-05-27) | Adopting hangarfit's GitFlow shape; pantry-tracker keeps its existing `<type>/<sr-id>-<slug>` branch naming (now cut off `develop`) plus `release/*` and `hotfix/*` prefixes (#108) |
 | Governance | Single-maintainer; **only humans merge to `main`** | Already the project's hard rule; `GOVERNANCE.md` documents it, branch protection enforces it post-flip |
 | Internal artifacts (`CLAUDE.md`, `.claude/`, `docs/superpowers/`) | **Keep public** | Confirmed by hangarfit precedent — these are an asset (disciplined-process signal), not a liability |
 
@@ -73,7 +73,7 @@ Already excluded correctly: `.claude/settings.local.json` (gitignored), `.claude
 | OSS-1 | Full git-history secret scan + `.claude/settings.json` review | **Safety gate. Claude runs it directly.** `gitleaks detect` over all history. |
 | OSS-2 | `LICENSE` (Apache-2.0) + source-header convention | `LICENSE` + optional `NOTICE`; document header convention in CONTRIBUTING |
 | OSS-3 | `README.md` | Overview, install (sideload), build, tech stack, badges. Screenshots = placeholder, real ones deferred (needs emulator) |
-| OSS-4 | Community-health docs | `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant), `GOVERNANCE.md` (**trunk-based**, single-maintainer, only-humans-merge) |
+| OSS-4 | Community-health docs | `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant), `GOVERNANCE.md` (**GitFlow**, single-maintainer, only-humans-merge) |
 | OSS-5 | `.github/` templates | `CODEOWNERS`, `ISSUE_TEMPLATE/{bug,feature,question,config}`, `pull_request_template.md` (encode "every PR links an issue") |
 | OSS-6 | Repo hygiene & metadata | `.gitignore` `HANDOVER.md`; `.editorconfig`; `.claude/README.md`; set repo description + topics |
 
@@ -102,7 +102,6 @@ Already excluded correctly: `.claude/settings.local.json` (gitignored), `.claude
 ## Out of scope (explicitly deferred)
 
 - Google Play Store / F-Droid distribution — separate future roadmap if ever pursued.
-- Switching to GitFlow / a `develop` branch — pantry-tracker stays trunk-based.
 - Real app screenshots in the README — follow-up once an emulator capture is run.
 - Relicensing existing release tags — Apache-2.0 applies going forward; historical tags are unchanged.
 
@@ -124,6 +123,6 @@ Already excluded correctly: `.claude/settings.local.json` (gitignored), `.claude
 ## Self-review
 
 - **Placeholders:** none — every issue has a concrete file map.
-- **Consistency:** branch model stated once (trunk-based) and reinforced in GOVERNANCE note; no GitFlow leakage.
+- **Consistency:** branch model stated once (GitFlow) and reinforced in the GOVERNANCE note; no conflicting branch-model wording.
 - **Scope:** two milestones, each independently shippable; pre-flight gates the flip, in-the-open is post-flip polish.
 - **Ambiguity:** "keep internal artifacts public" is explicit and precedent-backed; flip actor is explicitly the human.
