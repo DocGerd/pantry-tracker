@@ -336,6 +336,47 @@ class OffApiClientTest {
     }
 
     @Test
+    fun lookup_host1IOException_returnsNull_doesNotWalk() = runTest {
+        // Net-new chain assertion folded in from SR-82 (the rest of that
+        // ticket's "fallback chain" suite duplicated the tests above, so only
+        // this unique scenario survived the rework).
+        //
+        // DELIBERATE DIVERGENCE FROM THE #82 SPEC ASSUMPTION: issue #82's
+        // acceptance criterion #5 reads "Host 1 IOException → host 2 succeeds
+        // (proves recovery isn't gated only on status)". Production does NOT
+        // recover — an IOException maps to HostResult.Error, which makes
+        // lookup() `return null` immediately (OffApiClient.kt: the
+        // `HostResult.Error -> return null` arm) so the chain does NOT walk to
+        // the sister hosts. This is intentional: walking past a real transport
+        // fault would multiply a single sick-host outage by 4. The #404 status
+        // miss is the only "walk-on" signal; IOException / 5xx / oversized body
+        // / contract-violation are all fail-fast. This test pins reality, not
+        // the spec's optimistic assumption.
+        val captured = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            captured += request
+            when (request.url.host) {
+                "world.openfoodfacts.org" -> throw IOException("host 1 down")
+                // Beauty WOULD have served a hit if the chain walked — it must not.
+                else -> respond(
+                    content = ByteReadChannel(loadFixture("off/coke_330ml.json")),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+        }) {
+            install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
+        }
+        val sut = OffApiClient(client)
+
+        val result = sut.lookup("5449000000996")
+
+        assertNull("IOException on host 1 must yield null (fail-fast, not recovery)", result)
+        assertEquals("chain must stop at 1 request on IOException, not walk", 1, captured.size)
+        assertEquals("world.openfoodfacts.org", captured[0].url.host)
+    }
+
+    @Test
     fun lookup_off5xx_returnsNull_doesNotWalk() = runTest {
         // Regression guard for the "do not walk past a real fault" rule. A 500
         // from OFF means *that server* is sick; it does not imply the barcode
