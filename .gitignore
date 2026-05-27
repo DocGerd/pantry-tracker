@@ -33,6 +33,7 @@ settings-gradle.lockfile
 
 # Kotlin / IntelliJ
 out/
+.kotlin/
 
 # OS junk
 .DS_Store

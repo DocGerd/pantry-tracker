@@ -57,33 +57,34 @@ scanning against real products).
 
 (Reset permission first if you've already granted: Settings → Apps → Pantry Tracker → Permissions → Camera → Don't allow.)
 
-- [ ] Tap "Scan to Add" → **rationale dialog** appears titled "Camera access"
-- [ ] Body text: "We scan barcodes to find products. Nothing leaves your device."
-- [ ] Buttons: **Continue** (filled) + **Cancel** (text)
-- [ ] Tap Cancel → returns to Home without opening the system prompt
-- [ ] Tap "Scan to Add" again → rationale dialog reappears
-- [ ] Tap Continue → **system permission prompt** appears
+- [ ] Tap "Scan to Add" → **rationale dialog** appears titled "Camera access" — [automated by SR-77: `CameraPermissionGateTest.unknown_showsRationaleDialog_andContinueInvokesCallback`]
+- [ ] Body text: "We scan barcodes to find products. Nothing leaves your device." — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Buttons: **Continue** (filled) + **Cancel** (text) — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap Cancel → returns to Home without opening the system prompt — [automated by SR-77: `CameraPermissionGateTest.unknown_cancelInvokesOnNavigateBack`]
+- [ ] Tap "Scan to Add" again → rationale dialog reappears — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap Continue → **system permission prompt** appears — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario A; real OS dialog stays human-only]
 
 ## 5. Permission flow — SoftDenied
 
-- [ ] At the system prompt, tap **Deny** (NOT "Don't ask again")
-- [ ] App shows **"Camera access needed"** screen with body "Pantry Tracker uses the camera to scan barcodes. Nothing leaves your device."
-- [ ] **"Try again"** button (filled) + **"Go back"** button (outlined)
-- [ ] Tap "Go back" → returns to Home
-- [ ] Tap "Scan to Add" → returns directly to **"Camera access needed"** (no rationale dialog this round)
-- [ ] Tap **Try again** → system permission prompt reappears
-- [ ] Tap **Allow** → camera preview renders
+- [ ] At the system prompt, tap **Deny** (NOT "Don't ask again") — [human-only: real OS system prompt]
+- [ ] App shows **"Camera access needed"** screen with body "Pantry Tracker uses the camera to scan barcodes. Nothing leaves your device." — [automated by SR-77: `CameraPermissionGateTest.softDenied_showsRetryAffordance_hidesContent_andTryAgainInvokesContinue`]
+- [ ] **"Try again"** button (filled) + **"Go back"** button (outlined) — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap "Go back" → returns to Home — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap "Scan to Add" → returns directly to **"Camera access needed"** (no rationale dialog this round) — [automated by SR-77: `CameraPermissionGateTest`]
+- [ ] Tap **Try again** → system permission prompt reappears — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario B; real OS dialog stays human-only]
+- [ ] Tap **Allow** → camera preview renders — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario B verifies permission granted; camera-preview rendering stays human-only (real camera hardware)]
 
 ## 6. Permission flow — HardDenied recovery
 
-- [ ] Settings → Apps → Pantry Tracker → Permissions → Camera → **Don't allow** (or revoke + re-deny with "don't ask again" if Android 11+)
+- [ ] Settings → Apps → Pantry Tracker → Permissions → Camera → **Don't allow** (or revoke + re-deny with "don't ask again" if Android 11+) — [human-only: real device Settings navigation]
 - [ ] Return to app → tap "Scan to Add"
-- [ ] App shows **"Camera access blocked"** screen with body "Open Settings and allow camera access for Pantry Tracker, then come back."
-- [ ] **"Open settings"** (filled) + **"Go back"** (outlined)
-- [ ] Tap "Open settings" → **system Settings app opens directly to the Pantry Tracker permission page**
-  - [ ] **OEM-fail fallback path** (Xiaomi/MIUI, some Huawei builds may land on a generic settings screen, or the Settings activity may be disabled entirely): if Open settings does NOT reach the permission page, the app must surface a "Couldn't open settings on this device" Toast — not silently fail
-- [ ] Toggle Camera to Allow → press device Back to return to the app
-- [ ] App **automatically transitions to the camera preview** (no extra tap needed) — this is the M6-caught regression
+- [ ] App shows **"Camera access blocked"** screen with body "Open Settings and allow camera access for Pantry Tracker, then come back." — [automated by SR-77: `CameraPermissionDeepLinkTest.hardDenied_showsBlockedHeadline` + `hardDenied_showsSettingsBody`]
+- [ ] **"Open settings"** (filled) + **"Go back"** (outlined) — [automated by SR-77: `CameraPermissionDeepLinkTest.hardDenied_showsOpenSettingsButton`]
+- [ ] Tap "Open settings" → **system Settings app opens directly to the Pantry Tracker permission page** — [automated by SR-77: `CameraPermissionDeepLinkTest.openSettings_tapFiresDeepLinkIntent` (asserts `ACTION_APPLICATION_DETAILS_SETTINGS` + `package:de.docgerdsoft.pantrytracker`)]
+  - [ ] **OEM-fail fallback path** (Xiaomi/MIUI, some Huawei builds may land on a generic settings screen, or the Settings activity may be disabled entirely): if Open settings does NOT reach the permission page, the app must surface a "Couldn't open settings on this device" Toast — not silently fail — [automated by SR-77: `CameraPermissionDeepLinkTest.openSettings_activityNotFound_showsToast`; OEM-specific Settings UI variations stay **human-only** — see §6 row 5 note below]
+  - **§6 row 5 — OEM-specific Settings navigation (human-only):** Xiaomi MIUI, Huawei HiSilicon, and Samsung One UI each redirect the `ACTION_APPLICATION_DETAILS_SETTINGS` intent to a different Settings sub-screen. Verifying the user lands on the *correct* permission toggle page on these OEM builds requires a real device running the OEM firmware. This row is explicitly **out of scope for instrumented and emulator automation** — only the toast fallback path (above) can be verified automatically.
+- [ ] Toggle Camera to Allow → press device Back to return to the app — [emulator script: `scripts/uat/permission-real-prompt.sh` Scenario C verifies permission granted + app resumed]
+- [ ] App **automatically transitions to the camera preview** (no extra tap needed) — this is the M6-caught regression — [automated by SR-77: `CameraPermissionOnResumeTest.onResume_afterPermissionGranted_transitionsToGrantedWithoutExtraTap`; camera-preview rendering stays human-only (real camera hardware)]
 
 ## 7. Scan to Add — OFF hit
 
@@ -234,16 +235,16 @@ sign-off record is not disturbed.
 - **Scenarios — all must pass:**
   1. [ ] **Upgrade-install from v1.1.0** `[automated by SR-81 — run scripts/uat/verify-migration-1-2.sh first; if exit 0 the migration path is verified on an emulator. Real-device sign-off below still required for the v1.2 R8 release.]` — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top (no uninstall). Verifies `MIGRATION_1_2` runs on a real device and v1.1.0 pantry data is preserved into v1.2.
   2. [ ] Scan known food product → OFF resolves → preview sheet appears
-  3. [ ] Scan known beauty product (fallback chain → beauty-facts host)
-  4. [ ] Scan known pet food (fallback chain → pet-food host)
-  5. [ ] Scan known generic product (fallback chain → products-facts host)
+  3. [ ] Scan known beauty product (fallback chain → beauty-facts host) `[automated by SR-82 — OffApiClientTest.lookup_offMiss_beautyHit_returnsBeautyProduct_doesNotWalkFurther]`
+  4. [ ] Scan known pet food (fallback chain → pet-food host) `[automated by SR-82 — OffApiClientTest.lookup_offMissBeautyMiss_petFoodHit_doesNotWalkToProducts]`
+  5. [ ] Scan known generic product (fallback chain → products-facts host) `[automated by SR-82 — OffApiClientTest.lookup_offMissBeautyMissPetFoodMiss_productsHit_returnsProductsProduct]`
   6. [ ] Scan unknown/garbage barcode → manual entry sheet appears
   7. [ ] Add scanned product → appears in inventory list
   8. [ ] Change quantity (+/-) → persists across cold-start
   9. [ ] Rename product → persists
   10. [ ] Delete product → undo snackbar restores
   11. [ ] Image loading from OFF (Coil) — image displays on detail screen `[render automated by SR-74's CoilImageScreenshotTest; real-device check still verifies actual network fetch through R8'd Coil]`
-  12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
+  12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit) `[automated by SR-82 — OffCacheOfflineReplayTest.offlineReplay_phaseAScanCaches_phaseBReScanServesFromCache_noNetwork (UI-level E2E: drives the real ScanScreen + preview sheet via FakeCameraSource, real ProductRepositoryImpl + Room cache, switchable OFF seam for airplane-mode)]`
 - **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
 - **Procedure for adding `-keep` rules mid-UAT:** if any item fails with a `ClassNotFoundException` / `NoSuchMethodException` / kotlinx.serialization "Serializer for class X is not found" in `adb logcat`: identify the stripped target, add the keep rule to `app/proguard-rules.pro`, document it in the line above, rebuild release (`./gradlew :app:assembleRelease`), reinstall, restart this checklist from item #1.
 - **Sign-off:** [signature/handle]
