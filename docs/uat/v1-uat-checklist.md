@@ -235,16 +235,16 @@ sign-off record is not disturbed.
 - **Scenarios — all must pass:**
   1. [ ] **Upgrade-install from v1.1.0** `[automated by SR-81 — run scripts/uat/verify-migration-1-2.sh first; if exit 0 the migration path is verified on an emulator. Real-device sign-off below still required for the v1.2 R8 release.]` — install v1.1.0 APK, populate ≥2 rows, then install v1.2 APK on top (no uninstall). Verifies `MIGRATION_1_2` runs on a real device and v1.1.0 pantry data is preserved into v1.2.
   2. [ ] Scan known food product → OFF resolves → preview sheet appears
-  3. [ ] Scan known beauty product (fallback chain → beauty-facts host)
-  4. [ ] Scan known pet food (fallback chain → pet-food host)
-  5. [ ] Scan known generic product (fallback chain → products-facts host)
+  3. [ ] Scan known beauty product (fallback chain → beauty-facts host) `[automated by SR-82 — OffApiClientTest.lookup_offMiss_beautyHit_returnsBeautyProduct_doesNotWalkFurther]`
+  4. [ ] Scan known pet food (fallback chain → pet-food host) `[automated by SR-82 — OffApiClientTest.lookup_offMissBeautyMiss_petFoodHit_doesNotWalkToProducts]`
+  5. [ ] Scan known generic product (fallback chain → products-facts host) `[automated by SR-82 — OffApiClientTest.lookup_offMissBeautyMissPetFoodMiss_productsHit_returnsProductsProduct]`
   6. [ ] Scan unknown/garbage barcode → manual entry sheet appears
   7. [ ] Add scanned product → appears in inventory list
   8. [ ] Change quantity (+/-) → persists across cold-start
   9. [ ] Rename product → persists
   10. [ ] Delete product → undo snackbar restores
   11. [ ] Image loading from OFF (Coil) — image displays on detail screen `[render automated by SR-74's CoilImageScreenshotTest; real-device check still verifies actual network fetch through R8'd Coil]`
-  12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit)
+  12. [ ] **OFF lookup cache** (run LAST — leaves device in airplane mode) — scan a non-pantry barcode, dismiss preview, enable airplane mode, re-scan same barcode → preview appears with no network (cache hit) `[automated by SR-82 — OffCacheOfflineReplayTest.offlineReplay_phaseAScanCaches_phaseBReScanServesFromCache_noNetwork (UI-level E2E: drives the real ScanScreen + preview sheet via FakeCameraSource, real ProductRepositoryImpl + Room cache, switchable OFF seam for airplane-mode)]`
 - **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
 - **Procedure for adding `-keep` rules mid-UAT:** if any item fails with a `ClassNotFoundException` / `NoSuchMethodException` / kotlinx.serialization "Serializer for class X is not found" in `adb logcat`: identify the stripped target, add the keep rule to `app/proguard-rules.pro`, document it in the line above, rebuild release (`./gradlew :app:assembleRelease`), reinstall, restart this checklist from item #1.
 - **Sign-off:** [signature/handle]
