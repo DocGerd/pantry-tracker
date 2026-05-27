@@ -1,0 +1,4 @@
+# Catch-all: every PR auto-requests @DocGerd as reviewer.
+# Per the trunk-based, only-humans-merge-to-main rule in CLAUDE.md and
+# GOVERNANCE.md, @DocGerd is the only approver and merger.
+* @DocGerd

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability (report privately)
+    url: https://github.com/DocGerd/pantry-tracker/security/advisories/new
+    about: Do NOT open a public issue for security-sensitive findings. Use a private security advisory — see SECURITY.md.

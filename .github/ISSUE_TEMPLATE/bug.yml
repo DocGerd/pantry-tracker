@@ -1,0 +1,67 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+title: "[bug] "
+labels: ["bug"]
+
+body:
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: What you did
+      description: Steps to reproduce the issue
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+      description: What did happen instead? Include any on-screen error text.
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App version
+      description: From the release you installed (e.g. v1.1.0), or a commit SHA if you built it yourself.
+      placeholder: "v1.1.0 or abc1234"
+    validations:
+      required: true
+
+  - type: input
+    id: android_version
+    attributes:
+      label: Android version
+      description: Settings → About phone → Android version (the app supports Android 8.0 / API 26 and newer).
+      placeholder: "Android 14 (API 34)"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: "Pixel 7 / Samsung Galaxy S22 / emulator"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Logs / barcode / screenshots
+      description: Optional — relevant logcat output, the barcode you scanned, or a screenshot. Redact anything personal.
+    validations:
+      required: false
