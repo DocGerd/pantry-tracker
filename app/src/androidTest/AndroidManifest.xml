@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Override the application class for the androidTest APK.
+
+  AGP merges this manifest with the main one for the instrumentation build.
+  Setting android:name here replaces the production PantryTrackerApp with
+  TestPantryTrackerApp so Activity-level tests (ConfigChangeRotationTest) can
+  inject a FakeProductRepository before MainActivity reads the container.
+
+  The testInstrumentationRunner in build.gradle.kts remains the default
+  AndroidJUnitRunner — no custom runner needed; only the Application class
+  changes.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:name="de.docgerdsoft.pantrytracker.testfixtures.TestPantryTrackerApp" />
+</manifest>

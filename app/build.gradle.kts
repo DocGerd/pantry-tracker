@@ -264,6 +264,35 @@ detekt {
     config.setFrom(files("$rootDir/detekt-config.yml"))
 }
 
+// SR-78: wire the custom ErrorToneRule (compiled in the test source set)
+// as a detektPlugins artifact so `:app:detekt` picks it up without a
+// separate module. The task dependency ensures the rule class exists before
+// detekt tries to load it.
+//
+// In AGP the Kotlin compiler emits class files under
+// intermediates/built_in_kotlinc/<variant>/<taskName>/classes/ rather than
+// the bare classes/kotlin/<variant>/ path used in non-Android JVM projects.
+// The service-loader metadata (META-INF/services/...) lives under
+// intermediates/java_res/<variant>/out/ after processDebugUnitTestJavaRes
+// merges it. We bundle both directories so the ServiceLoader in detekt finds
+// the PantryRuleSetProvider class AND its fully-qualified name in the service
+// file.
+dependencies {
+    detektPlugins(
+        files(
+            layout.buildDirectory.dir(
+                "intermediates/built_in_kotlinc/debugUnitTest/compileDebugUnitTestKotlin/classes",
+            ),
+            layout.buildDirectory.dir(
+                "intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out",
+            ),
+        ),
+    )
+}
+tasks.named("detekt") {
+    dependsOn("compileDebugUnitTestKotlin", "processDebugUnitTestJavaRes")
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
@@ -314,6 +343,7 @@ dependencies {
     implementation(libs.kotlinx.datetime)
 
     testImplementation(libs.junit)
+    testImplementation(libs.detekt.api)
     testImplementation(libs.robolectric)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)

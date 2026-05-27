@@ -300,13 +300,13 @@ private fun SnackbarEventCollector(
                 }
                 is SnackbarEvent.DeleteFailed -> {
                     snackbarHostState.showSnackbar(
-                        message = "Could not delete ${event.name}",
+                        message = "Couldn't delete: ${event.name}",
                         duration = SnackbarDuration.Short,
                     )
                 }
                 is SnackbarEvent.RestoreFailed -> {
                     snackbarHostState.showSnackbar(
-                        message = "Could not undo delete of ${event.name}",
+                        message = "Couldn't restore: ${event.name}",
                         duration = SnackbarDuration.Short,
                     )
                 }

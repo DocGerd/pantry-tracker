@@ -227,6 +227,18 @@ restructured to make the lesson load-bearing on its own.*
   [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas" —
   consult that table before debugging a release-build or release-publish
   failure.
+- **User-facing error messages must start with `"Couldn't <verb>: ..."`.**
+  Every snackbar, ErrorSheet, or Toast that surfaces a repository or system
+  failure must use this prefix — NOT "Could not ...", "Error: ...", or a raw
+  `java.lang.Exception` string. The convention is enforced statically by
+  `ErrorToneRule` (SR-78, `app/src/test/.../detekt/ErrorToneRule.kt`), which
+  runs as part of `:app:detekt`. When adding a new error path, check the
+  rendered string matches `"Couldn't <verb>: <reason>"`. The `<reason>` is
+  typically `e.message ?: "unknown error"` — never a stack trace. Violation
+  example that was found and fixed: `HomeScreen.kt` previously used
+  `"Could not delete ..."` (bitten SR-78). The eviction criterion is the
+  detekt rule entry in `detekt-config.yml` under `pantry.ErrorTone` which
+  now encodes this as a static gate.
 - **UAT scripts and bash automation: fresh-host end-to-end execution
   is non-negotiable before declaring ready.** `bash -n` + `:app:detekt`
   + the implementer subagent's "BUILD SUCCESSFUL" self-report are

@@ -70,6 +70,13 @@ naming:
     excludes:
       - '**/*NavGraph.kt'
 
+pantry:
+  # SR-78: custom rule set compiled from app/src/test/.../detekt/.
+  # Enforces the "Couldn't <verb>: ..." error-copy convention for every
+  # string literal passed as `message` to showSnackbar / Toast.makeText.
+  ErrorTone:
+    active: true
+
 complexity:
   LongMethod:
     # 60-line default is tight for Compose screen composables that include
