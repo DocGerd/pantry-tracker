@@ -1,17 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Override the application class for the androidTest APK.
+  androidTest manifest.
 
-  AGP merges this manifest with the main one for the instrumentation build.
-  Setting android:name here replaces the production PantryTrackerApp with
-  TestPantryTrackerApp so Activity-level tests (ConfigChangeRotationTest) can
-  inject a FakeProductRepository before MainActivity reads the container.
+  The test Application class (TestPantryTrackerApp) is NOT swapped here. The
+  reliable on-device mechanism is the custom instrumentation runner
+  (PantryTestRunner, set as testInstrumentationRunner in build.gradle.kts),
+  which overrides newApplication() to force TestPantryTrackerApp. A manifest
+  `android:name` override is unreliable: at runtime the Application is created
+  from the *target* (app) manifest, which still names PantryTrackerApp, so the
+  hard cast in ConfigChangeRotationTest would fail with a ClassCastException
+  (this is the SR-78 on-device failure being fixed here).
 
-  The testInstrumentationRunner in build.gradle.kts remains the default
-  AndroidJUnitRunner — no custom runner needed; only the Application class
-  changes.
+  This manifest is intentionally minimal — no <application> override.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
-        android:name="de.docgerdsoft.pantrytracker.testfixtures.TestPantryTrackerApp" />
-</manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

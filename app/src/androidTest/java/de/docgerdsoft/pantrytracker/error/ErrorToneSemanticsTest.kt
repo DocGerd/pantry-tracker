@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.platform.app.InstrumentationRegistry
 import de.docgerdsoft.pantrytracker.PantryTrackerNavGraph
+import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.di.AppContainer
 import de.docgerdsoft.pantrytracker.testfixtures.FakeCameraSource
 import de.docgerdsoft.pantrytracker.testfixtures.FakeProductRepository
@@ -20,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import kotlin.time.Clock
 
 /**
  * Strategy B — Error-tone instrumented semantics test.
@@ -44,7 +46,10 @@ import org.junit.Test
  *
  *  3. **Rename failure on Detail screen** — a local [ErrorFakeRepository] subclass
  *     overrides `rename` to throw; [DetailViewModel] wraps this in
- *     `"Couldn't rename: …"` and the Detail screen shows it as a Snackbar.
+ *     `"Couldn't rename: …"` and the Detail screen shows it as a Snackbar. The
+ *     product is SEEDED directly into the repo (not added through the
+ *     manual-entry sheet) so the test reaches the Detail screen with a single
+ *     Home tap — avoiding the fragile add-sheet UI sequence on-device.
  *
  * These are prefix checks — asserting that the visible text STARTS WITH
  * "Couldn't " is the enforcement mechanism. A raw "java.lang.RuntimeException"
@@ -165,7 +170,28 @@ class ErrorToneSemanticsTest {
 
     @Test
     fun detailRenameFailure_snackbarStartsWithCouldnt() {
-        val repo = ErrorFakeRepository()
+        // SEED the product directly into the injected repo rather than driving
+        // the manual-entry sheet. The sheet route was fragile on-device: the
+        // HomeScreen "Add manually" sheet (AddProductSheet) has a confirm button
+        // labelled "Add" — NOT "Add to inventory" (that label lives in the
+        // scan-flow ScanResultSheet). The previous locator therefore matched
+        // zero nodes on a real emulator and failed at performClick. Seeding
+        // bypasses the entire add UI: the product appears directly on Home,
+        // navigation to Detail is a single tap, and the rename-failure → error
+        // snackbar path (the actual thing under test) is exercised unchanged.
+        val repo = ErrorFakeRepository().apply {
+            val now = Clock.System.now()
+            seed(
+                Product(
+                    id = 1L,
+                    barcode = null,
+                    name = "Butter",
+                    quantity = 1,
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
         val container = AppContainer(productRepository = repo)
 
         rule.setContent {
@@ -174,18 +200,11 @@ class ErrorToneSemanticsTest {
             }
         }
 
-        // Add a product via the manual-entry sheet so we have a Detail to open.
-        rule.onNodeWithText("Add manually").performClick()
-        rule.onNodeWithText("Name").performTextInput("Butter")
-        // The confirm button reads "Add to inventory" — onAllNodesWithText("Add")
-        // matched zero nodes (no bare "Add" label exists), so the old [0] indexing
-        // threw IndexOutOfBoundsException. Use the exact label, like Path 2.
-        rule.onNodeWithText("Add to inventory").performClick()
+        // The seeded product is already on Home — wait for its row, then tap it
+        // to navigate to the Detail screen.
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
             rule.onAllNodesWithText("Butter").fetchSemanticsNodes().isNotEmpty()
         }
-
-        // Navigate to Detail screen.
         rule.onNodeWithText("Butter").performClick()
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
             rule.onAllNodesWithText("Product details").fetchSemanticsNodes().isNotEmpty()
@@ -193,6 +212,8 @@ class ErrorToneSemanticsTest {
         rule.onNodeWithText("Product details").assertIsDisplayed()
 
         // Enable rename failure, then commit a rename via IME Done action.
+        // commitName() only calls rename when the new name differs from the
+        // current one, so the replacement must change "Butter" → "Margarine".
         repo.renameShouldThrow = RuntimeException("permission denied")
         rule.onNodeWithText("Butter").performTextReplacement("Margarine")
         rule.onNodeWithText("Margarine").performImeAction()

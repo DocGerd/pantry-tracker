@@ -19,7 +19,13 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "1.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Custom runner (extends AndroidJUnitRunner) that forces the test
+        // Application class via newApplication() — the reliable on-device
+        // mechanism to swap PantryTrackerApp → TestPantryTrackerApp. The
+        // androidTest-manifest `android:name` override is NOT reliable for this
+        // because the runtime Application comes from the target (app) manifest.
+        // See PantryTestRunner.kt for the full rationale.
+        testInstrumentationRunner = "de.docgerdsoft.pantrytracker.testfixtures.PantryTestRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
