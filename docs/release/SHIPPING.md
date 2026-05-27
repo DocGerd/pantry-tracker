@@ -13,6 +13,21 @@ remains useful day-to-day.
 
 ---
 
+## Branching model (GitFlow)
+
+The repo follows **GitFlow**: `develop` is the integration branch, `main` is
+release-tagged/production. **Future releases are cut on a `release/<version>`
+branch off `develop`, opened as a PR into both `main` and `develop`, and only
+then is `main` tagged** (the tag — and the `chore(release): lock dependencies`
+commit — lands on `main`). A human merges both PRs; no automated agent merges
+into `develop` or `main`.
+
+The detailed procedure below was written for v1.0/v1.1, which were cut
+trunk-style directly off `main`; that history is unchanged. Apply the
+`release/<version>` flow above for releases from here forward.
+
+---
+
 ## A. `adb install` — dev-loop install
 
 The fastest way to get *your latest commit* onto your device. Works for any

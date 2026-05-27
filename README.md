@@ -88,10 +88,10 @@ list of what ships in the APK is in
   all standard sections; read §1 and §3 first.
 - [`CHANGELOG.md`](CHANGELOG.md) — per-release notes (Keep a Changelog format).
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability (privately).
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute: the trunk-based
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute: the GitFlow
   workflow, branch naming, the review process, and the source-header convention.
 - [`GOVERNANCE.md`](GOVERNANCE.md) — the decision-making model (single-maintainer,
-  trunk-based, only-humans-merge-to-`main`).
+  GitFlow, only-humans-merge-to-`develop`-and-`main`).
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant.
 - [`CLAUDE.md`](CLAUDE.md) — the operational guide (workflow, tooling,
   project-local config), not the architectural canon.

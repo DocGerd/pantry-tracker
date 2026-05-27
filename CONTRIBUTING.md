@@ -57,41 +57,41 @@ issue should stay open. No PR ships without an issue link.
 
 ---
 
-## Workflow (trunk-based on `main`)
+## Workflow (GitFlow)
 
-Pantry Tracker is **trunk-based**: `main` is the single long-lived branch, and
-every change lands through a short-lived feature branch and a reviewed pull
-request. **There is no `develop` branch and no release branch.** Never push
-directly to `main` — see [`GOVERNANCE.md`](GOVERNANCE.md) for why only the
+Pantry Tracker follows **GitFlow**: `develop` is the integration branch and the
+repository default; `main` is release-tagged and production. **Never push
+directly to either** — every change lands through a short-lived branch and a
+reviewed pull request. See [`GOVERNANCE.md`](GOVERNANCE.md) for why only the
 human maintainer merges.
 
-The standard loop:
+The standard loop for a feature, fix, or chore:
 
 ```bash
-git switch main && git pull
+git switch develop && git pull
 git switch -c <type>/<tracker-id>-<slug>
 
 # ... write code, add tests, commit ...
 
 git push -u origin <type>/<tracker-id>-<slug>
-gh pr create --base main --title "type(scope): short summary" --body "Closes #N ..."
+gh pr create --base develop --title "type(scope): short summary" --body "Closes #N ..."
 ```
 
 ### Branch naming
 
-Branches follow `<type>/<tracker-id>-<slug>`, where the tracker id is the issue
-number (e.g. `sr-42`). One branch per issue.
+Day-to-day branches keep the project's `<type>/<tracker-id>-<slug>` convention,
+where the tracker id is the issue number (e.g. `sr-42`). One branch per issue.
+They are cut off `develop` and PR'd back into `develop`.
 
-| Type | Use for |
+| Prefix | Use for |
 |---|---|
-| `feat` | New features |
-| `fix` | Bug fixes |
-| `chore` | Build, tooling, dependency, and housekeeping changes |
-| `docs` | Documentation-only changes |
-| `security` | Security hardening |
+| `<type>/<tracker-id>-<slug>` (`feat`, `fix`, `chore`, `docs`, `security`) | Features, fixes, chores, docs, and security hardening — branched off `develop`, PR'd into `develop` |
+| `release/<version>` | Release cuts — branched off `develop`, PR'd into **both** `main` and `develop` |
+| `hotfix/<slug>` | Urgent production fixes — branched off `main`, back-merged into `develop` |
 
-Examples: `docs/sr-94-oss-preflight`, `fix/sr-46-undo-restore`,
-`security/v1-final-hardening`.
+The `<type>` segment (`feat`, `fix`, `chore`, `docs`, `security`) mirrors the
+commit type. Examples: `docs/sr-94-oss-preflight`, `fix/sr-46-undo-restore`,
+`security/v1-final-hardening`, `release/1.2.0`.
 
 ---
 
@@ -124,12 +124,13 @@ Two gates protect every change:
   [`.claude/README.md`](.claude/README.md)). When you work through the Claude
   Code CLI, a `PreToolUse` hook blocks edits to the machine-generated Gradle
   lockfile, and another pattern-matches the command line to block dangerous git
-  operations (force-push, `--no-verify`, direct pushes to `main`). These mirror
-  the project's hard rules so a violation is caught before it reaches CI.
+  operations (force-push, `--no-verify`, direct pushes to `develop`/`main`).
+  These mirror the project's hard rules so a violation is caught before it
+  reaches CI.
 
 **Never bypass a gate.** Do not pass `--no-verify`, never force-push, and never
-land code on `main` directly. If a gate fails, that is real signal — fix the
-cause.
+land code on `develop` or `main` directly. If a gate fails, that is real signal
+— fix the cause.
 
 ---
 
@@ -151,13 +152,13 @@ resolved.
 
 ## Approval and merge
 
-**Merging is maintainer-only, and only a human merges to `main`.** Once your PR
-is green and all review threads are resolved, post a comment saying it's ready
-for final review and wait for the maintainer to merge. This is a hard
+**Merging is maintainer-only, and only a human merges to `develop` or `main`.**
+Once your PR is green and all review threads are resolved, post a comment saying
+it's ready for final review and wait for the maintainer to merge. This is a hard
 governance rule (see [`GOVERNANCE.md`](GOVERNANCE.md) and
 [`CLAUDE.md`](CLAUDE.md)): no automated agent runs `gh pr merge` or pushes to
-`main`. The audit trail is the maintainer's explicit click on "Merge pull
-request".
+`develop` or `main`. The audit trail is the maintainer's explicit click on
+"Merge pull request".
 
 ---
 
