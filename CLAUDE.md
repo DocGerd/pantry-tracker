@@ -7,16 +7,18 @@ shipped 2026-05-19, both as signed sideload APKs on GitHub Releases.
 This file is loaded into every Claude Code session in this repo. Keep it
 high-signal — pointers, not duplication of the source-of-truth docs.
 
-## Hard governance rule: only humans merge to main
+## Hard governance rule: only humans merge to develop or main
 
-**Every change reaching `main` MUST go through a PR that the human merges.**
-Claude may open PRs, push to feature branches, dispatch review subagents,
-post + resolve inline threads, create tags, build APKs, and create GitHub
-Releases — but MUST NOT invoke `gh pr merge` or `git push origin main` (or
-any equivalent that lands code on main). No exceptions for one-line reverts,
-"UAT-verified" hotfixes, wrap-up phases, or ambiguous "do the rest" /
-"continue" instructions. When in doubt, ASK before merging. The audit-trail
-gate is the human's explicit click on "Merge pull request".
+The repo follows **GitFlow**: `develop` is the integration branch + default,
+`main` is release-tagged/production. **Every change reaching `develop` OR
+`main` MUST go through a PR that the human merges.** Claude may open PRs, push
+to feature branches, dispatch review subagents, post + resolve inline threads,
+create tags, build APKs, and create GitHub Releases — but MUST NOT invoke `gh
+pr merge` or `git push origin develop`/`git push origin main` (or any
+equivalent that lands code on either protected branch). No exceptions for
+one-line reverts, "UAT-verified" hotfixes, wrap-up phases, or ambiguous "do
+the rest" / "continue" instructions. When in doubt, ASK before merging. The
+audit-trail gate is the human's explicit click on "Merge pull request".
 
 ## Commands
 
@@ -36,9 +38,13 @@ gate is the human's explicit click on "Merge pull request".
 **Every PR opened in this repo goes through the multi-agent review cycle.**
 
 - **Issue tracker:** <https://github.com/DocGerd/pantry-tracker/issues>
-- **Branch naming:** `<type>/<tracker-id>-<slug>` — e.g.
+- **Branch naming:** day-to-day branches are `<type>/<tracker-id>-<slug>`,
+  cut off `develop` and PR'd into `develop` (`--base develop`) — e.g.
   `chore/sr-26-claude-md`, `security/v1-final-hardening`. Types in use:
-  `chore`, `docs`, `feat`, `fix`, `security`.
+  `chore`, `docs`, `feat`, `fix`, `security`. GitFlow also uses
+  `release/<version>` (off `develop`, PR'd into **both** `main` and `develop`,
+  then tag `main`) and `hotfix/<slug>` (off `main`, back-merged into
+  `develop`). See [`CONTRIBUTING.md`](CONTRIBUTING.md#workflow-gitflow).
 
 Workflow:
 
