@@ -2,9 +2,9 @@ name: Security
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     # Weekly schedule catches CVEs disclosed since the last PR landed.
     - cron: '0 6 * * 1'
