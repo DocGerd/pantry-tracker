@@ -177,7 +177,10 @@ class ErrorToneSemanticsTest {
         // Add a product via the manual-entry sheet so we have a Detail to open.
         rule.onNodeWithText("Add manually").performClick()
         rule.onNodeWithText("Name").performTextInput("Butter")
-        rule.onAllNodesWithText("Add")[0].performClick()
+        // The confirm button reads "Add to inventory" — onAllNodesWithText("Add")
+        // matched zero nodes (no bare "Add" label exists), so the old [0] indexing
+        // threw IndexOutOfBoundsException. Use the exact label, like Path 2.
+        rule.onNodeWithText("Add to inventory").performClick()
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
             rule.onAllNodesWithText("Butter").fetchSemanticsNodes().isNotEmpty()
         }

@@ -132,9 +132,16 @@ class ConfigChangeRotationTest {
         @BeforeClass
         @JvmStatic
         fun setup() {
+            // HARD cast — must fail loudly. A soft `as? … ?: return` would let
+            // the test silently run against the REAL AppContainer (real Room DB,
+            // real OFF client) if the androidTest manifest override of the
+            // application class ever broke. That would mean this test exercises
+            // the wrong dependencies and "passes" while testing nothing it
+            // claims to. A ClassCastException here is the intended failure mode:
+            // it points straight at a broken android:name override in
+            // app/src/androidTest/AndroidManifest.xml.
             val app = InstrumentationRegistry.getInstrumentation()
-                .targetContext.applicationContext as? TestPantryTrackerApp
-                ?: return // not running with TestPantryTrackerApp; skip injection
+                .targetContext.applicationContext as TestPantryTrackerApp
 
             val now = Clock.System.now()
             val repo = FakeProductRepository().also { r ->
