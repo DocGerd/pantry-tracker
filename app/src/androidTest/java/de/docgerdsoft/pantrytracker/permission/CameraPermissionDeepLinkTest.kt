@@ -1,6 +1,5 @@
 package de.docgerdsoft.pantrytracker.permission
 
-import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -20,7 +19,6 @@ import de.docgerdsoft.pantrytracker.ui.scan.openAppSettings
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -49,6 +47,14 @@ import org.junit.Test
  * `ComponentActivity`, so `findActivity()` returns non-null and `initialPhase`
  * lands on `Unknown`/`SoftDenied` — never `HardDenied`.)
  *
+ * Because the phase is always pinned, these tests intentionally do NOT touch
+ * runtime CAMERA permission. Revoking a *held* runtime permission tears down
+ * the shared instrumentation process (an `ActivityManager` "permissions
+ * revoked" kill), which on `develop` crashed the whole run once
+ * [de.docgerdsoft.pantrytracker.error.ErrorToneSemanticsTest] had granted
+ * CAMERA earlier in the same process (see #117). No grant/revoke is needed
+ * here — do not re-introduce one.
+ *
  *   - Rows 1-4 pin the phase and assert the HardDenied screen renders correctly.
  *   - Row 4 wires `onOpenSettings = { openAppSettings(context, fakeLauncher) }`,
  *     taps "Open settings", and asserts the intent the [FakeIntentLauncher]
@@ -64,18 +70,6 @@ class CameraPermissionDeepLinkTest {
 
     @get:Rule
     val composeRule = createComposeRule()
-
-    @Before
-    fun revokeCamera() {
-        // Ensure camera permission is NOT granted so CameraPermissionGate starts
-        // with the rationale dialog (Unknown phase). The individual tests that
-        // need HardDenied pin it via CameraPermissionGateContent directly.
-        InstrumentationRegistry.getInstrumentation().uiAutomation
-            .revokeRuntimePermission(
-                InstrumentationRegistry.getInstrumentation().targetContext.packageName,
-                Manifest.permission.CAMERA,
-            )
-    }
 
     // --- §6 rows 1-3: HardDenied screen renders correctly ---
 
