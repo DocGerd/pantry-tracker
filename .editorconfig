@@ -1,0 +1,29 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Kotlin and Kotlin/Gradle DSL — 4-space indent, matching detekt/ktlint defaults.
+[*.{kt,kts}]
+indent_size = 4
+max_line_length = 120
+
+# YAML, Markdown, TOML (version catalog, workflows, configs) — 2-space indent.
+[*.{yaml,yml,md,toml}]
+indent_size = 2
+
+# Markdown: keep trailing whitespace (two trailing spaces is a hard line break).
+[*.md]
+trim_trailing_whitespace = false
+
+# Gradle wrapper properties and other .properties files.
+[*.properties]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

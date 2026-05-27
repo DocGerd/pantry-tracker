@@ -1,0 +1,20 @@
+name: Question
+description: Ask a question about Pantry Tracker
+title: "[question] "
+labels: ["question"]
+
+body:
+  - type: textarea
+    id: trying_to_do
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried_so_far
+    attributes:
+      label: What have you tried?
+      description: Including which docs you've already checked (README, CONTRIBUTING, arc42).
+    validations:
+      required: true

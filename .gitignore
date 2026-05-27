@@ -37,3 +37,8 @@ out/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Per-session handover scratch file — written at the end of a work session
+# (see the `wrap` skill). Untracked by design; ignored here to harden against
+# an accidental `git add`.
+HANDOVER.md
