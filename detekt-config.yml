@@ -71,9 +71,10 @@ naming:
       - '**/*NavGraph.kt'
 
 pantry:
-  # SR-78: custom rule set compiled from app/src/test/.../detekt/.
-  # Enforces the "Couldn't <verb>: ..." error-copy convention for every
-  # string literal passed as `message` to showSnackbar / Toast.makeText.
+  # SR-78: custom rule set from the standalone :detekt-rules module, wired into
+  # :app:detekt via detektPlugins(project(":detekt-rules")). Enforces the
+  # "Couldn't <verb>: ..." error-copy convention on string-literal messages
+  # passed to showSnackbar / Toast.makeText / ScanUiState.Phase.Error(...).
   ErrorTone:
     active: true
 

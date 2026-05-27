@@ -9,11 +9,13 @@ import io.gitlab.arturbosch.detekt.api.RuleSetProvider
  *
  * Detekt discovers this provider via the service-loader mechanism: the file
  * `resources/META-INF/services/io.gitlab.arturbosch.detekt.api.RuleSetProvider`
- * (placed under `src/test/resources/`) lists this fully-qualified class name.
+ * lists this fully-qualified class name. The provider + rules ship in the
+ * standalone `:detekt-rules` jar, wired into `:app:detekt` via
+ * `detektPlugins(project(":detekt-rules"))`.
  *
  * Rules in this set:
  * - [ErrorToneRule] — enforces "Couldn't <verb>: ..." prefix on all
- *   user-facing error messages passed to Snackbar / Toast call sites.
+ *   user-facing error messages passed to Snackbar / Toast / Phase.Error sinks.
  */
 class PantryRuleSetProvider : RuleSetProvider {
 
@@ -21,6 +23,6 @@ class PantryRuleSetProvider : RuleSetProvider {
 
     override fun instance(config: Config): RuleSet = RuleSet(
         id = ruleSetId,
-        rules = listOf(ErrorToneRule(config.subConfig("ErrorTone"))),
+        rules = listOf(ErrorToneRule(config)),
     )
 }

@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "PantryTracker"
 include(":app")
+include(":detekt-rules")
