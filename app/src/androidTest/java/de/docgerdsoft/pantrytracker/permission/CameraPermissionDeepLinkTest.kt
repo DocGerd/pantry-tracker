@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.permission
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -10,16 +11,12 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.RootMatchers.isPlatformPopup
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
 import de.docgerdsoft.pantrytracker.testfixtures.FakeIntentLauncher
-import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionGate
-import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionPhase
 import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionGateContent
+import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionPhase
+import de.docgerdsoft.pantrytracker.ui.scan.SETTINGS_UNAVAILABLE_MESSAGE
+import de.docgerdsoft.pantrytracker.ui.scan.openAppSettings
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -44,12 +41,24 @@ import org.junit.Test
  * Xiaomi/Huawei/Samsung variations cannot be covered by instrumented tests.
  * §6 row 6 (onResume auto-recovery) is covered by [CameraPermissionOnResumeTest].
  *
- * Two strategies are used here:
- *   - Rows 1-4 use [CameraPermissionGateContent] (pure-presentation composable):
- *     pin the phase to [CameraPermissionPhase.HardDenied] and inject a
- *     [FakeIntentLauncher] via the stateful [CameraPermissionGate] wrapper.
- *   - Row 7 uses [CameraPermissionGate] with [FakeIntentLauncher.throwActivityNotFound]
- *     set to `true` before the tap, then asserts an Espresso Toast matcher.
+ * All tests here drive the [CameraPermissionPhase.HardDenied] phase
+ * **deterministically** by rendering the stateless [CameraPermissionGateContent]
+ * with the phase pinned — never by relying on runtime phase inference. (The
+ * stateful `CameraPermissionGate` cannot be used: `createComposeRule()` ==
+ * `createAndroidComposeRule<ComponentActivity>()`, which hosts a real
+ * `ComponentActivity`, so `findActivity()` returns non-null and `initialPhase`
+ * lands on `Unknown`/`SoftDenied` — never `HardDenied`.)
+ *
+ *   - Rows 1-4 pin the phase and assert the HardDenied screen renders correctly.
+ *   - Row 4 wires `onOpenSettings = { openAppSettings(context, fakeLauncher) }`,
+ *     taps "Open settings", and asserts the intent the [FakeIntentLauncher]
+ *     recorded.
+ *   - Row 7 sets [FakeIntentLauncher.throwActivityNotFound] = `true`, taps
+ *     "Open settings", and asserts **at the seam**: `openAppSettings` swallowed
+ *     the [android.content.ActivityNotFoundException] (the tap did not crash the
+ *     test) and recorded exactly one intent. The Toast copy is pinned via the
+ *     [SETTINGS_UNAVAILABLE_MESSAGE] constant, not an Espresso root matcher —
+ *     Android 12+ Toasts are not inspectable via `isPlatformPopup()`.
  */
 class CameraPermissionDeepLinkTest {
 
@@ -147,26 +156,27 @@ class CameraPermissionDeepLinkTest {
     @Test
     fun openSettings_tapFiresDeepLinkIntent() {
         val fakeLauncher = FakeIntentLauncher()
+        val context: Context =
+            InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.setContent {
             PantryTrackerTheme {
                 Surface {
-                    // CameraPermissionGate (stateful) is used here so the
-                    // FakeIntentLauncher is wired through the real
-                    // openAppSettings() call path.
-                    // We pass intentLauncher to override context::startActivity.
-                    // initialPhase() without camera permission and with no
-                    // Activity in LocalContext falls back to HardDenied, which
-                    // is exactly the phase we want to drive.
-                    CameraPermissionGate(
+                    // Pin HardDenied directly via the stateless content composable
+                    // and wire onOpenSettings to the real openAppSettings() path
+                    // with the FakeIntentLauncher. This exercises the deep-link
+                    // construction deterministically — no reliance on runtime
+                    // initialPhase() inference (which never yields HardDenied under
+                    // createComposeRule()'s real ComponentActivity host).
+                    CameraPermissionGateContent(
+                        phase = CameraPermissionPhase.HardDenied,
+                        onContinue = {},
+                        onOpenSettings = { openAppSettings(context, fakeLauncher) },
                         onNavigateBack = {},
-                        intentLauncher = fakeLauncher,
                     ) { Text("CONTENT") }
                 }
             }
         }
 
-        // With no camera permission and no Activity in the test composition context,
-        // CameraPermissionGate starts in HardDenied (null-activity fallback path).
         composeRule.onNodeWithText("Open settings").assertIsDisplayed()
         composeRule.onNodeWithText("Open settings").performClick()
 
@@ -188,19 +198,26 @@ class CameraPermissionDeepLinkTest {
         )
     }
 
-    // --- §6 row 7: OEM-fail fallback — ActivityNotFoundException → Toast ---
+    // --- §6 row 7: OEM-fail fallback — ActivityNotFoundException → caught ---
 
     @Test
-    fun openSettings_activityNotFound_showsToast() {
+    fun openSettings_activityNotFound_isCaughtAtSeam() {
         val fakeLauncher = FakeIntentLauncher().apply {
             throwActivityNotFound = true
         }
+        val context: Context =
+            InstrumentationRegistry.getInstrumentation().targetContext
         composeRule.setContent {
             PantryTrackerTheme {
                 Surface {
-                    CameraPermissionGate(
+                    CameraPermissionGateContent(
+                        phase = CameraPermissionPhase.HardDenied,
+                        onContinue = {},
+                        // If openAppSettings rethrew the ActivityNotFoundException,
+                        // this click handler would crash the test — the test passing
+                        // through the tap is itself the "does not rethrow" assertion.
+                        onOpenSettings = { openAppSettings(context, fakeLauncher) },
                         onNavigateBack = {},
-                        intentLauncher = fakeLauncher,
                     ) { Text("CONTENT") }
                 }
             }
@@ -209,15 +226,23 @@ class CameraPermissionDeepLinkTest {
         composeRule.onNodeWithText("Open settings").assertIsDisplayed()
         composeRule.onNodeWithText("Open settings").performClick()
 
-        // Espresso matcher — verifies the "Couldn't open settings on this device"
-        // Toast is shown when ActivityNotFoundException is thrown. Toasts on
-        // Android 11+ (API 30+) render via a platform popup window outside the
-        // activity; `isPlatformPopup()` is the correct root matcher for this.
-        // Toast copy must start with "Couldn't" per the project error-tone
-        // convention (enforced by ErrorToneSemanticsTest for snackbar/sheet;
-        // this test pins the same convention for the fallback Toast).
-        onView(withText("Couldn't open settings on this device"))
-            .inRoot(isPlatformPopup())
-            .check(matches(isDisplayed()))
+        // Assert at the seam, NOT via an Espresso Toast root matcher
+        // (isPlatformPopup() is for PopupWindow roots; Android 12+ Toasts are not
+        // inspectable that way, and CI runs API 35). The launcher recorded exactly
+        // one launch attempt, and the ActivityNotFoundException it threw was caught
+        // inside openAppSettings — proven by the click handler completing without
+        // propagating the exception out of performClick().
+        assertEquals(
+            "openAppSettings must attempt exactly one launch before catching ANFE",
+            1,
+            fakeLauncher.launchedIntents.size,
+        )
+        // Pin the exact OEM-fallback copy at its source-of-truth constant so a
+        // copy change is caught here without depending on the rendered Toast.
+        assertEquals(
+            "Toast copy must match the project error-tone convention",
+            "Couldn't open settings on this device",
+            SETTINGS_UNAVAILABLE_MESSAGE,
+        )
     }
 }

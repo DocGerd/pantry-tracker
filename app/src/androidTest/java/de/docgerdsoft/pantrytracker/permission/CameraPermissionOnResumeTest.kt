@@ -21,10 +21,19 @@ import org.junit.Test
  * SR-77 — §6 row 6: onResume auto-recovery regression test.
  *
  * Regression description (the "M6-caught regression"):
- *   User is on the HardDenied screen → taps "Open settings" → grants Camera
- *   permission in the OS Settings app → presses device Back to return to the
- *   app → the app MUST automatically transition to the camera preview (i.e.
- *   the [CameraPermissionPhase.Granted] branch) without requiring an extra tap.
+ *   The user has Camera permission revoked → returns to the app and grants it
+ *   out-of-band (here: while backgrounded) → on the next ON_RESUME the gate MUST
+ *   automatically transition to the camera preview (the
+ *   [CameraPermissionPhase.Granted] branch) without requiring an extra tap.
+ *
+ *   Note on the starting phase: this test revokes Camera on a fresh app process,
+ *   so `shouldShowRequestPermissionRationale` is `false` and `initialPhase`
+ *   yields [CameraPermissionPhase.Unknown] — the rationale dialog, NOT
+ *   HardDenied. The path under test is therefore **Unknown → (grant) → Granted**.
+ *   The HardDenied → Settings deep-link path is covered by
+ *   [CameraPermissionDeepLinkTest]; what matters here is solely the ON_RESUME
+ *   re-check promoting *any* non-Granted phase to Granted once the OS reports the
+ *   permission as held.
  *
  * Mechanism under test:
  *   [CameraPermissionGate] installs a [androidx.lifecycle.LifecycleEventObserver]
@@ -39,7 +48,10 @@ import org.junit.Test
  *   1. Revoke camera permission (ensure we start with no permission).
  *   2. Mount [CameraPermissionGate] in a real [ComponentActivity] so the
  *      lifecycle is controllable via [activityRule.scenario.moveToState].
- *   3. Capture the initial render (gate shows rationale/deny UI, not content).
+ *   3. Assert a POSITIVE pre-state — the rationale dialog ("Camera access") is
+ *      shown and the content lambda is not — so a wrong starting phase (e.g.
+ *      nothing rendered) fails loudly instead of letting a vacuous
+ *      `assertDoesNotExist` pass.
  *   4. Move the activity to [Lifecycle.State.STARTED] (simulates app going
  *      to background while the user is in Settings).
  *   5. Grant camera permission via [UiAutomation.grantRuntimePermission]
@@ -83,9 +95,13 @@ class CameraPermissionOnResumeTest {
             }
         }
 
-        // Step 3: Verify initial state — camera permission is not granted,
-        // so the rationale dialog or HardDenied screen is shown; content is NOT.
-        // "CAMERA CONTENT" must not be visible.
+        // Step 3: Verify initial state with a POSITIVE assertion first — a fresh
+        // revoke yields the Unknown phase, which renders the rationale dialog.
+        // Asserting the dialog title is present means a wrong starting phase (or
+        // nothing rendered at all) fails loudly here, rather than the
+        // assertDoesNotExist below passing vacuously.
+        composeRule.onNodeWithText("Camera access").assertIsDisplayed()
+        // ...and the camera content must NOT yet be shown.
         composeRule.onNodeWithText("CAMERA CONTENT").assertDoesNotExist()
 
         // Step 4: Move to STARTED (simulates app backgrounded while user is in Settings).
