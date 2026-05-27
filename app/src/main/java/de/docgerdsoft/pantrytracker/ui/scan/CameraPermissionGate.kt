@@ -92,10 +92,7 @@ fun CameraPermissionGate(
     val context = LocalContext.current
     val activity = context.findActivity()
     val lifecycleOwner = LocalLifecycleOwner.current
-    val cameraGranted: (Context) -> Boolean = isCameraGranted ?: { ctx ->
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED
-    }
+    val cameraGranted: (Context) -> Boolean = isCameraGranted ?: ::checkCameraGranted
     var phase: CameraPermissionPhase by remember {
         mutableStateOf(initialPhase(context, activity, cameraGranted))
     }
@@ -223,16 +220,21 @@ private fun DeniedScreen(
 //   3. Otherwise → Unknown (shows rationale dialog). The launcher callback
 //      later promotes a denied result to HardDenied when shouldShowRationale
 //      is false at that point.
+// Default production permission read — single source shared by the
+// [CameraPermissionGate] `isCameraGranted` seam fallback and [initialPhase]'s
+// default param, so the two cannot drift. Instrumented tests inject their own
+// checker instead of touching real runtime permission (see the seam KDoc / #117).
+private fun checkCameraGranted(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+        PackageManager.PERMISSION_GRANTED
+
 // `internal` (not private) so a JVM Robolectric test can pin the three-arm
 // `when`; the previous private signature is exactly what let the SoftDenied
 // regression escape unit-test coverage.
 internal fun initialPhase(
     context: Context,
     activity: Activity?,
-    isCameraGranted: (Context) -> Boolean = { ctx ->
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) ==
-            PackageManager.PERMISSION_GRANTED
-    },
+    isCameraGranted: (Context) -> Boolean = ::checkCameraGranted,
 ): CameraPermissionPhase {
     if (isCameraGranted(context)) {
         return CameraPermissionPhase.Granted

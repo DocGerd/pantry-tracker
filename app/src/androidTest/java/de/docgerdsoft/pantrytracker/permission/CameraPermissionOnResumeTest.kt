@@ -97,8 +97,8 @@ class CameraPermissionOnResumeTest {
             }
         }
 
-        // Step 3: Verify initial state with a POSITIVE assertion first — a fresh
-        // revoke yields the Unknown phase, which renders the rationale dialog.
+        // Step 3: Verify initial state with a POSITIVE assertion first — the
+        // not-granted seam yields the Unknown phase, which renders the rationale dialog.
         // Asserting the dialog title is present means a wrong starting phase (or
         // nothing rendered at all) fails loudly here, rather than the
         // assertDoesNotExist below passing vacuously.
