@@ -119,11 +119,11 @@ scanning against real products).
 ## 9. Search
 
 - [ ] In Home, tap the Search field and type "Test"
-- [ ] List filters to only matching rows
+- [ ] List filters to only matching rows — [automated by SR-76]
 - [ ] Type a string that matches nothing (e.g. "zzz")
-- [ ] List shows **"No matches for "zzz""** hint
-- [ ] **Empty-pantry CTAs do NOT appear** (no "Your pantry is empty", no "Scan to Add" button — those are only for blank-query empty)
-- [ ] Clear the search → list returns to full
+- [ ] List shows **"No matches for "zzz""** hint — [automated by SR-76]
+- [ ] **Empty-pantry CTAs do NOT appear** (no "Your pantry is empty", no "Scan to Add" button — those are only for blank-query empty) — [automated by SR-76]
+- [ ] Clear the search → list returns to full — [automated by SR-76]
 
 ## 10. Detail screen — rename + stepper
 
