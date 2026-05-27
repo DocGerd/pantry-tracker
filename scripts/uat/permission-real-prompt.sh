@@ -285,9 +285,9 @@ fi
 
 # Verify the final permission state
 if adb shell dumpsys package "${PKG}" 2>/dev/null | grep -q "android.permission.CAMERA.*granted=true"; then
-    pass "§6 row 6: Camera permission is granted on resume (auto-recovery state verified)"
+    pass "§6 row 6: Camera permission is granted on resume (permission-granted state verified)"
 elif adb shell pm dump "${PKG}" 2>/dev/null | grep -q "android.permission.CAMERA: granted=true"; then
-    pass "§6 row 6: Camera permission is granted on resume (auto-recovery state verified)"
+    pass "§6 row 6: Camera permission is granted on resume (permission-granted state verified)"
 else
     fail "§6 row 6: Camera permission not showing as granted after Settings grant + resume"
 fi
