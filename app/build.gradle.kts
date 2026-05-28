@@ -1,4 +1,5 @@
 import com.android.build.api.artifact.SingleArtifact
+import java.time.Duration
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -418,7 +419,7 @@ tasks.register<Test>("fuzzTest") {
     }
 
     // Belt-and-braces hard ceiling — see the comment block above.
-    timeout.set(java.time.Duration.ofMinutes(6))
+    timeout.set(Duration.ofMinutes(6))
 
     // Switch Jazzer from regression-only mode into actual fuzzing.
     // The @FuzzTest(maxDuration = "5m") annotation on the fuzz method is
