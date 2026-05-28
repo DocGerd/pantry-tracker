@@ -105,9 +105,12 @@ class DetailViewModelErrorPathsTest {
         )
         val vm = DetailViewModel(repo, productId = 1L)
         advanceUntilIdle()
-        // CE from the collect must re-throw, not become a "Couldn't …" message.
+        // CE from the collect must re-throw, not become a "Couldn't …" message,
+        // and must tear down the collect WITHOUT clobbering the already-seeded
+        // product (symmetry with the Exception case above).
         assertNull(vm.uiState.value.error)
         assertFalse(vm.uiState.value.shouldNavigateBack)
+        assertEquals("Coke", vm.uiState.value.product?.name)
     }
 
     // --- rename / stepperDelta / confirmDelete cancellation rethrow ------
