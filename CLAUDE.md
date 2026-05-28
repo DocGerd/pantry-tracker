@@ -158,7 +158,7 @@ section B (sideload of release APK). Two non-obvious bits:
 
 - **Dependency lockfile**: `app/gradle.lockfile` is **tracked on `develop`**
   per Gradle's "lockfiles should be checked in to source control" guidance;
-  dependabot keeps it current alongside `gradle/libs.versions.toml`. At a
+  Dependabot keeps it current alongside `gradle/libs.versions.toml`. At a
   release tag, `--write-locks` runs once more and commits the diff (if any)
   in a dedicated `chore(release): lock dependencies` commit for post-hoc
   CVE forensics. See [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md)
