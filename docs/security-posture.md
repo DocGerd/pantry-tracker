@@ -304,8 +304,8 @@ review surface.
 ### Maintained — time-resolves, then bursty
 
 **What Scorecard checks:** see the
-[Maintained check docs](https://github.com/ossf/scorecard/blob/main/docs/checks.md#maintained).
-There are two distinct sub-rules:
+[Maintained check docs](https://github.com/ossf/scorecard/blob/c22063e786c11f9dd714d777a687ff7c4599b600/docs/checks.md#maintained).
+The check has two failure modes:
 
 1. The repository must have existed for at least **90 days**. A repo
    younger than that triggers an automatic warn-and-zero, regardless
@@ -314,44 +314,54 @@ There are two distinct sub-rules:
 2. Once past that threshold, Scorecard looks for sustained commit +
    issue activity in the most recent 90-day window.
 
-**Why we currently score zero.** The repo flipped public on 2026-05-27
-and the first public commits start in late April 2026. The 90-day
-warn-and-zero clears around **2026-07-23**. Until then, the score is
-"zero by repository age" and is not a reflection of activity. Once it
-clears, the second sub-rule applies.
+**Why we currently score zero.** The repository was created on GitHub
+on 2026-05-16 (it flipped public on 2026-05-27, but Scorecard's
+`createdRecently` probe keys off the repo `created_at`, not the
+visibility-flip date). The 90-day warn-and-zero clears on
+**2026-08-14** (`created_at 2026-05-16 + 90 days`). Until then, the
+score is "zero by repository age" and is not a reflection of activity.
+Once it clears, the second failure mode applies.
 
-**Why the second sub-rule can dip later.** Release cadence is
-feature-driven, not calendar-driven. v1.0.0 shipped 2026-05-18; v1.1.0
-shipped 2026-05-19; v1.2.0 shipped 2026-05-28. A multi-week quiet
-period between minor releases is normal for a kitchen-inventory app —
-it does not mean the project is abandoned. Look at the issue tracker
-activity rather than the commit count if the score dips.
+**Why the second failure mode can dip later.** Release cadence is
+feature-driven, not calendar-driven. As of 2026-05-28, three minor
+releases have shipped within 10 days (v1.0.0 on 2026-05-18, v1.1.0 on
+2026-05-19, v1.2.0 on 2026-05-28). A multi-week quiet period between
+minor releases is normal for a kitchen-inventory app — it does not
+mean the project is abandoned. Note: Scorecard's Maintained check
+already weights issue-tracker activity in its partial-score path, so
+the score dip is the human reviewer's signal to do a deeper sniff-test,
+not a recommendation to use a different metric than Scorecard does.
 
 ### Contributors — structural zero
 
 **What Scorecard checks:** see the
-[Contributors check docs](https://github.com/ossf/scorecard/blob/main/docs/checks.md#contributors).
-The check counts contributing **companies or organizations** to the
-project over the last five years, derived from the `company` field on
-contributor GitHub profiles. A diverse contributor base reduces
-single-organization capture risk on dependencies the OpenSSF ecosystem
-cares about.
+[Contributors check docs](https://github.com/ossf/scorecard/blob/c22063e786c11f9dd714d777a687ff7c4599b600/docs/checks.md#contributors).
+The check counts contributing companies or organizations from the
+project's recent contributors (in the last 30 commits, weighted to
+contributors with at least 5 commits), derived from the `company`
+field on contributor GitHub profiles **and their public GitHub
+organization membership**. A diverse contributor base reduces
+single-organization capture risk on dependencies the OpenSSF
+ecosystem cares about.
 
 **Why we score zero:** the project has one maintainer. There is no
-second contributor whose `company` field could increment the count.
-This is the same structural cause as the Code-Review zero — the
-project is a single-maintainer Android app
+second contributor whose `company` field or public org membership
+could increment the count. This is the same structural cause as the
+Code-Review zero — the project is a single-maintainer Android app
 ([`GOVERNANCE.md`](../GOVERNANCE.md)), not a multi-company effort.
 
 **What we do instead.** Nothing — this metric correctly characterizes
-the project. The compensating controls that *exist* against the
-class of risk this metric proxies for (single-author supply-chain
-capture) live elsewhere: Pinned-Dependencies (every action SHA-pinned;
-every Gradle dep version-pinned with a lockfile), Dependency-Update-Tool
-(Dependabot enabled in
-[`.github/dependabot.yml`](../.github/dependabot.yml)), and the
-multi-agent PR review described under Code-Review above. The
-Contributors badge zero remains, accurately, zero.
+the project. Two **adjacent** controls reduce the neighbouring risk
+this metric proxies for (single-author supply-chain capture), without
+papering over the contributor-diversity gap itself:
+Pinned-Dependencies (every action SHA-pinned; every Gradle dep
+version-pinned with a lockfile), and Dependency-Update-Tool (Dependabot
+enabled in [`.github/dependabot.yml`](../.github/dependabot.yml)).
+The Contributors badge zero remains, accurately, zero.
+
+*Last verified against Scorecard
+[`c22063e`](https://github.com/ossf/scorecard/tree/c22063e786c11f9dd714d777a687ff7c4599b600)
+on 2026-05-28.*
 
 ### Token-Permissions — high, with evidence
 
