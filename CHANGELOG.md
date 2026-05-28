@@ -12,6 +12,8 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-05-28
+
 ### Added
 
 - Offline cache for OFF lookups of non-pantry barcodes. Re-scanning a
@@ -38,6 +40,49 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
   (`OffProduct`, `OffApiEnvelope`) and Room entities/DAOs (`Product`,
   `OffLookupCacheEntry`, `ProductDao`, `OffLookupCacheDao`, plus
   `AppDatabase` and `Converters` defensively). (SR-9, refs #36)
+
+### Tests / quality
+
+- 194 → 218 JVM unit tests.
+- **RNG screenshot harness** added (#74 / SR-74) using Robolectric
+  Native Graphics + golden-PNG diff. Covers icon variants, theme,
+  font-scale, and Coil image rendering — retires UAT §0 row 2,
+  §2 rows 1-2/4, §11 row 1, and v1.2 §11 Coil row.
+- **Scan-flow Compose UI tests** (#75 / SR-75) cover OFF-hit, OFF-miss
+  timeout fallback, in-inventory remove, and not-in-inventory +
+  switch-to-Add — retires UAT §7 (8 of 9), §8 (5 of 6), §11 (5), §12 (2).
+- **Search UI test** (#76 / SR-76) — retires UAT §9 (5 rows).
+- **Camera permission deep-link + onResume tests** (#77 / SR-77) —
+  retires UAT §4 (5 of 6), §5 (5 of 7), §6 (3 of 8).
+- **Rotation + error-tone tests + detekt rule** (#78 / SR-78) — config-change
+  + error tone; the `ErrorToneRule` extracted to a standalone
+  `:detekt-rules` Gradle module with a proof test. Retires UAT §14 row 1,
+  §15 row 1.
+- **CI emulator job** (#79 / SR-79) on
+  `reactivecircus/android-emulator-runner@v2.37.0`, API 35, PR-gating
+  `connectedDebugAndroidTest` runs. ~5-8 min added per PR.
+- **R8 static-inspection script** (#80 / SR-80) verifies `@Serializable` +
+  `@Entity` classes survive minification in the release APK.
+- **MIGRATION_1_2 emulator-drive runbook** (#81 / SR-81) — script + docs
+  for on-device migration smoke; retires UAT v1.2 §1 upgrade-install row.
+- **OFF resilience tests** (#82 / SR-82) — fallback-chain matrix +
+  cache offline replay; retires UAT v1.2 §3-5 (3) + §12 (1).
+- **androidTest permission-revoke fix** (SR-117 / PR #118) — adds
+  `CameraPermissionGate.isCameraGranted` test seam so revoking a held
+  runtime permission no longer kills the shared instrumentation
+  process.
+- **Room schema baseline committed** under `app/schemas/` (#57 / SR-17),
+  unlocking `MigrationTestHelper`-based migration tests against the
+  v1 → v2 schema delta.
+- **UAT checklist umbrella closed** (#73) — every retired row annotated
+  with `[automated by SR-N]`; new "Stays human-only" appendix
+  enumerates the irreducibly-physical items + the v1.2 OFF CDN chunked
+  encoding rule.
+- **CLAUDE.md lessons fold** (#119) — 6 new entries in "Things that
+  have bitten past sessions" covering revoke-of-held-permission,
+  custom AndroidJUnitRunner.newApplication, detekt custom rules in
+  standalone module, post-tag lockfile untrack, on-device CI catches
+  what static review can't, GitFlow ruleset constraints.
 
 ---
 
