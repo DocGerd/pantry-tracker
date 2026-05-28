@@ -31,7 +31,10 @@ rotation. The following are best-effort targets, not commitments:
   complex issues (we will agree on a timeline together).
 
 The GitHub Security Advisory channel is monitored on a best-effort basis;
-there is no on-call rotation, but reports are not dropped.
+there is no on-call rotation, but reports are not dropped. If a security
+report goes unanswered, see the **Continuity & succession** plan in
+[`GOVERNANCE.md`](GOVERNANCE.md) — the project is Apache-2.0 and may be
+forked and continued.
 
 ### Scope
 
