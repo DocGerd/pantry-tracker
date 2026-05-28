@@ -14,5 +14,8 @@ paths-ignore:
 # issue #150. The query is in the security-and-quality suite;
 # we keep the rest of the suite enabled by only excluding this id.
 query-filters:
+  # NOTE: this exclude is global — CodeQL query-filters have no per-language
+  # selector. Harmless today (repo is 100% Kotlin, zero .java files), but if
+  # real Java source is ever added, this rule stays off for it too. Revisit then.
   - exclude:
       id: java/local-variable-is-never-read
