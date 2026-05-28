@@ -1,0 +1,93 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Weekly schedule catches new CodeQL queries / CVE rules disclosed since
+    # the last PR landed. Wednesday 06:00 UTC — deliberately offset from
+    # security.yml's Monday slot so dependency-CVE forensics and source-code
+    # findings don't pile into the same morning's GitHub-Actions queue.
+    - cron: '0 6 * * 3'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # CodeQL's combined language for the JVM ecosystem. A single
+        # `java-kotlin` database covers both languages — listing them
+        # separately is a deprecated configuration.
+        language: [java-kotlin]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality bundles the security-extended queries plus
+          # maintainability/quality lints — broader than the default suite,
+          # appropriate for a small app where we want maximum signal.
+          queries: security-and-quality
+
+      # Build choice: manual `:app:assembleDebug` rather than `autobuild`,
+      # with the Kotlin compiler forced in-process AND the Gradle build
+      # cache disabled — both are required for CodeQL to see Kotlin code.
+      #
+      # Why not `autobuild`: it routinely fails to discover the AGP variant
+      # model on Android projects, producing an empty CodeQL DB.
+      #
+      # Why not `build-mode: none`: for the `java-kotlin` combined language,
+      # `none` only does dependency-graph analysis on the Java side and is
+      # not a Kotlin source extractor — on a 100% Kotlin codebase (this
+      # repo has zero `.java` sources) the finalize step fails with "no
+      # source code seen during build" because Kotlin extraction always
+      # requires a traced build.
+      #
+      # Why `kotlin.compiler.execution.strategy=in-process`: by default the
+      # Kotlin Gradle plugin spawns an out-of-process Kotlin compiler daemon
+      # for every build. That daemon JVM is started *outside* CodeQL's
+      # `LD_PRELOAD` tracer scope, so even though the Android Gradle build
+      # succeeds, the Kotlin compilation never gets traced.
+      #
+      # Why `--no-build-cache` AND `clean`: `gradle/actions/setup-gradle`
+      # restores Gradle's local build cache from previous workflow runs
+      # (including ci.yml). On a cache hit, `compileDebugKotlin` is served
+      # `FROM-CACHE` and no compiler process runs — leaving CodeQL's tracer
+      # with nothing to capture. Disabling the build cache + cleaning the
+      # task outputs forces a fresh in-process Kotlin compilation that the
+      # tracer can actually see. Canonical fix for the
+      # https://gh.io/troubleshooting-code-scanning/no-source-code-seen-during-build
+      # symptom on Kotlin Gradle projects where compileDebugKotlin shows
+      # `FROM-CACHE` in the build log.
+      - name: Build (Android debug, Kotlin compiler in-process, no cache)
+        run: |
+          chmod +x gradlew
+          ./gradlew clean :app:assembleDebug --no-daemon --no-build-cache \
+            -Pkotlin.compiler.execution.strategy=in-process
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
+        with:
+          category: "/language:${{ matrix.language }}"
