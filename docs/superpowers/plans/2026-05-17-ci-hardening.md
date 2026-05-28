@@ -324,8 +324,7 @@ Only the `main` branch is supported. There are no released versions yet.
 Please report security vulnerabilities **privately**. Do NOT open a public GitHub
 issue for security-sensitive findings.
 
-- **Email:** claude@docgerdsoft.de
-- **Alternative:** open a GitHub Security Advisory draft via
+- **Preferred:** open a GitHub Security Advisory draft via
   https://github.com/DocGerd/pantry-tracker/security/advisories/new
 
 ### What to include

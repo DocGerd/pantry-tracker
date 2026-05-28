@@ -236,10 +236,10 @@ verify "is this still true?" without trusting this document.
 ### Disclosure
 
 - **Responsible disclosure policy.** [`SECURITY.md`](../SECURITY.md)
-  documents the private-disclosure channels (`claude@docgerdsoft.de`
-  and the GitHub Security Advisory draft endpoint), best-effort
-  acknowledgement / assessment / fix timelines, and the scope split
-  between this repo's code and third-party dependency upstreams.
+  documents the private-disclosure channel (a GitHub Security
+  Advisory draft endpoint), best-effort acknowledgement / assessment /
+  fix timelines, and the scope split between this repo's code and
+  third-party dependency upstreams.
 - **Dated security-review notes.** Findings raised during development
   that don't fit a normal issue (or that warrant a written record of
   an accept-risk decision) land under
@@ -551,8 +551,8 @@ see they were considered.
 ## Reporting a security issue
 
 Reporting policy, channels, and best-effort timelines live in
-[`SECURITY.md`](../SECURITY.md). The short form: email
-`claude@docgerdsoft.de` or open a GitHub Security Advisory draft at
+[`SECURITY.md`](../SECURITY.md). The short form: open a GitHub
+Security Advisory draft at
 <https://github.com/DocGerd/pantry-tracker/security/advisories/new>.
 **Do not open a public GitHub issue** for security-sensitive findings.
 
