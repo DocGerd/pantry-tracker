@@ -370,16 +370,33 @@ it does not pin the **wrapper jar that lives in source control** at
 [`gradle/wrapper/gradle-wrapper.jar`](../../gradle/wrapper/gradle-wrapper.jar).
 That jar is what Scorecard's `Binary-Artifacts` check flags as a
 checked-in binary. We close the gap with a
-`gradle/actions/wrapper-validation` step at the top of every CI job in
-[`ci.yml`](../../.github/workflows/ci.yml) — it verifies the jar's
-SHA-256 against the official Gradle wrapper-jar hash list before any
-Gradle invocation runs, so a tampered wrapper jar (e.g. from a
-typo-squatted PR or a compromised contributor branch) can never
-execute on CI. See [SR-138](https://github.com/DocGerd/pantry-tracker/issues/138).
+`gradle/actions/wrapper-validation` step at the top of the `build` job
+in [`ci.yml`](../../.github/workflows/ci.yml); the `androidTest` job
+declares `needs: build`, so a failure there also gates emulator tests.
+The step verifies the jar's SHA-256 against the official Gradle
+wrapper-jar hash list before any Gradle invocation runs in that job,
+so a tampered wrapper jar (e.g. a malicious PR substituting the jar,
+or a compromised maintainer push) cannot execute in the build pipeline.
+See [SR-138](https://github.com/DocGerd/pantry-tracker/issues/138).
 
-A Gradle wrapper upgrade rev's the *jar* alongside the *URL* and *SHA*,
-so the upgrade procedure above produces the right jar automatically;
-no extra step is required when bumping versions.
+The `osv-scan` job in
+[`security.yml`](../../.github/workflows/security.yml) invokes
+`./gradlew :app:dependencies --write-locks` without a preceding
+wrapper-validation step. That's a separate gap — file a follow-up if
+the lockfile-regeneration path needs to be jar-validated too.
+
+A Gradle wrapper upgrade does **not** regenerate `gradle-wrapper.jar`
+in a single invocation. Per the
+[Gradle Wrapper user guide](https://docs.gradle.org/current/userguide/gradle_wrapper.html),
+"running the wrapper task once will update `gradle-wrapper.properties`
+only, but leave the wrapper itself in `gradle-wrapper.jar` untouched".
+To bring the jar to the new version's bytes, run `./gradlew wrapper`
+a **second time** after the atomic-update form above — the second
+invocation regenerates the jar using the just-downloaded distribution.
+Commit both files together. The SR-138 guard validates whichever jar
+lands in the commit, so a stale jar from a single-invocation upgrade
+would still pass CI silently — the discipline is procedural, not
+automated.
 
 ---
 

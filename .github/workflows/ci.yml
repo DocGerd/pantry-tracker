@@ -31,8 +31,8 @@ jobs:
       # this validates the *wrapper jar itself*, which is what Scorecard's
       # Binary-Artifacts check flags as a checked-in binary. Runs before any
       # Gradle invocation so a tampered wrapper jar can never execute on CI.
-      # The androidTest job below depends on build (`needs: build`), so a
-      # failure here also gates that job.
+      # The `androidTest` job declares `needs: build`, so a failure here
+      # also gates emulator tests.
       - name: Validate Gradle wrapper jar (SR-138)
         uses: gradle/actions/wrapper-validation@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
 
