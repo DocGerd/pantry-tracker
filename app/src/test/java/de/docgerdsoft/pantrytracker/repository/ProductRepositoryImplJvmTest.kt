@@ -211,8 +211,12 @@ class ProductRepositoryImplJvmTest {
 
     @Test
     fun lookupForPreview_cacheAtTtlBoundary_stillFresh() = runTest {
-        cacheDao.put(cacheEntry(barcode = "222", fetchedAt = clock.current.minus(30.days)))
-        repo.lookupForPreview("222")
+        cacheDao.put(cacheEntry(barcode = "222", name = "Boundary", fetchedAt = clock.current.minus(30.days)))
+        // The TTL-boundary row must be SERVED (not just "no network call"): pin
+        // the returned candidate too, so a regression that early-returns null at
+        // the boundary while also not calling OFF would still fail.
+        val candidate = repo.lookupForPreview("222") as ScanCandidate.FromOff
+        assertEquals("Boundary", candidate.name)
         assertEquals(0, off.lookupCallCount)
     }
 
@@ -341,12 +345,18 @@ class ProductRepositoryImplJvmTest {
     fun addNew_cacheEvictCancelled_propagatesCancellation() = runTest {
         cacheDao.cancelDelete = true
         assertCancellationPropagates { repo.addNew(name = "Coke", barcode = "111", initialQuantity = 1) }
+        // Pin that the CE originated INSIDE the guarded evict (barcode-gate passed,
+        // delete invoked) rather than somewhere before the try.
+        assertEquals(1, cacheDao.deleteCount)
     }
 
     @Test
     fun lookupForPreview_cacheReadCancelled_propagatesCancellation() = runTest {
         cacheDao.cancelFind = true
         assertCancellationPropagates { repo.lookupForPreview("222") }
+        // CE thrown from the cache read must NOT be reinterpreted as a miss that
+        // then calls OFF — the rethrow short-circuits before the network call.
+        assertEquals(0, off.lookupCallCount)
     }
 
     @Test
@@ -354,6 +364,8 @@ class ProductRepositoryImplJvmTest {
         cacheDao.cancelUpsert = true
         off.stub("555", OffProduct(productName = "Sprite"))
         assertCancellationPropagates { repo.lookupForPreview("555") }
+        // The OFF call ran (so the upsert arm was reached) before CE propagated.
+        assertEquals(1, off.lookupCallCount)
     }
 
     // --- helpers / fakes -------------------------------------------------
