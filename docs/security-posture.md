@@ -261,6 +261,11 @@ compensating control where one exists. The intent is to make those
 zeros legible — to a reviewer, a future maintainer, or a downstream
 user looking at the badge — rather than to argue them away.
 
+The full live result for this repo is at
+[scorecard.dev/viewer](https://scorecard.dev/viewer/?uri=github.com/DocGerd/pantry-tracker);
+the parent audit issue for this section is
+[#141](https://github.com/DocGerd/pantry-tracker/issues/141).
+
 ### Code-Review — structural zero
 
 **What Scorecard checks:** every commit on the default branch was
@@ -296,17 +301,57 @@ inline-thread + GraphQL-resolve audit trail is permanent on the PR.
 The structural zero on the Scorecard badge does not reflect the actual
 review surface.
 
-### Maintained — fine, but bursty
+### Maintained — time-resolves, then bursty
 
-**What Scorecard checks:** sustained commit + issue activity in the
-last 90 days.
+**What Scorecard checks:** see the
+[Maintained check docs](https://github.com/ossf/scorecard/blob/main/docs/checks.md#maintained).
+There are two distinct sub-rules:
 
-**Why this can dip:** release cadence is feature-driven, not
-calendar-driven. v1.0.0 shipped 2026-05-18; v1.1.0 shipped 2026-05-19;
-v1.2.0 shipped 2026-05-28. A multi-week quiet period between minor
-releases is normal for a kitchen-inventory app — it does not mean the
-project is abandoned. Look at the issue tracker activity rather than
-the commit count if the score dips.
+1. The repository must have existed for at least **90 days**. A repo
+   younger than that triggers an automatic warn-and-zero, regardless
+   of activity ("Repository was created within the last 90 days.
+   Please review its contents carefully.").
+2. Once past that threshold, Scorecard looks for sustained commit +
+   issue activity in the most recent 90-day window.
+
+**Why we currently score zero.** The repo flipped public on 2026-05-27
+and the first public commits start in late April 2026. The 90-day
+warn-and-zero clears around **2026-07-23**. Until then, the score is
+"zero by repository age" and is not a reflection of activity. Once it
+clears, the second sub-rule applies.
+
+**Why the second sub-rule can dip later.** Release cadence is
+feature-driven, not calendar-driven. v1.0.0 shipped 2026-05-18; v1.1.0
+shipped 2026-05-19; v1.2.0 shipped 2026-05-28. A multi-week quiet
+period between minor releases is normal for a kitchen-inventory app —
+it does not mean the project is abandoned. Look at the issue tracker
+activity rather than the commit count if the score dips.
+
+### Contributors — structural zero
+
+**What Scorecard checks:** see the
+[Contributors check docs](https://github.com/ossf/scorecard/blob/main/docs/checks.md#contributors).
+The check counts contributing **companies or organizations** to the
+project over the last five years, derived from the `company` field on
+contributor GitHub profiles. A diverse contributor base reduces
+single-organization capture risk on dependencies the OpenSSF ecosystem
+cares about.
+
+**Why we score zero:** the project has one maintainer. There is no
+second contributor whose `company` field could increment the count.
+This is the same structural cause as the Code-Review zero — the
+project is a single-maintainer Android app
+([`GOVERNANCE.md`](../GOVERNANCE.md)), not a multi-company effort.
+
+**What we do instead.** Nothing — this metric correctly characterizes
+the project. The compensating controls that *exist* against the
+class of risk this metric proxies for (single-author supply-chain
+capture) live elsewhere: Pinned-Dependencies (every action SHA-pinned;
+every Gradle dep version-pinned with a lockfile), Dependency-Update-Tool
+(Dependabot enabled in
+[`.github/dependabot.yml`](../.github/dependabot.yml)), and the
+multi-agent PR review described under Code-Review above. The
+Contributors badge zero remains, accurately, zero.
 
 ### Token-Permissions — high, with evidence
 
