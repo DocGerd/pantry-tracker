@@ -31,8 +31,10 @@ jobs:
       # `actions: read` lets the CodeQL action introspect the workflow file
       # for the matrix expansion and language detection.
       actions: read
-      # `contents: read` is implicit (inherits the workflow-level default)
-      # but restated here for grep-ability.
+      # `contents: read` is REQUIRED here because job-level `permissions:`
+      # REPLACES (not merges with) the workflow-level block — omitting it
+      # would deny content access in this job and break the checkout step.
+      # Also useful for grep-ability.
       contents: read
       # `security-events: write` is what CodeQL needs to upload SARIF
       # results to GitHub Code Scanning. Held at job level (not top level)
