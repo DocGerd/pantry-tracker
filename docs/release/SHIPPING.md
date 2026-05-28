@@ -305,12 +305,14 @@ table). The upgrade-install path must be verified before tagging.
 
 ### Release-tag dependency-lock procedure
 
-Day-to-day, `app/gradle.lockfile` is **gitignored** — it's regenerated each
-Security-CI run from the current resolved dependency graph (commenting a
-developer-local snapshot would cause OSV-Scanner to report drift no one can
-explain). At a release tag, the priority flips: the tag commit needs an
-**immutable record of exactly what shipped** so post-hoc CVE forensics has
-a concrete answer.
+`app/gradle.lockfile` is **tracked on `develop`** per
+[Gradle's official recommendation](https://docs.gradle.org/current/userguide/dependency_locking.html)
+("Lockfiles should be checked in to source control"). Dependabot keeps
+the lockfile in sync with `gradle/libs.versions.toml` on every weekly run.
+At a release tag, regenerate it once more to capture the exact dependency
+snapshot for post-hoc CVE forensics — even if dependabot has been keeping
+it current, the regen produces a no-op diff which proves "what shipped
+matches what's in develop."
 
 Run these commands as the commit immediately preceding the tag (between
 checklist steps 6 and 8 above):
@@ -319,17 +321,30 @@ checklist steps 6 and 8 above):
 # Regenerate the lockfile from the current resolved graph.
 ./gradlew :app:dependencies --write-locks
 
-# Force-add (it's gitignored) and commit on its own so the diff is
-# reviewable as "the dependency snapshot for v1.0.0", not buried in
-# unrelated work.
-git add -f app/gradle.lockfile
-git commit -m "chore(release): lock dependencies for v1.0.0"
+# Commit only if there's an actual diff. If dependabot has kept the
+# lockfile current, --write-locks may produce no changes — in which
+# case no commit is needed.
+if ! git diff --quiet app/gradle.lockfile; then
+  git add app/gradle.lockfile
+  git commit -m "chore(release): lock dependencies for v1.X.X"
+else
+  echo "Lockfile already current; no release-tag commit needed."
+fi
 ```
 
-Then proceed with step 8 (`git tag -a ...`). The tag commit will include
-the lockfile; the immediately-following commit on `main` will not (because
-day-to-day no-commit policy resumes, and the file's gitignored). That's
-intentional — the lockfile is a release artifact, not a maintained file.
+Then proceed with step 8 (`git tag -a ...`). The lockfile stays tracked
+on `develop` after the tag; do **not** `git rm --cached` it post-release.
+The earlier untrack-on-develop pattern (PR #112) was a workaround for a
+dependabot bug ([dependabot-core #12557](https://github.com/dependabot/dependabot-core/issues/12557))
+that has since been [fixed](https://github.com/dependabot/dependabot-core/pull/12853).
+See CLAUDE.md "Things that have bitten" lesson on `gradle.lockfile`
+tracking for the full reasoning.
+
+Note: `.gitignore` line 25 still contains `gradle.lockfile`. That's a
+historical artifact — gitignore only affects untracked files, and the
+lockfile is tracked, so the line is moot for `app/gradle.lockfile`
+itself. It still prevents accidental tracking of new module-level
+lockfiles. Leave it.
 
 ### Note: `distributionSha256Sum` must move atomically with `distributionUrl`
 
