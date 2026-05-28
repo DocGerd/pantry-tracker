@@ -290,3 +290,49 @@ restructured to make the lesson load-bearing on its own.*
   needs an actual run in a non-interactive shell on a fresh host
   before merge. Evict once a "before-PR end-to-end" checklist for new
   scripts lands in `scripts/uat/README.md`.
+- **Revoking a HELD runtime permission kills the shared `androidTest` process.**
+  Signature: the in-flight test reports as FAILED, then the run aborts with no
+  logcat for the crashed pid (`ActivityManager: Killing <pid>: permissions
+  revoked`). Mitigation: never call `revokeRuntimePermission` on a held
+  permission in a shared instrumentation process — use a test seam (see
+  `CameraPermissionGate.isCameraGranted` for the pattern); for tests that pin
+  state another way, just delete the revoke. Source: PR #118 / issue #117.
+- **Custom `AndroidJUnitRunner.newApplication()` is the reliable Application
+  swap for `androidTest`.** The androidTest manifest's `android:name` does
+  NOT win because the runtime Application class is resolved from the
+  *target* (app-under-test) manifest; the runner's `newApplication()`
+  override is what actually swaps it. See `PantryTestRunner.kt:42` for the
+  canonical pattern. Note: the swap is **global** — every instrumented test
+  runs against the test Application, so the test Application must call
+  `super.onCreate()` and stay transparent unless a test opts into an
+  override. (It is not itself a root cause of "Process crashed" — that's a
+  separate gotcha covered by the entry above; see issue #117 root-cause
+  analysis.)
+- **Detekt custom rules belong in a standalone Gradle module + proof test.**
+  Compiling a detekt rule into the app test source set is silently inert; the
+  rule never fires. The `ErrorToneRule` extraction in SR-78 (`:detekt-rules`
+  module + a proof test) is the working pattern.
+- **Post-tag `gradle.lockfile` must be `git rm --cached`-d** on `develop` after
+  the release tag, or `activateDependencyLocking()` will pin develop to the
+  release's lockfile and defeat dependabot. The release tag itself needs the
+  lockfile committed for CVE forensics; `develop` does not. Source: PR #112
+  / issue #111. Evict once `docs/release/SHIPPING.md` documents the
+  post-tag `git rm --cached` step explicitly (today it only covers the
+  pre-tag force-commit).
+- **On-device CI or a local emulator catches instrumented-test bugs that
+  static analysis and multi-agent PR review cannot.** PR #118's
+  `ActivityManager: Killing <pid>: permissions revoked` logcat was invisible
+  to every review surface but instant on a local emulator boot. Generalises
+  the **Real-device UAT is non-negotiable for HTTP-client changes** entry
+  above to instrumented-test debugging — for any instrumented-test
+  regression that doesn't reproduce in JVM unit tests, run
+  `:app:connectedDebugAndroidTest` on a local emulator (or push and let the
+  CI emulator job at `.github/workflows/ci.yml` run
+  `reactivecircus/android-emulator-runner` before declaring ready).
+- **GitFlow ruleset constraints for this repo.** Keep `develop` as the
+  default branch — feature PRs target develop and rely on the
+  default-branch behaviour of `Closes #N` to auto-close issues on merge
+  (GitHub only honours closing-keywords on merges to the default branch).
+  Keep `required_linear_history` *off* on ruleset 16948699 ("Protect main
+  and develop"): release-prep merges from `release/<version>` into `main`
+  are non-fast-forward by construction and would be blocked otherwise.
