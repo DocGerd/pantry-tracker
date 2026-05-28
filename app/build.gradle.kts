@@ -17,8 +17,8 @@ android {
         applicationId = "de.docgerdsoft.pantrytracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.2.0"
         // Custom runner (extends AndroidJUnitRunner) that forces the test
         // Application class via newApplication() — the reliable on-device
         // mechanism to swap PantryTrackerApp → TestPantryTrackerApp. The
