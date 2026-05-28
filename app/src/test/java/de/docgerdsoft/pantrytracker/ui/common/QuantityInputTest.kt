@@ -16,7 +16,13 @@ class QuantityInputTest {
 
     @Test
     fun dropsSignsDotsAndWhitespace() {
-        assertEquals("12", sanitizeQuantityInput(" -1.2 "))
+        assertEquals("12", sanitizeQuantityInput(" -1.\t2\n "))
+    }
+
+    @Test
+    fun exactlyFourDigits_passThroughUnchanged() {
+        // Boundary of take(MAX_QUANTITY_DIGITS): four digits in, four out.
+        assertEquals("1234", sanitizeQuantityInput("1234"))
     }
 
     @Test

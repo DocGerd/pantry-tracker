@@ -43,11 +43,18 @@ class ScanUiStateTest {
 
     @Test
     fun otherPhases_areAllowedInAddMode() {
-        // None of these trip the NotInInventory guard, so all must construct.
-        ScanUiState(phase = ScanUiState.Phase.Loading(barcode = "5449000000996"))
-        ScanUiState(phase = ScanUiState.Phase.ManualEntry(barcode = "999", pendingQuantity = 2))
-        ScanUiState(phase = ScanUiState.Phase.Error(message = "Couldn't scan: boom"))
-        ScanUiState(
+        // None of these trip the NotInInventory guard, so all must construct and
+        // round-trip their phase unchanged (the init block must not normalise it).
+        val loading = ScanUiState(phase = ScanUiState.Phase.Loading(barcode = "5449000000996"))
+        assertTrue(loading.phase is ScanUiState.Phase.Loading)
+
+        val manual = ScanUiState(phase = ScanUiState.Phase.ManualEntry(barcode = "999", pendingQuantity = 2))
+        assertTrue(manual.phase is ScanUiState.Phase.ManualEntry)
+
+        val error = ScanUiState(phase = ScanUiState.Phase.Error(message = "Couldn't scan: boom"))
+        assertTrue(error.phase is ScanUiState.Phase.Error)
+
+        val preview = ScanUiState(
             phase = ScanUiState.Phase.Preview(
                 candidate = ScanCandidate.FromOff(
                     barcode = "5449000000996",
@@ -58,6 +65,7 @@ class ScanUiStateTest {
                 pendingQuantity = 1,
             ),
         )
+        assertTrue(preview.phase is ScanUiState.Phase.Preview)
     }
 
     @Test
