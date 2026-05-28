@@ -26,8 +26,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       # SR-138 guard: validates the checked-in `gradle/wrapper/gradle-wrapper.jar`
-      # against the official Gradle wrapper-jar hash list. The SR-5 guard below
-      # validates the *downloaded distribution* via `distributionSha256Sum`;
+      # against the official Gradle wrapper-jar hash list. The SR-5 guard
+      # step validates the *downloaded distribution* via `distributionSha256Sum`;
       # this validates the *wrapper jar itself*, which is what Scorecard's
       # Binary-Artifacts check flags as a checked-in binary. Runs before any
       # Gradle invocation so a tampered wrapper jar can never execute on CI.

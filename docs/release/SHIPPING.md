@@ -370,13 +370,13 @@ it does not pin the **wrapper jar that lives in source control** at
 [`gradle/wrapper/gradle-wrapper.jar`](../../gradle/wrapper/gradle-wrapper.jar).
 That jar is what Scorecard's `Binary-Artifacts` check flags as a
 checked-in binary. We close the gap with a
-`gradle/actions/wrapper-validation` step at the top of the `build` job
-in [`ci.yml`](../../.github/workflows/ci.yml); the `androidTest` job
-declares `needs: build`, so a failure there also gates emulator tests.
-The step verifies the jar's SHA-256 against the official Gradle
-wrapper-jar hash list before any Gradle invocation runs in that job,
-so a tampered wrapper jar (e.g. a malicious PR substituting the jar,
-or a compromised maintainer push) cannot execute in the build pipeline.
+`gradle/actions/wrapper-validation` step in the `build` job of
+[`ci.yml`](../../.github/workflows/ci.yml), before any Gradle invocation
+runs; the `androidTest` job declares `needs: build`, so a failure there
+also gates emulator tests. The step verifies the jar's SHA-256 against
+the official Gradle wrapper-jar hash list, so a tampered wrapper jar
+(e.g. a malicious PR substituting the jar, or a compromised maintainer
+push) cannot execute in the build pipeline.
 See [SR-138](https://github.com/DocGerd/pantry-tracker/issues/138).
 
 The `osv-scan` job in
