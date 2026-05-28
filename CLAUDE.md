@@ -349,3 +349,24 @@ restructured to make the lesson load-bearing on its own.*
   Keep `required_linear_history` *off* on ruleset 16948699 ("Protect main
   and develop"): release-prep merges from `release/<version>` into `main`
   are non-fast-forward by construction and would be blocked otherwise.
+- **CodeQL Kotlin extraction needs three load-bearing build flags.**
+  [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) runs the
+  Gradle build under a CodeQL `LD_PRELOAD` tracer; for the tracer to
+  actually see Kotlin compilation on this 100% Kotlin Android project,
+  ALL THREE must hold simultaneously: (a) **Kotlin compiler in-process**
+  (`-Pkotlin.compiler.execution.strategy=in-process`) — the default
+  out-of-process Kotlin daemon JVM is outside the tracer scope;
+  (b) **build cache disabled** (`clean` + `--no-build-cache`) — a
+  `compileDebugKotlin FROM-CACHE` from a prior ci.yml run means no
+  compiler process runs for the tracer to capture; (c) **trace mode, NOT
+  `build-mode: none`** — for the `java-kotlin` combined language `none`
+  is a Java-only dependency-graph scanner that yields an empty source
+  archive on a Kotlin-only codebase (this repo has zero `.java` files).
+  Each failure mode produces the identical "no source code seen during
+  build" finalize error, so a passing Android Gradle build inside the
+  tracer is NOT sufficient evidence the DB is non-empty — watch the
+  actual `Analyze (java-kotlin)` check conclusion. Diagnosed across
+  PR #131 iterations 1-3; commit `a33a449` is the working config and
+  codeql.yml's build-step comment block documents the full chain.
+  Eviction criterion: codeql.yml is removed, or CodeQL ships native
+  source-only Kotlin extraction for `java-kotlin`.
