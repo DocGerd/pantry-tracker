@@ -1,0 +1,18 @@
+name: "Pantry Tracker CodeQL Config"
+
+# Exclude generated code so we don't flag KSP / Room / Compose
+# compiler output that humans never wrote. Issue #150 closed
+# alert #10 (java/field-masks-super-field on AppDatabase_Impl)
+# via this exclusion.
+paths-ignore:
+  - "app/build/**"
+  - "**/build/**"          # defensive: covers future build dirs
+
+# Suppress the Kotlin-lowering false positive that fires on
+# synthesised `tmp0_other_with_cast` locals from exhaustive `when`
+# over sealed classes. Source: closed alerts #11, #12, #13 in
+# issue #150. The query is in the security-and-quality suite;
+# we keep the rest of the suite enabled by only excluding this id.
+query-filters:
+  - exclude:
+      id: java/local-variable-is-never-read
