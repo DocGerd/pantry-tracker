@@ -12,7 +12,7 @@ release buildType since v1.2.0.)
 Through v1.1.0 the release buildType shipped with `isMinifyEnabled = false`
 and `isShrinkResources = false`. That left several known shortcomings:
 
-- The release APK at v1.1.0 measured **~38.65 MB** (40,523,977 bytes),
+- The release APK at v1.1.0 measured **~40.5 MB** (40,523,977 bytes),
   carrying a substantial amount of Kotlin stdlib, Compose, Coil, Ktor, and
   Room code that the app never reaches.
 - The attack surface was larger than necessary — every public method on
@@ -88,7 +88,7 @@ builds are not slowed down; release UAT runs it explicitly.
 `isDebuggable` and `isJniDebuggable` are explicitly set to `false`
 (SR-19) even though that matches the AGP default — defending against a
 future merge accident or plugin that silently flips either flag. The
-manifest-level guard `verifyReleaseManifestNotDebuggable` (also SR-19 era)
+manifest-level guard `verifyReleaseManifestNotDebuggable` (SR-22)
 asserts `android:debuggable="true"` is absent from the merged release
 manifest at the end of every `assembleRelease`.
 
@@ -96,7 +96,7 @@ manifest at the end of every `assembleRelease`.
 
 **Positive.**
 
-- **APK size: 38.65 MB → 23.02 MB**, a 40.4% reduction (~16.4 MB saved)
+- **APK size: ~40.5 MB → ~24.1 MB**, a 40.4% reduction (~16.4 MB saved)
   observed on the v1.2.0 build. Smaller download, smaller install
   footprint, smaller attack surface.
 - `lintVitalRelease` now runs against the minified output — analysis

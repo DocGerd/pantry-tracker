@@ -118,7 +118,7 @@ The app uses **Room** with **KSP**-generated DAOs and **exported schemas**.
 - Quality goals driving this: [`docs/architecture/01-introduction-and-goals.md`](../architecture/01-introduction-and-goals.md)
   §1.2 row 2 (offline-first) and row 4 (no surprise data loss).
 - Cross-cutting concerns: [`docs/architecture/08-crosscutting-concepts.md`](../architecture/08-crosscutting-concepts.md)
-  §8.7 (testing layers) and §8.9 (data-at-rest).
+  §8.7 *Testing strategy* and §8.9 *Security*.
 - v1 design spec: [`docs/superpowers/specs/2026-05-16-kitchen-inventory-design.md`](../superpowers/specs/2026-05-16-kitchen-inventory-design.md)
   §"Local DB" row + §"Programmer error" handling.
 - Implementation:
