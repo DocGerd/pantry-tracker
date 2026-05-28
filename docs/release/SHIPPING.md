@@ -274,7 +274,7 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
 > runs on the `release: published` event and attaches three additional
 > artifacts: `app-release.apk.sig` (keyless cosign signature),
 > `app-release.apk.pem` (Fulcio certificate), and
-> `app-release.intoto.jsonl` (SLSA Build L3 provenance). No manual
+> `app-release.apk.intoto.jsonl` (SLSA Build L3 provenance). No manual
 > `cosign` step is needed from the releaser. The user-facing verification
 > command lives in [`SECURITY.md`](../../SECURITY.md). Releases v1.0.x /
 > v1.1.x / v1.2.x predate this workflow and are jarsigner-signed only.

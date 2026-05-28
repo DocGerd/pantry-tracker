@@ -6,7 +6,7 @@ name: Release signing (cosign + SLSA provenance)
 #
 #   - app-release.apk.sig    -- keyless cosign signature (via Sigstore + OIDC)
 #   - app-release.apk.pem    -- ephemeral signing certificate from Fulcio
-#   - app-release.intoto.jsonl -- SLSA Build L3 provenance attestation
+#   - app-release.apk.intoto.jsonl -- SLSA Build L3 provenance attestation
 #
 # Scope: v1.3.0 onward only. v1.0/v1.1/v1.2 were jarsigner-signed only and
 # are NOT re-signed retroactively -- the OIDC token wouldn't bind to the
@@ -76,7 +76,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release upload "$TAG" \
+          # --clobber: a re-publish of the same release (e.g., maintainer
+          # edits the notes and re-publishes, or this workflow is re-run
+          # after a transient failure) must not 422-fail on the second
+          # attempt. concurrency.cancel-in-progress is false above, so
+          # re-runs are explicitly allowed; clobbering the previous
+          # signature+cert is the intended behaviour.
+          gh release upload --clobber "$TAG" \
             --repo "${{ github.repository }}" \
             app-release.apk.sig app-release.apk.pem
 

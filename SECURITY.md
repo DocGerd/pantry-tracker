@@ -55,7 +55,7 @@ provenance attestation. Both are produced by
 
 To verify the APK before installing, download all four assets from the
 release page (`app-release.apk`, `app-release.apk.sig`, `app-release.apk.pem`,
-`app-release.intoto.jsonl`) and run:
+`app-release.apk.intoto.jsonl`) and run:
 
 ```bash
 cosign verify-blob \
