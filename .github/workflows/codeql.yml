@@ -74,6 +74,7 @@ jobs:
           # maintainability/quality lints — broader than the default suite,
           # appropriate for a small app where we want maximum signal.
           queries: security-and-quality
+          config-file: ./.github/codeql/codeql-config.yml
 
       # Build choice: manual `:app:assembleDebug` rather than `autobuild`,
       # with the Kotlin compiler forced in-process AND the Gradle build
