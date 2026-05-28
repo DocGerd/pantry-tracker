@@ -1,0 +1,451 @@
+# Security posture
+
+> **Status:** Living document.
+> **Last reviewed:** 2026-05-28.
+> **Cadence:** reviewed on every major release (next: v2.0) and whenever a
+> structural item below changes (e.g. new CI workflow, signing-cert rotation,
+> distribution-channel change).
+
+This document captures how we — Pantry Tracker, a single-maintainer
+Android app distributed as a signed sideload APK — reason about the
+security of the code, the build pipeline, and the release process. It
+exists as the human-readable counterpart to whatever automated badges
+(OpenSSF Scorecard, Best Practices) end up rendering on the
+[README](../README.md), and to explain the cases where a high-quality
+single-maintainer project structurally cannot meet a badge ideal — and
+what we do instead.
+
+The shape of this document mirrors the
+[hangarfit `security-posture.md`](https://github.com/DocGerd/hangarfit/blob/main/docs/security-posture.md)
+template that the maintainer uses across personal repos. The text is
+specific to pantry-tracker; the section layout is the reusable bit.
+
+## Threat model & scope
+
+Pantry Tracker is a **single-user**, **offline-first** Android app that
+tracks kitchen inventory at integer quantities. The app runs entirely
+on-device against a local Room database; the only outbound network call
+is an **anonymous** barcode lookup against the public
+[Open Food Facts](https://world.openfoodfacts.org/) API (and three
+sister-project hosts as 404 fallbacks). No accounts, no analytics, no
+crash reporter, no advertising SDK. Distribution is signed sideload
+APK on GitHub Releases — there is no Play Store / F-Droid presence in
+scope of this document. See
+[arc42 §1 — Introduction & goals](architecture/01-introduction-and-goals.md)
+and [arc42 §3 — System scope & context](architecture/03-system-scope-and-context.md)
+for the full design context.
+
+**In scope** for this posture:
+
+- The Android app source code in `app/` and the custom-detekt-rule
+  module in `detekt-rules/`.
+- The build pipeline:
+  [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) and
+  [`.github/workflows/security.yml`](../.github/workflows/security.yml).
+- The release process documented in
+  [`docs/release/SHIPPING.md`](release/SHIPPING.md), including the
+  signing-key management model.
+- The process / governance documents that gate what reaches `main` and
+  `develop`: [`CLAUDE.md`](../CLAUDE.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md),
+  [`GOVERNANCE.md`](../GOVERNANCE.md), and the GitHub branch-protection
+  rulesets that mechanically enforce them.
+- The disclosure policy at [`SECURITY.md`](../SECURITY.md).
+
+**Out of scope** — because the project has none of these:
+
+- Multi-tenant operations, hosted services, server-side state.
+- User accounts, identity, session management.
+- Any infrastructure we operate (we operate none; GitHub-hosted runners
+  and GitHub.com itself are upstream services we consume).
+- Vulnerabilities requiring root access on a user's device.
+- Third-party dependencies' own bug pipelines — these are routed to
+  their maintainers per [`SECURITY.md`](../SECURITY.md) §"Out of scope".
+
+This scoping deliberately matches [`SECURITY.md`](../SECURITY.md) §Scope
+so that the disclosure policy and this posture document agree on what we
+will and won't act on.
+
+## What we do
+
+The controls below are the active surface, listed by category. Each
+item links to the file or workflow that implements it so the reader can
+verify "is this still true?" without trusting this document.
+
+### Code review
+
+- **Mandatory multi-agent PR review cycle.** Every PR opened in this
+  repo — by the maintainer or by an automated/agent contributor — goes
+  through the multi-agent review cycle documented in
+  [`CLAUDE.md`](../CLAUDE.md) §"PR review". Findings are posted as
+  **inline review threads** on the diff (not single summary comments),
+  fixed on the same branch, and resolved per-thread via GraphQL's
+  `resolveReviewThread` mutation. Ready-to-merge is only declared once
+  every thread is resolved. This is the mitigation for the single-maintainer
+  Scorecard Code-Review zero — see §"Structural OpenSSF Scorecard zeros"
+  below.
+- **Only humans merge to `develop` or `main`.** Branch protection
+  rulesets on GitHub require PR merges (no direct push) on both branches,
+  and the project's hard governance rule (documented in
+  [`CLAUDE.md`](../CLAUDE.md) and [`GOVERNANCE.md`](../GOVERNANCE.md))
+  states that automated agents MUST NOT invoke `gh pr merge` or
+  `git push origin develop` / `git push origin main`. Every change
+  reaching either branch has a human "Merge pull request" click on the
+  audit trail.
+
+### CI gates
+
+- **SHA-pinned third-party Actions.** Every action used in
+  [`ci.yml`](../.github/workflows/ci.yml) and
+  [`security.yml`](../.github/workflows/security.yml) is pinned to a
+  full commit SHA with a `# vX.Y.Z` trailing comment for human
+  readability. Example, from `ci.yml`:
+  `uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2`.
+  This pattern is uniform across both workflows.
+- **Least-privilege `GITHUB_TOKEN` permissions.** Both workflows
+  declare explicit `permissions:` blocks. `ci.yml` declares
+  `contents: read` at the workflow top level (covering every step
+  uniformly); `security.yml` declares the same scope per-job (`osv-scan`
+  uses `contents: read`; `gitleaks` adds `pull-requests: read` for
+  comment posting). Neither job requests write scopes it does not need.
+  See [SR-18](https://github.com/DocGerd/pantry-tracker/issues/18) for
+  the historical reason this is explicit.
+- **Detekt + AGP Lint on every PR.** The `build` job in
+  [`ci.yml`](../.github/workflows/ci.yml) runs `:app:detekt` (Kotlin
+  static analysis with a strict project-local config in
+  [`detekt-config.yml`](../detekt-config.yml)) and `lintDebug` (AGP
+  Lint). The `!cancelled()` guard on the detekt step ensures static
+  analysis runs even when the build/test step fails — so devs get the
+  feedback in the same iteration as compile errors.
+- **Custom `ErrorToneRule` detekt check.** Lives in the standalone
+  `:detekt-rules` Gradle module and enforces the project-wide convention
+  that user-facing error messages start with `"Couldn't <verb>: ..."`.
+  Backed by `ErrorToneRuleTest` (in `:detekt-rules:test`) which lints
+  sample snippets and asserts exact finding counts — included in the
+  default CI Gradle invocation so a regression that makes the rule
+  silently inert fails the PR.
+- **Instrumented tests on an emulator.** The `androidTest` job in
+  [`ci.yml`](../.github/workflows/ci.yml) boots a Google APIs x86_64
+  emulator via `reactivecircus/android-emulator-runner@…` and runs
+  `:app:connectedDebugAndroidTest`. This catches instrumented-test
+  bugs that static analysis and PR review cannot — e.g.
+  `ActivityManager: Killing <pid>: permissions revoked` from
+  [issue #117](https://github.com/DocGerd/pantry-tracker/issues/117)
+  was invisible to every review surface but instant on an emulator boot.
+- **Gradle wrapper SHA pin guard.** [`ci.yml`](../.github/workflows/ci.yml)
+  has an explicit "Assert Gradle wrapper SHA is pinned (SR-5)" step
+  that fails the PR if `distributionSha256Sum=` is missing from
+  `gradle/wrapper/gradle-wrapper.properties`. A bare
+  `./gradlew wrapper --gradle-version X.Y.Z` silently drops the pin;
+  this guard catches the regression at PR time. See
+  [`docs/release/SHIPPING.md`](release/SHIPPING.md) for the atomic
+  two-flag form maintainers must use.
+
+### Dependency hygiene
+
+- **OSV-Scanner on every push + PR + weekly schedule.** The `osv-scan`
+  job in [`security.yml`](../.github/workflows/security.yml) regenerates
+  the Gradle lockfile from the current resolved dependency graph and
+  runs OSV-Scanner against it. Exits non-zero on any vulnerability —
+  fails the PR. The weekly `0 6 * * 1` cron re-runs the scan so newly
+  disclosed CVEs surface even if no PRs land.
+- **Gradle lockfile tracked on `develop`.** `app/gradle.lockfile` is
+  checked into source control per
+  [Gradle's official guidance](https://docs.gradle.org/current/userguide/dependency_locking.html).
+  Dependabot updates it alongside `gradle/libs.versions.toml`. The
+  OSV scan therefore reflects what would actually ship, not what was
+  last hand-resolved. The `security.yml` job also fails loud if the
+  lockfile is missing — catching the silent-no-op regression we hit
+  during this milestone's first iteration.
+- **Dependabot enabled** via [`.github/dependabot.yml`](../.github/dependabot.yml)
+  for `gradle` and `github-actions` ecosystems. Action PRs and Gradle
+  PRs follow the same multi-agent review cycle as any other PR — they
+  do not auto-merge.
+
+### Secret hygiene
+
+- **Gitleaks on every PR + push + weekly schedule.** The `gitleaks`
+  job in [`security.yml`](../.github/workflows/security.yml) runs
+  `gitleaks/gitleaks-action` with `fetch-depth: 0` so it can scan the
+  full PR diff against the base. Pre-flight git-history secret scan
+  was completed as part of OSS-1 before the repository flipped public.
+- **Local pre-commit + pre-push hooks** gate on detekt + secret
+  scanning (see [`CLAUDE.md`](../CLAUDE.md) §"Hooks"). A hook failure
+  means real signal — fix the underlying issue rather than skipping
+  the hook (which the project's hard governance rule forbids).
+- **`block-dangerous-bash.sh`** pattern-matches the full command-line
+  text and refuses to let agent sessions invoke obvious foot-guns
+  (`gh pr merge` on main, `git push --force` to protected branches, etc.).
+  This is belt-and-braces on top of the branch-protection ruleset, not
+  a substitute for it.
+
+### Build / release hardening
+
+- **R8 minification + resource shrinking on release builds.**
+  [`app/build.gradle.kts`](../app/build.gradle.kts) §`buildTypes.release`
+  sets `isMinifyEnabled = true` and `isShrinkResources = true`. This
+  reduces the attack surface of the shipped APK (dead-code removal),
+  shrinks the artifact, and forces the test of every keep-rule we
+  rely on. The `-PverifyR8=true` flag enables an optional post-build
+  inspection (`verifyR8KeepRules`) that asserts annotated classes
+  (`@Serializable`, `@Entity`) survived shrinking — see
+  [SR-80](https://github.com/DocGerd/pantry-tracker/issues/80).
+- **Release-signing isolation.** The release keystore lives **outside**
+  the repository and is referenced only via four Gradle properties
+  (`PANTRY_TRACKER_RELEASE_STORE_FILE`, …PASSWORD, …KEY_ALIAS,
+  …KEY_PASSWORD). [`app/build.gradle.kts`](../app/build.gradle.kts)
+  enforces an all-or-nothing rule: all four set → signed APK; none set
+  → `app-release-unsigned.apk` (intentionally not installable);
+  some-but-not-all → `GradleException` at configuration time naming
+  the missing props. Full procedure: [`docs/release/SHIPPING.md`](release/SHIPPING.md) §B.
+- **Cert lifetime-identity model.** The v1.0.0 signing certificate
+  (SHA-256 `ec9a4bb8…b3d9`) is the lifetime identity for all v1.0.x and
+  subsequent minor versions. Android refuses to install an APK signed
+  by a different cert over an existing install, so cert rotation is a
+  user-visible breaking change. We document the cert SHA in every
+  release's GitHub Release notes so a user can verify a downloaded APK
+  via `apksigner verify --print-certs` before installing.
+- **Room schema migration emulator drive.** Every Room schema migration
+  is exercised end-to-end on an emulator via
+  [`scripts/uat/verify-migration-1-2.sh`](../scripts/uat/verify-migration-1-2.sh)
+  before the release tag. JVM-only migration tests cannot catch
+  device-level migration regressions (manifest-level component changes,
+  SQLite engine differences). See [`docs/release/SHIPPING.md`](release/SHIPPING.md)
+  §"Migration drive" for the full runbook.
+- **Real-device UAT for HTTP-client changes.** JVM tests with
+  `MockEngine` cannot reproduce CDN-specific behaviour like Open Food
+  Facts' chunked transfer encoding. Any change that touches request /
+  response headers, body validation, or response classification goes
+  through a real-device smoke test against the public OFF API — see
+  [`docs/uat/v1-uat-checklist.md`](uat/v1-uat-checklist.md).
+- **No cleartext network traffic.** OFF is HTTPS-only. We do not pin
+  the certificate (intentional — pinning would brick the app on a
+  routine OFF cert rotation, which would be a denial-of-service against
+  every user). The `AndroidManifest.xml` `usesCleartextTraffic="false"`
+  default applies; we do not opt out.
+
+### Disclosure
+
+- **Responsible disclosure policy.** [`SECURITY.md`](../SECURITY.md)
+  documents the private-disclosure channels (`claude@docgerdsoft.de`
+  and the GitHub Security Advisory draft endpoint), best-effort
+  acknowledgement / assessment / fix timelines, and the scope split
+  between this repo's code and third-party dependency upstreams.
+- **Dated security-review notes.** Findings raised during development
+  that don't fit a normal issue (or that warrant a written record of
+  an accept-risk decision) land under
+  [`docs/security/`](security/). The current review note is
+  [`security-review-2026-05-17.md`](security/security-review-2026-05-17.md).
+
+## Structural OpenSSF Scorecard zeros — and what we do instead
+
+OpenSSF [Scorecard](https://github.com/ossf/scorecard) is a useful
+external pass — it surfaces real issues — but its scoring model assumes
+a multi-maintainer project distributing through standard package
+ecosystems (npm, PyPI, Maven Central, container registries). A
+single-maintainer Android sideload-APK project structurally cannot
+score 10/10 on every check, no matter how disciplined its process.
+
+This section walks through each check where the structural model
+diverges from what we actually ship, explains why, and points at the
+compensating control where one exists. The intent is to make those
+zeros legible — to a reviewer, a future maintainer, or a downstream
+user looking at the badge — rather than to argue them away.
+
+### Code-Review — structural zero
+
+**What Scorecard checks:** every commit on the default branch was
+approved by at least one reviewer account distinct from the author,
+via a GitHub PR review.
+
+**Why we score zero:** the project has one maintainer. There is no
+second human GitHub account that can approve PRs. Self-review is
+explicitly forbidden by GitHub (`event=APPROVE` on your own PR returns
+422), and even if it weren't, "distinct reviewer-account" is the metric
+Scorecard measures.
+
+**What we do instead.** Every PR is routed through the **mandatory
+multi-agent PR review cycle** documented in
+[`CLAUDE.md`](../CLAUDE.md) §"PR review". Concretely:
+
+1. The PR opener (maintainer or agent) does not push a "this is done"
+   marker.
+2. Multi-agent review is run — locally via the `pr-review-toolkit`
+   skill or in the cloud via `/ultrareview`. Each finding is posted as
+   an inline review thread on the relevant diff line.
+3. Findings are fixed on the same branch (new commits, never amended).
+4. Each fix's corresponding inline thread is resolved via GraphQL's
+   `resolveReviewThread` mutation.
+5. Only once every thread is resolved is the PR declared ready-to-merge.
+6. The human maintainer performs the merge click. Automated agents are
+   prohibited from invoking `gh pr merge` by the project's hard
+   governance rule.
+
+This is a different review model from "second human eyeballs", and we
+do not claim it is equivalent — but it is **not zero review**, and the
+inline-thread + GraphQL-resolve audit trail is permanent on the PR.
+The structural zero on the Scorecard badge does not reflect the actual
+review surface.
+
+### Maintained — fine, but bursty
+
+**What Scorecard checks:** sustained commit + issue activity in the
+last 90 days.
+
+**Why this can dip:** release cadence is feature-driven, not
+calendar-driven. v1.0.0 shipped 2026-05-18; v1.1.0 shipped 2026-05-19;
+v1.2.0 shipped 2026-05-28. A multi-week quiet period between minor
+releases is normal for a kitchen-inventory app — it does not mean the
+project is abandoned. Look at the issue tracker activity rather than
+the commit count if the score dips.
+
+### Token-Permissions — high, with evidence
+
+**Why this scores well:** both workflow files declare explicit
+least-privilege `permissions:` blocks. See
+[`ci.yml`](../.github/workflows/ci.yml) line 19 (`contents: read` at
+workflow top level) and
+[`security.yml`](../.github/workflows/security.yml) lines 20-21 and
+61-63 (per-job blocks for `osv-scan` and `gitleaks`). No workflow
+requests write scopes it does not need.
+
+No mitigation required — flagged here so a reader can verify the
+evidence rather than trusting the badge.
+
+### Pinned-Dependencies — high, with evidence
+
+**Why this scores well:** every third-party action in both workflows
+is pinned to a full commit SHA with a trailing `# vX.Y.Z` comment for
+readability. The two patterns Scorecard cares about — GitHub Actions
+pins and language-ecosystem pins — are both covered:
+
+- **Actions** are SHA-pinned at every `uses:` site in
+  [`ci.yml`](../.github/workflows/ci.yml) and
+  [`security.yml`](../.github/workflows/security.yml).
+- **Gradle dependencies** are version-pinned via
+  `gradle/libs.versions.toml` and additionally locked via
+  `app/gradle.lockfile`, which is tracked in source control and
+  regenerated by the OSV-scan job to ensure the scan reflects shippable
+  state.
+
+No mitigation required — flagged here for evidence.
+
+### Signed-Releases — partial, by distribution-channel choice
+
+**What Scorecard checks:** release artifacts have either GPG signatures
+or SLSA provenance attestations attached to the GitHub Release. Modern
+Scorecard runs prefer SLSA.
+
+**Why we score partial.** The shipped artifact is an `app-release.apk`
+signed by the Android v2/v3 APK signing scheme with the project's
+release keystore. This is the correct signing for the artifact's
+distribution channel — `pm install` and the OS package installer
+verify the APK signature on install, and Android refuses to install an
+update signed by a different cert over an existing install. Scorecard
+does not currently recognise APK signing as a release signature
+because it scans for GPG `.sig` / `.asc` files or `attestations.json`
+SLSA provenance, neither of which a sideload-Android-APK workflow
+produces.
+
+**What we do instead.**
+
+- **Lifetime cert identity.** The signing cert SHA-256
+  (`ec9a4bb8…b3d9`) is documented in every GitHub Release's notes (see
+  [v1.0.0 release notes](https://github.com/DocGerd/pantry-tracker/releases/tag/v1.0.0))
+  and referenced from the design spec
+  [`docs/superpowers/specs/2026-05-18-v1.1-fallbacks-and-undo-design.md`](superpowers/specs/2026-05-18-v1.1-fallbacks-and-undo-design.md).
+  A downloader can verify the cert via
+  `apksigner verify --print-certs app-release.apk` before installing.
+- **Build pipeline integrity.** Release builds are produced from a
+  signed tag on `main`, with the `chore(release): lock dependencies`
+  commit immediately preceding the tag capturing the exact dependency
+  state shipped. See [`docs/release/SHIPPING.md`](release/SHIPPING.md)
+  §"Release-tag dependency-lock procedure".
+- **Build pipeline isolation.** The keystore is not in the repository
+  and not in CI secrets — release builds are produced on the
+  maintainer's workstation from a keystore stored outside any
+  version-controlled or CI-accessible location.
+
+SLSA provenance attestation for sideload APKs is on the backlog as a
+future hardening step. Adoption is gated on the
+[GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+flow stabilising for Android-APK build artifacts; once it does, this
+document and `SHIPPING.md` will be updated together and the SLSA tag
+added to release notes.
+
+### Branch-Protection — configured
+
+**What Scorecard checks:** the default branch (and ideally release
+branches) require PRs, status checks, and other administrative
+guardrails before merge.
+
+**State at last review:** branch-protection ruleset 16948699 ("Protect
+main and develop") is active on this repository. It enforces:
+
+- PR-only merges (no direct push) on both `main` and `develop`.
+- `required_status_checks` includes the `build` job from `ci.yml`.
+- No deletion of either branch.
+- No non-fast-forward push (with one explicit exception — see below).
+- `required_linear_history` is **off** by design: release-prep merges
+  from `release/<version>` into `main` are non-fast-forward by
+  construction (they're merge commits that preserve the GitFlow
+  structure). Enabling linear history would block them. This trade-off
+  is documented in [`CLAUDE.md`](../CLAUDE.md) §"Things that have
+  bitten past sessions" → "GitFlow ruleset constraints for this repo".
+
+Because the GitHub legacy "Branch Protection Rules" API returns 404
+for branches protected by a Repository Ruleset (which is what
+ruleset 16948699 is), older Scorecard versions may misreport this
+check as zero. The current state is verifiable via
+`gh api repos/DocGerd/pantry-tracker/rules/branches/main`.
+
+### CII-Best-Practices — pursuing
+
+The OpenSSF Best Practices (formerly CII) badge is in the
+[OSS-10 backlog](https://github.com/DocGerd/pantry-tracker/issues/104).
+Once registered, the badge will be added to the
+[README](../README.md) and this section updated with the badge URL.
+
+### Dangerous-Workflow / Webhooks / License / Vulnerabilities
+
+These either trivially pass (Apache-2.0 license is in
+[`LICENSE`](../LICENSE); no dangerous workflow patterns; OSV-Scanner
+fails the build on known CVEs) or are not under the project's control
+(GitHub webhooks). They are noted here only so the badge reader can
+see they were considered.
+
+### Fuzzing / SAST
+
+- **SAST.** CodeQL is in the
+  [OSS-9 backlog](https://github.com/DocGerd/pantry-tracker/issues/102)
+  and will land before the next major release. Until then, the SAST
+  surface is detekt (with the custom `ErrorToneRule` regression test)
+  plus AGP Lint — both run on every PR by `ci.yml`.
+- **Fuzzing.** Not currently practiced. The app's parsing surface is
+  small and well-bounded (OFF JSON via kotlinx.serialization with a
+  strict body cap and fail-closed decoder; barcode strings constrained
+  by the scanner). Fuzzing kotlinx.serialization is upstream's
+  responsibility. We accept the structural zero here for now.
+
+## Reporting a security issue
+
+Reporting policy, channels, and best-effort timelines live in
+[`SECURITY.md`](../SECURITY.md). The short form: email
+`claude@docgerdsoft.de` or open a GitHub Security Advisory draft at
+<https://github.com/DocGerd/pantry-tracker/security/advisories/new>.
+**Do not open a public GitHub issue** for security-sensitive findings.
+
+## Review cadence
+
+This document is reviewed:
+
+- **On every major release** (currently: next at v2.0). The release
+  branch's `release/<version>` PR is required to confirm the doc still
+  describes reality before merging into `main`.
+- **Whenever a structural item changes** — e.g. a new CI workflow
+  lands, a workflow's permission scope widens, the signing cert
+  rotates, the distribution channel changes, or a new compensating
+  control is added for one of the structural Scorecard zeros above.
+- **On any update to [`SECURITY.md`](../SECURITY.md)** — the scope
+  definitions must agree.
+
+Last reviewed: **2026-05-28** (initial version, OSS-11).

@@ -43,3 +43,9 @@ Out of scope:
 - Third-party dependencies — please report to their maintainers directly, then
   optionally let us know so we can pin/upgrade.
 - Vulnerabilities requiring root access on a user's device.
+
+## See also
+
+- [`docs/security-posture.md`](docs/security-posture.md) — what we do
+  proactively (CI gates, dependency hygiene, build hardening) and the
+  rationale for any structural OpenSSF Scorecard zeros.
