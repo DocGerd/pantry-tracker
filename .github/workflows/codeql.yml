@@ -52,7 +52,8 @@ jobs:
           queries: security-and-quality
 
       # Build choice: manual `:app:assembleDebug` rather than `autobuild`,
-      # with the Kotlin compiler forced in-process for CodeQL tracing.
+      # with the Kotlin compiler forced in-process AND the Gradle build
+      # cache disabled — both are required for CodeQL to see Kotlin code.
       #
       # Why not `autobuild`: it routinely fails to discover the AGP variant
       # model on Android projects, producing an empty CodeQL DB.
@@ -68,16 +69,22 @@ jobs:
       # Kotlin Gradle plugin spawns an out-of-process Kotlin compiler daemon
       # for every build. That daemon JVM is started *outside* CodeQL's
       # `LD_PRELOAD` tracer scope, so even though the Android Gradle build
-      # succeeds, the Kotlin compilation never gets traced and the source
-      # archive is empty at finalize. Forcing `in-process` runs the Kotlin
-      # compiler inside the same Gradle JVM (which IS under the tracer) —
-      # this is the canonical fix for the
+      # succeeds, the Kotlin compilation never gets traced.
+      #
+      # Why `--no-build-cache` AND `clean`: `gradle/actions/setup-gradle`
+      # restores Gradle's local build cache from previous workflow runs
+      # (including ci.yml). On a cache hit, `compileDebugKotlin` is served
+      # `FROM-CACHE` and no compiler process runs — leaving CodeQL's tracer
+      # with nothing to capture. Disabling the build cache + cleaning the
+      # task outputs forces a fresh in-process Kotlin compilation that the
+      # tracer can actually see. Canonical fix for the
       # https://gh.io/troubleshooting-code-scanning/no-source-code-seen-during-build
-      # symptom on Kotlin Gradle projects.
-      - name: Build (Android debug, Kotlin compiler in-process)
+      # symptom on Kotlin Gradle projects where compileDebugKotlin shows
+      # `FROM-CACHE` in the build log.
+      - name: Build (Android debug, Kotlin compiler in-process, no cache)
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon \
+          ./gradlew clean :app:assembleDebug --no-daemon --no-build-cache \
             -Pkotlin.compiler.execution.strategy=in-process
 
       - name: Perform CodeQL Analysis
