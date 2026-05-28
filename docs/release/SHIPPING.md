@@ -363,6 +363,24 @@ Running plain `./gradlew wrapper --gradle-version X.Y.Z` updates the URL
 but leaves the *old* SHA in place — the next wrapper run will then refuse
 to start because the new archive doesn't match the old hash.
 
+### Also pinned: the checked-in `gradle-wrapper.jar` itself
+
+`distributionSha256Sum` pins the **downloaded distribution archive**;
+it does not pin the **wrapper jar that lives in source control** at
+[`gradle/wrapper/gradle-wrapper.jar`](../../gradle/wrapper/gradle-wrapper.jar).
+That jar is what Scorecard's `Binary-Artifacts` check flags as a
+checked-in binary. We close the gap with a
+`gradle/actions/wrapper-validation` step at the top of every CI job in
+[`ci.yml`](../../.github/workflows/ci.yml) — it verifies the jar's
+SHA-256 against the official Gradle wrapper-jar hash list before any
+Gradle invocation runs, so a tampered wrapper jar (e.g. from a
+typo-squatted PR or a compromised contributor branch) can never
+execute on CI. See [SR-138](https://github.com/DocGerd/pantry-tracker/issues/138).
+
+A Gradle wrapper upgrade rev's the *jar* alongside the *URL* and *SHA*,
+so the upgrade procedure above produces the right jar automatically;
+no extra step is required when bumping versions.
+
 ---
 
 ## Common gotchas
