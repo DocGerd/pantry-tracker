@@ -1,0 +1,80 @@
+name: Fuzz (Jazzer)
+
+# SR-144: non-gating, scheduled-plus-on-demand Jazzer fuzz job against
+# OffApiClient's JSON decode path. Framing per issue #144: this is
+# regression-catch quality, not OSS-Fuzz-grade fuzzing. Findings are
+# uploaded as workflow artifacts; the job is deliberately NOT in any
+# required-status-checks list — feature PRs do not block on it.
+on:
+  workflow_dispatch:
+  schedule:
+    # Monday 04:15 UTC — deliberately offset from security.yml (Mon 06:00)
+    # and codeql.yml (Wed 06:00) so the three scheduled security workflows
+    # don't pile into the same minute on the GitHub-Actions queue. 04:15
+    # is also off-peak, which matters because Jazzer needs ~5 minutes of
+    # actual CPU time and shared runners are slower mid-business-day.
+    - cron: '15 4 * * 1'
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+# Workflow-level least-privilege scope (SR-18 convention, mirrors ci.yml).
+# The fuzz job only reads — no SARIF upload, no PR comment, no release —
+# so `contents: read` is sufficient. Artifact upload uses the implicit
+# `actions: write` from the upload-artifact action's own permission
+# (granted to the GITHUB_TOKEN at the workflow run level, not requested
+# here).
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Jazzer fuzz (OffApiClient)
+    runs-on: ubuntu-latest
+    # Hard ceiling on the whole job: 7 minutes. The @FuzzTest annotation's
+    # `maxDuration = "5m"` is the per-method Jazzer ceiling; the additional
+    # 2 minutes covers JDK + Gradle bootstrap, dependency resolution, and
+    # the JUnit Platform / Jazzer JVM warmup. If a future fuzz method's
+    # annotation is widened without thinking, this Actions-level timeout
+    # is the belt-and-braces stop.
+    timeout-minutes: 7
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
+
+      - name: Run Jazzer fuzz tests
+        # The :app:fuzzTest task sets JAZZER_FUZZ=1 internally so this runs
+        # in actual fuzzing mode (not just regression replay). --no-daemon
+        # keeps the JVM lifecycle predictable for the 7-minute timeout.
+        # --stacktrace ensures any Gradle-level failure (task-resolution,
+        # classpath mismatch) surfaces a full trace into the job log.
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:fuzzTest --no-daemon --stacktrace
+
+      - name: Upload findings (if any)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: jazzer-findings
+          # Jazzer drops crashing inputs into the inputs directory and writes
+          # the surrounding stack trace + Gradle test report under
+          # build/reports/tests/fuzzTest/. Both paths are uploaded so the
+          # maintainer can pull the artifact, replay the crashing input
+          # locally (in regression mode, JAZZER_FUZZ unset), and commit it
+          # back into the seed corpus.
+          path: |
+            app/build/reports/tests/fuzzTest/
+            app/build/test-results/fuzzTest/
+            app/src/test/resources/de/docgerdsoft/pantrytracker/data/remote/OffApiClientFuzzTestInputs/
+          if-no-files-found: ignore
+          retention-days: 30
