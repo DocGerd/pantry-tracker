@@ -299,7 +299,7 @@ alerts is the Android Gradle Plugin version. AGP 9.2.1 was the latest *stable*
 release at this snapshot (only 9.3.0 *alphas* existed); none of those
 transitives are bumped to their patched versions in any stable AGP yet, so no
 `libs.versions.toml` bump could close them. They were dismissed as
-`tolerated_risk` per step 3 above, to be revisited when a stable AGP pulls the
+`tolerable_risk` per step 3 above, to be revisited when a stable AGP pulls the
 fixes.
 
 ## Structural OpenSSF Scorecard zeros — and what we do instead
