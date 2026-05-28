@@ -374,3 +374,32 @@ restructured to make the lesson load-bearing on its own.*
   codeql.yml's build-step comment block documents the full chain.
   Eviction criterion: codeql.yml is removed, or CodeQL ships native
   source-only Kotlin extraction for `java-kotlin`.
+- **Scorecard check scoring is not always proportional.** Two checks
+  surprised us on 2026-05-28: **Branch-Protection** uses *tiered*
+  scoring (each tier must be fully satisfied to count any next-tier
+  work — solo maintainer can't reach Tier 2 because "require ≥1
+  reviewer" is structurally infeasible, so the score is capped at
+  Tier 1 = 3/10 regardless of how many Tier 5 toggles get flipped).
+  **Fuzzing** only recognizes a narrow whitelist (OSS-Fuzz,
+  ClusterFuzzLite, Go-native fuzz, Haskell QuickCheck/Hedgehog/
+  validity/SmallCheck, JS/TS fast-check, Erlang proper/quickcheck)
+  — **Jazzer is not on the list**, so PR #157 added real fuzz
+  coverage without moving the Scorecard score. When sizing Scorecard
+  tickets, read the per-check docs at
+  https://github.com/ossf/scorecard/blob/main/docs/checks.md before
+  predicting score movements. Bitten on #139 (predicted 3→6,
+  got 3→3) and #144 (predicted 0→10, got 0→0). Eviction criterion:
+  when Scorecard publishes per-check eligibility hints in the
+  workflow output (would make pre-prediction unnecessary).
+- **`.kts` + `java.time.Duration` inside a Gradle DSL block needs
+  an explicit import.** Fully-qualified `java.time.Duration.ofMinutes(N)`
+  may fail with `Unresolved reference 'time'` inside task-config
+  blocks — the Gradle `java { }` extension shadows the `java`
+  package root in DSL context. Fix: `import java.time.Duration` at
+  file top, then use bare `Duration.ofMinutes(N)` in the body. Same
+  shadow likely applies to other `java.*` package-root references
+  Gradle reuses as extensions — when in doubt, import explicitly.
+  Bitten on PR #157's `:app:fuzzTest` task. Eviction criterion: when
+  Kotlin DSL resolution prefers package roots over Gradle extensions,
+  or when `build.gradle.kts` is replaced by an alternative build
+  system.
