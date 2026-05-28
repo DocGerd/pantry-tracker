@@ -90,6 +90,26 @@ jobs:
         if: steps.gate.outputs.ready == 'true' && !cancelled()
         run: ./gradlew --no-daemon detekt
 
+      # SR-169 phase 1: generate the JaCoCo statement-coverage report from the
+      # debug JVM unit tests and upload the XML as a build artifact. This does
+      # NOT gate the PR yet — the jacocoTestCoverageVerification minimum is 0.00
+      # (a measured baseline), and this report is informational. The follow-up
+      # raises the gate to 0.80, merges instrumented (emulator) coverage, and
+      # adds :app:jacocoTestCoverageVerification to the required status checks.
+      # `!cancelled()` mirrors the Detekt step so coverage is produced in the
+      # same iteration as a failing build/test step.
+      - name: JaCoCo coverage report (SR-169)
+        if: steps.gate.outputs.ready == 'true' && !cancelled()
+        run: ./gradlew --no-daemon :app:jacocoTestReport
+
+      - name: Upload JaCoCo coverage XML (SR-169)
+        if: steps.gate.outputs.ready == 'true' && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: jacoco-coverage-xml
+          path: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          if-no-files-found: error
+
   androidTest:
     runs-on: ubuntu-latest
     needs: build
