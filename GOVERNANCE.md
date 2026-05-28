@@ -94,16 +94,6 @@ maintainer will revisit this document to add additional maintainers and a shared
 decision process at that point. Until then, the fastest way to influence
 direction is a well-argued issue or a clean pull request.
 
-## Related documents
-
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute, the GitFlow
-  workflow, PR requirements, and the code-review process.
-- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — expected behaviour and how to
-  report conduct issues.
-- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
-- [`CLAUDE.md`](CLAUDE.md) — the operational guide (workflow, tooling,
-  project-local configuration).
-
 ## Continuity & succession
 
 Pantry Tracker is single-maintainer today (bus factor = 1 — the same structural condition the Scorecard `Contributors` check surfaces, accept-risk per `docs/security-posture.md`). `access_continuity` is satisfied by a *documented plan*, not by headcount.
@@ -115,3 +105,13 @@ Pantry Tracker is single-maintainer today (bus factor = 1 — the same structura
 **Out-of-band contact.** The private security channel in `SECURITY.md` is the way to reach the maintainer if GitHub itself is the blocker.
 
 **What is canonical for handoff.** The `main` branch, the tagged releases, and the `docs/` tree (architecture, security-posture, release runbook) constitute the authoritative project state.
+
+## Related documents
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute, the GitFlow
+  workflow, PR requirements, and the code-review process.
+- [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — expected behaviour and how to
+  report conduct issues.
+- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
+- [`CLAUDE.md`](CLAUDE.md) — the operational guide (workflow, tooling,
+  project-local configuration).
