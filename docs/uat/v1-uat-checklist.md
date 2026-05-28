@@ -119,9 +119,9 @@ scanning against real products).
 
 ## 9. Search
 
-- [ ] In Home, tap the Search field and type "Test"
+- [ ] In Home, tap the Search field and type "Test" — [automated by SR-76]
 - [ ] List filters to only matching rows — [automated by SR-76]
-- [ ] Type a string that matches nothing (e.g. "zzz")
+- [ ] Type a string that matches nothing (e.g. "zzz") — [automated by SR-76]
 - [ ] List shows **"No matches for "zzz""** hint — [automated by SR-76]
 - [ ] **Empty-pantry CTAs do NOT appear** (no "Your pantry is empty", no "Scan to Add" button — those are only for blank-query empty) — [automated by SR-76]
 - [ ] Clear the search → list returns to full — [automated by SR-76]
@@ -248,3 +248,41 @@ sign-off record is not disturbed.
 - **New `-keep` rules required during UAT:** [list any added beyond the v1.2 spec, or "none"]
 - **Procedure for adding `-keep` rules mid-UAT:** if any item fails with a `ClassNotFoundException` / `NoSuchMethodException` / kotlinx.serialization "Serializer for class X is not found" in `adb logcat`: identify the stripped target, add the keep rule to `app/proguard-rules.pro`, document it in the line above, rebuild release (`./gradlew :app:assembleRelease`), reinstall, restart this checklist from item #1.
 - **Sign-off:** [signature/handle]
+
+---
+
+## Stays human-only (post-#73 reconciliation, 2026-05-28)
+
+The following rows are explicitly out of scope for automation, with rationale.
+Each must be walked on a real device before any tagged release.
+
+- **§0 row 1 — APK install on a real device.** No automation can prove a clean
+  first-install on a never-seen device class; OEM-specific package manager
+  behaviour and storage state cannot be reproduced in an emulator with
+  confidence.
+- **§0 rows 3-4 — Icon on a real OEM launcher grid and drawer.** RNG renders
+  the icon asset correctly, but OEM launcher composition, badge rendering,
+  and grid spacing are outside any emulator fidelity guarantee.
+- **§2 row 3 — Status / nav bar contrast.** Subjective visual judgement about
+  legibility against system chrome; no pixel-diff threshold reliably
+  substitutes for a human eye on a physical screen.
+- **§6 row 5 — OEM-specific Settings fallback Toast (Xiaomi MIUI / Huawei /
+  Samsung).** These manufacturers override the standard permission Settings
+  intent with proprietary UIs. The path an Intent takes and the UI that
+  appears vary in ways no emulator image reproduces.
+- **§7 / §8 / §11 / §12 — Actual barcode capture with a printed EAN-13.** The
+  camera hardware + ML Kit ground-truth path is irreducibly physical:
+  lighting, label stock, focal distance, and ML Kit decode quality cannot be
+  faked by injecting a mock barcode string into the scan ViewModel.
+- **§14 row 2 — Device reboot persistence.** Verifying that database and
+  preference state survives a real OS power cycle requires the actual OS
+  reboot sequence; emulator snapshots do not replicate cold-boot state
+  restoration fidelity.
+- **v1.2 OFF CDN chunked transfer encoding.** Open Food Facts chunks every
+  response and omits `Content-Length`. `MockEngine` never emits chunked
+  transfer encoding. Any header-keyed or body-validation policy that all
+  unit tests endorse can still break every scan on a real device over a
+  real CDN connection. (Documented bite-source: v1.1 CLAUDE.md "Things that
+  have bitten past sessions".)
+
+Source: GitHub issue #73 — v1 UAT automation umbrella.
