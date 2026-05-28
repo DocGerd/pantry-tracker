@@ -16,15 +16,30 @@ concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
+# Default to read-only at the workflow level; the analyze job below opts
+# in to the narrow extra scopes it actually needs. Matches the OpenSSF
+# Scorecard Token-Permissions recommendation that workflows declare the
+# minimum at top level and elevate only at the job that uses it (SR-137).
 permissions:
-  actions: read
   contents: read
-  security-events: write
 
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    permissions:
+      # `actions: read` lets the CodeQL action introspect the workflow file
+      # for the matrix expansion and language detection.
+      actions: read
+      # `contents: read` is REQUIRED here because job-level `permissions:`
+      # REPLACES (not merges with) the workflow-level block — omitting it
+      # would deny content access in this job and break the checkout step.
+      # Also useful for grep-ability.
+      contents: read
+      # `security-events: write` is what CodeQL needs to upload SARIF
+      # results to GitHub Code Scanning. Held at job level (not top level)
+      # so no other job in this workflow inherits the write scope.
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
