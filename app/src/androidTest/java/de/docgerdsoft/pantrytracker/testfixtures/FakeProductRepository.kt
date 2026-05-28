@@ -50,7 +50,7 @@ import kotlin.time.Clock
  * so the production sorted-by-name + unique-by-id invariants hold without
  * synchronization. All suspend writes update the map atomically.
  */
-class FakeProductRepository : ProductRepository {
+open class FakeProductRepository : ProductRepository {
 
     private val rows = MutableStateFlow<Map<Long, Product>>(emptyMap())
     private var nextId: Long = 1

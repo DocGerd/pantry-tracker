@@ -63,9 +63,11 @@ jobs:
         # `assembleDebugAndroidTest` compiles the Compose test sources without
         # running them (no emulator). Surfaces interface-evolution drift at PR
         # time — e.g. a FakeRepository forgetting a new ProductRepository method.
+        # `:detekt-rules:test` runs the ErrorToneRule proof test (SR-78) so a
+        # regression that makes the custom detekt rule inert fails the PR.
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug assembleDebugAndroidTest
+          ./gradlew --no-daemon assembleDebug testDebugUnitTest :detekt-rules:test lintDebug assembleDebugAndroidTest
 
       - name: Detekt (Kotlin static analysis)
         # `!cancelled()` keeps Detekt running even when the build/test/lint step
