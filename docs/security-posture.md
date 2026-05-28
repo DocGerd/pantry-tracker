@@ -664,3 +664,27 @@ This document is reviewed:
   definitions must agree.
 
 Last reviewed: **2026-05-28** (initial version, OSS-11).
+
+## Assurance case
+
+An assurance case is a structured argument that the software is adequately secure for its purpose. It is required by OpenSSF Best Practices Silver (`assurance_case`).
+
+**Claim.** Pantry Tracker adequately protects its users given its threat model: a single-user, offline-first Android app with no accounts, no server, and no user-to-user data flow.
+
+**Threat model & trust boundary.** The app's only untrusted input surfaces are (1) Open Food Facts (OFF) HTTP responses (attacker-controlled or man-in-the-middle JSON) and (2) the scanned barcode string. Everything else is local: a Room database in app-private storage and Compose UI. There is no authentication, no secrets at rest beyond the release signing key (which lives outside the repo and off-device), and no inbound network surface.
+
+**Secure-design argument (positive).**
+- Network responses are parsed defensively: a fail-closed response-body size cap (256 KB, enforced by `readBoundedBody` on actual bytes received — not on a Content-Length header that OFF's CDN omits) prevents a hostile response from exhausting memory. Parse guards classify the response from the parsed envelope, not from attacker-supplied headers — this is the lesson from the SR-24 chunked-encoding incident documented in arc42 §11.
+- TLS is the Android platform default (1.2+, certificate verification on, no overrides in `OffApiClient`); the app ships no bespoke cryptography.
+- Released APKs are `apksigner`-signed under a lifetime cert (SHA-256 `ec9a4bb8…b3d9`); install integrity is verifiable (see §"Build / release hardening" and [`docs/release/SHIPPING.md`](release/SHIPPING.md)).
+- Release builds run R8 minify + resource shrinking, reducing the shipped attack surface.
+- The only exported component is `MainActivity`, which handles the `android.intent.action.MAIN` launcher action; it carries no content provider, file provider, or deep-link export surface that would expose stored data to other apps.
+
+**Weakness-countering argument (negative).** The project actively hunts for the weaknesses it cannot reason away:
+- Static analysis: CodeQL `security-and-quality` + Detekt (with the custom `ErrorToneRule`) gate every PR and run on schedule.
+- Dependency risk: OSV-Scanner gates merges; Dependabot monitors weekly; the plugin-classpath vs. runtime-classpath exposure model is documented in §"Build-time vs. runtime exposure model" above.
+- Secret leakage: Gitleaks runs on every PR.
+- Fuzz testing: a Jazzer fuzz target exercises `OffApiClient`'s JSON-decode path weekly via [`fuzz.yml`](../.github/workflows/fuzz.yml).
+- Process: every change reaches `develop` or `main` only via human-merged PR with multi-agent review.
+
+**Residual risk (honest).** Bus factor is 1 (structural — see the single-maintainer model in [`GOVERNANCE.md`](../GOVERNANCE.md)); there is no dynamic analysis (DAST) — accepted for a memory-safe Kotlin client with one narrow untrusted input. These are tracked, justified accept-risk decisions, not oversights.
