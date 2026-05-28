@@ -1,0 +1,60 @@
+name: OpenSSF Scorecard
+
+# OpenSSF Scorecard analyses the repo against a battery of supply-chain
+# security checks (pinned actions, branch protection, signed releases, ...)
+# and publishes anonymised results to https://scorecard.dev so the badge in
+# README.md can read them. SARIF results also land in the Security tab as
+# Code Scanning alerts so any drop in score surfaces inline on PRs.
+#
+# Schedule rationale: Tuesday at 06:00 UTC, staggered against the other
+# weekly security workflows in this repo so they don't all queue at once
+# on the same morning:
+#   - security.yml (OSV-Scanner)    runs Monday    06:00 UTC
+#   - scorecard.yml (this workflow) runs Tuesday   06:00 UTC
+#   - codeql.yml                    runs Wednesday 06:00 UTC (added in #101)
+
+on:
+  push:
+    branches: [develop]
+  schedule:
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+
+# Default to read-only for the workflow; jobs opt in to the narrow extra
+# scopes they need (matches the OpenSSF "Token-Permissions" recommendation).
+permissions: read-all
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to publish results and upload Scorecard's SARIF.
+      id-token: write          # OIDC token used to publish results to the central Scorecard API
+      security-events: write   # SARIF upload to GitHub Code Scanning
+      contents: read           # Read repo metadata + checkout
+      actions: read            # Read workflow definitions for the "Token-Permissions" check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Publish anonymised results to the central Scorecard dataset.
+          # This is what powers the README badge — without it the badge
+          # URL returns "no data" indefinitely.
+          publish_results: true
+
+      - name: Upload SARIF to Code Scanning
+        uses: github/codeql-action/upload-sarif@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        with:
+          sarif_file: results.sarif
