@@ -312,13 +312,22 @@ restructured to make the lesson load-bearing on its own.*
   Compiling a detekt rule into the app test source set is silently inert; the
   rule never fires. The `ErrorToneRule` extraction in SR-78 (`:detekt-rules`
   module + a proof test) is the working pattern.
-- **Post-tag `gradle.lockfile` must be `git rm --cached`-d** on `develop` after
-  the release tag, or `activateDependencyLocking()` will pin develop to the
-  release's lockfile and defeat dependabot. The release tag itself needs the
-  lockfile committed for CVE forensics; `develop` does not. Source: PR #112
-  / issue #111. Evict once `docs/release/SHIPPING.md` documents the
-  post-tag `git rm --cached` step explicitly (today it only covers the
-  pre-tag force-commit).
+- **Keep `app/gradle.lockfile` tracked on `develop`.** Per
+  [Gradle's official docs](https://docs.gradle.org/current/userguide/dependency_locking.html):
+  "Lockfiles should be checked in to source control." Dependabot updates
+  `gradle.lockfile` alongside `gradle/libs.versions.toml` since GA in June
+  2025; the historical Version-Catalog interaction bug
+  ([dependabot-core #12557](https://github.com/dependabot/dependabot-core/issues/12557))
+  was fixed in [dependabot-core PR #12853](https://github.com/dependabot/dependabot-core/pull/12853),
+  merged 2026-02-03. The earlier untrack-on-develop pattern (PR #112)
+  was a workaround for that now-fixed bug; do **not** reintroduce
+  `git rm --cached app/gradle.lockfile` as a release-procedure step.
+  If a future dependabot PR ever updates only `libs.versions.toml`
+  without the lockfile, regenerate locally
+  (`./gradlew :app:dependencies --write-locks`) and amend the PR —
+  do not revert to untracking. The release-prep procedure still
+  re-runs `--write-locks` and commits any diff before the tag, but
+  the post-tag untrack is gone.
 - **On-device CI or a local emulator catches instrumented-test bugs that
   static analysis and multi-agent PR review cannot.** PR #118's
   `ActivityManager: Killing <pid>: permissions revoked` logcat was invisible
