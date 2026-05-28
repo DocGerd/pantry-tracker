@@ -23,6 +23,11 @@ detekt = "1.23.8"
 ktor = "3.5.0"
 kotlinxSerialization = "1.11.0"
 coil = "3.4.0"
+# Jazzer JVM fuzzing — JUnit 5 driver. Pulls in jazzer-api, the native
+# jazzer agent jar, and JUnit Jupiter 5.9.0 as transitive runtime deps.
+# Used only by :app:fuzzTest (see app/build.gradle.kts) — not on any
+# runtime classpath. Verified latest on Maven Central 2026-05-28.
+jazzer = "0.24.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -80,6 +85,12 @@ detekt-api = { group = "io.gitlab.arturbosch.detekt", name = "detekt-api", versi
 # detekt-test: rule unit-testing harness (lint() / compileAndLintWithContext).
 # Used only by :detekt-rules' test source set to prove ErrorToneRule fires.
 detekt-test = { group = "io.gitlab.arturbosch.detekt", name = "detekt-test", version.ref = "detekt" }
+
+# Jazzer JUnit 5 driver — JVM coverage-guided fuzzer. testImplementation-only,
+# wired through the :app:fuzzTest task in app/build.gradle.kts. NOT on any
+# runtime classpath — the fuzz harness lives under src/test/java and the
+# production code never sees Jazzer.
+jazzer-junit = { group = "com.code-intelligence", name = "jazzer-junit", version.ref = "jazzer" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

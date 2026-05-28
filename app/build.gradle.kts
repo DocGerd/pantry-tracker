@@ -340,6 +340,14 @@ dependencies {
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.ktor.client.mock)
+    // SR-144: Jazzer JUnit 5 driver — used ONLY by the :app:fuzzTest task
+    // below (filtered to *FuzzTest classes); the regular :app:test task
+    // still runs on JUnit 4 via Robolectric. jazzer-junit pulls in JUnit
+    // Jupiter 5.x as a transitive runtime dep, which is fine because the
+    // JUnit Platform happily hosts both engines in the same source set —
+    // the per-task `useJUnitPlatform()` vs default JUnit 4 split keeps
+    // the two from interfering.
+    testImplementation(libs.jazzer.junit)
     // Compose UI test APIs (createComposeRule, captureToImage, onRoot) used by
     // RNG screenshot tests under src/test. The androidTestImplementation line
     // below is kept for instrumentation tests; this line enables the same APIs
@@ -357,4 +365,74 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     detektPlugins(libs.detekt.formatting)
+}
+
+// SR-144: Jazzer fuzz-test task. Runs ONLY classes matching `*FuzzTest` under
+// the unit-test source set, using JUnit Platform (Jupiter) so the @FuzzTest
+// annotation is picked up by jazzer-junit's TestEngine. The regular :app:test
+// task is untouched and continues to use JUnit 4 — Jazzer is filtered out
+// there by class-name pattern.
+//
+// Mode toggle: setting JAZZER_FUZZ=1 puts Jazzer into *fuzzing* mode (generate
+// + mutate). Without it, the driver runs in *regression* mode and only
+// replays the static seed corpus under src/test/resources/.../OffApiClientFuzzTestInputs/
+// — which finishes in milliseconds and is useful for CI smoke-tests but is
+// not actually fuzzing. The :app:fuzzTest task sets JAZZER_FUZZ=1 so a local
+// `./gradlew :app:fuzzTest` invocation actually fuzzes.
+//
+// Time-cap: the @FuzzTest(maxDuration = "5m") annotation on the single fuzz
+// method is Jazzer's own hard ceiling on a fuzzing run. We *also* apply
+// Gradle's task-level `timeout` as a belt-and-braces — if a future fuzz
+// method is added and forgets the annotation, the task still can't run
+// longer than 6 minutes (1-minute slack covers Jazzer warmup + JVM start).
+//
+// Why a separate task instead of folding into :app:test: (1) JUnit 4 is the
+// default for :app:test (Robolectric + Compose UI tests); switching the whole
+// task to JUnit Platform would force a Jupiter migration on the existing
+// ~200 tests, out of scope here. (2) Fuzz runs are slow (5 min) and gating
+// every PR on them would balloon CI time. (3) The fuzz.yml workflow runs
+// this task on a weekly schedule, decoupled from :app:test.
+tasks.register<Test>("fuzzTest") {
+    description = "Run Jazzer-driven fuzz tests against OffApiClient JSON decode (SR-144)."
+    group = "verification"
+
+    // Reuse the compiled unit-test outputs + classpath from the existing
+    // testDebugUnitTest task so we stay in lockstep with whatever AGP
+    // currently produces (no hardcoded `build/intermediates/...` paths,
+    // which are AGP-version-internal). dependsOn the per-variant
+    // *compileTask* (not the test task itself — we don't want to run
+    // the JUnit 4 suite as a side effect of compiling).
+    val testTaskProvider = tasks.named<Test>("testDebugUnitTest")
+    testClassesDirs = testTaskProvider.get().testClassesDirs
+    classpath = testTaskProvider.get().classpath
+    dependsOn("compileDebugUnitTestKotlin", "compileDebugUnitTestJavaWithJavac")
+
+    useJUnitPlatform()
+
+    filter {
+        // Only classes ending in `FuzzTest` (the project convention). The
+        // unit-test sibling for the same target — OffApiClientTest — does
+        // NOT match this pattern, so the regular JUnit 4 tests don't get
+        // re-discovered as JUnit 5 zero-test classes here.
+        includeTestsMatching("*FuzzTest")
+    }
+
+    // Belt-and-braces hard ceiling — see the comment block above.
+    timeout.set(java.time.Duration.ofMinutes(6))
+
+    // Switch Jazzer from regression-only mode into actual fuzzing.
+    // The @FuzzTest(maxDuration = "5m") annotation on the fuzz method is
+    // Jazzer's own hard ceiling per fuzz run.
+    environment("JAZZER_FUZZ", "1")
+
+    // Surface any crashing input that Jazzer discovers — Gradle's default
+    // is to swallow stdout/stderr unless the test fails, which makes the
+    // post-mortem on a finding harder than it needs to be.
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        showStandardStreams = true
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
 }

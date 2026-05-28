@@ -483,11 +483,23 @@ see they were considered.
   and will land before the next major release. Until then, the SAST
   surface is detekt (with the custom `ErrorToneRule` regression test)
   plus AGP Lint — both run on every PR by `ci.yml`.
-- **Fuzzing.** Not currently practiced. The app's parsing surface is
-  small and well-bounded (OFF JSON via kotlinx.serialization with a
-  strict body cap and fail-closed decoder; barcode strings constrained
-  by the scanner). Fuzzing kotlinx.serialization is upstream's
-  responsibility. We accept the structural zero here for now.
+- **Fuzzing.** A
+  [Jazzer](https://github.com/CodeIntelligenceTesting/jazzer) JVM
+  fuzz target exercises `OffApiClient`'s JSON-decode path (the only
+  network-derived input the app parses) via the `:app:fuzzTest`
+  Gradle task and `OffApiClientFuzzTest` harness under
+  `app/src/test/java/.../data/remote/`. The
+  [`fuzz.yml`](../.github/workflows/fuzz.yml) workflow runs it weekly
+  (Mon 04:15 UTC) and on `workflow_dispatch`, capped at 5 minutes per
+  Jazzer's `@FuzzTest(maxDuration)` and 7 minutes at the Actions
+  job-timeout level. The job is **non-gating** — findings upload as
+  workflow-run artifacts (`jazzer-findings`) rather than failing
+  feature PRs, per the
+  [SR-144 issue](https://github.com/DocGerd/pantry-tracker/issues/144)
+  framing that this is regression-catch quality, not OSS-Fuzz-grade
+  fuzzing. The harness tolerates `SerializationException` and
+  `IllegalArgumentException` (mirroring `OffApiClient.lookupOnce`'s
+  catch arms) and treats any other thrown type as a finding.
 
 ## Reporting a security issue
 
