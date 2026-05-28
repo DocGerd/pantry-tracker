@@ -290,3 +290,32 @@ restructured to make the lesson load-bearing on its own.*
   needs an actual run in a non-interactive shell on a fresh host
   before merge. Evict once a "before-PR end-to-end" checklist for new
   scripts lands in `scripts/uat/README.md`.
+- **Revoking a HELD runtime permission kills the shared `androidTest` process.**
+  Signature: the in-flight test reports as FAILED, then the run aborts with no
+  logcat for the crashed pid (`ActivityManager: Killing <pid>: permissions
+  revoked`). Mitigation: never call `revokeRuntimePermission` on a held
+  permission in a shared instrumentation process — use a test seam (see
+  `CameraPermissionGate.isCameraGranted` for the pattern); for tests that pin
+  state another way, just delete the revoke. Source: PR #118 / issue #117.
+- **Custom `AndroidJUnitRunner.newApplication()` is the reliable Application
+  swap for `androidTest`.** Manifest `android:name` does NOT win; the runner's
+  `newApplication()` override does. It is **global** — be aware it can
+  interact with unrelated tests — but is NOT itself a root cause of "Process
+  crashed" by itself (see #117 root-cause analysis).
+- **Detekt custom rules belong in a standalone Gradle module + proof test.**
+  Compiling a detekt rule into the app test source set is silently inert; the
+  rule never fires. The `ErrorToneRule` extraction in SR-78 (`:detekt-rules`
+  module + a proof test) is the working pattern.
+- **Post-tag `gradle.lockfile` must be `git rm --cached`-d** on `develop` after
+  the release tag, or `activateDependencyLocking()` will pin develop to the
+  release's lockfile and defeat dependabot. The release tag itself needs the
+  lockfile committed for CVE forensics; `develop` does not.
+- **On-device CI or a local emulator catches instrumented-test bugs that
+  static analysis and multi-agent PR review cannot.** PR #118's
+  `ActivityManager: Killing <pid>: permissions revoked` logcat was invisible
+  to every review surface but instant on a local emulator boot. Generalises
+  the "Real-device UAT non-negotiable" entry to instrumented-test debugging.
+- **GitFlow specifics for this repo.** `develop` as default branch is what
+  lets `Closes #N` auto-close on feature merges; `required_linear_history`
+  would block release-prep merges into `main` (the merge commit is not a
+  fast-forward) — keep linear-history *off* in the ruleset.
