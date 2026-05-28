@@ -73,18 +73,28 @@ sealed interface CameraPermissionPhase {
  *  in production. Instrumented tests supply a [FakeIntentLauncher] (from
  *  `testfixtures/`) to capture the deep-link intent without a real Settings app
  *  and to force [android.content.ActivityNotFoundException] for the OEM-fallback
- *  Toast path. */
+ *  Toast path.
+ *
+ *  [isCameraGranted] is a parallel test seam (#117) — defaults to the real OS
+ *  permission read. Instrumented tests inject a deterministic checker so they
+ *  drive the Unknown→Granted `ON_RESUME` path WITHOUT calling
+ *  `UiAutomation.revokeRuntimePermission`: revoking a permission the app
+ *  currently *holds* makes Android kill the shared instrumentation process
+ *  (an `ActivityManager` "permissions revoked" kill), which crashed the whole
+ *  androidTest run on `develop` once an earlier test had granted CAMERA. */
 @Composable
 fun CameraPermissionGate(
     onNavigateBack: () -> Unit,
     intentLauncher: IntentLauncher? = null,
+    isCameraGranted: ((Context) -> Boolean)? = null,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraGranted: (Context) -> Boolean = isCameraGranted ?: ::checkCameraGranted
     var phase: CameraPermissionPhase by remember {
-        mutableStateOf(initialPhase(context, activity))
+        mutableStateOf(initialPhase(context, activity, cameraGranted))
     }
 
     // Re-check permission on ON_RESUME so the Settings round-trip recovers.
@@ -94,9 +104,7 @@ fun CameraPermissionGate(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val nowGranted = ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.CAMERA,
-                ) == PackageManager.PERMISSION_GRANTED
+                val nowGranted = cameraGranted(context)
                 phase = when {
                     nowGranted -> CameraPermissionPhase.Granted
                     phase == CameraPermissionPhase.Granted -> CameraPermissionPhase.Unknown
@@ -212,13 +220,23 @@ private fun DeniedScreen(
 //   3. Otherwise → Unknown (shows rationale dialog). The launcher callback
 //      later promotes a denied result to HardDenied when shouldShowRationale
 //      is false at that point.
+// Default production permission read — single source shared by the
+// [CameraPermissionGate] `isCameraGranted` seam fallback and [initialPhase]'s
+// default param, so the two cannot drift. Instrumented tests inject their own
+// checker instead of touching real runtime permission (see the seam KDoc / #117).
+private fun checkCameraGranted(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+        PackageManager.PERMISSION_GRANTED
+
 // `internal` (not private) so a JVM Robolectric test can pin the three-arm
 // `when`; the previous private signature is exactly what let the SoftDenied
 // regression escape unit-test coverage.
-internal fun initialPhase(context: Context, activity: Activity?): CameraPermissionPhase {
-    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-        == PackageManager.PERMISSION_GRANTED
-    ) {
+internal fun initialPhase(
+    context: Context,
+    activity: Activity?,
+    isCameraGranted: (Context) -> Boolean = ::checkCameraGranted,
+): CameraPermissionPhase {
+    if (isCameraGranted(context)) {
         return CameraPermissionPhase.Granted
     }
     if (activity == null) {

@@ -1,6 +1,5 @@
 package de.docgerdsoft.pantrytracker.permission
 
-import android.Manifest
 import androidx.activity.ComponentActivity
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -9,11 +8,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.lifecycle.Lifecycle
-import androidx.test.platform.app.InstrumentationRegistry
 import de.docgerdsoft.pantrytracker.testfixtures.FakeIntentLauncher
 import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionGate
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -26,14 +23,14 @@ import org.junit.Test
  *   automatically transition to the camera preview (the
  *   [CameraPermissionPhase.Granted] branch) without requiring an extra tap.
  *
- *   Note on the starting phase: this test revokes Camera on a fresh app process,
- *   so `shouldShowRequestPermissionRationale` is `false` and `initialPhase`
- *   yields [CameraPermissionPhase.Unknown] — the rationale dialog, NOT
- *   HardDenied. The path under test is therefore **Unknown → (grant) → Granted**.
- *   The HardDenied → Settings deep-link path is covered by
- *   [CameraPermissionDeepLinkTest]; what matters here is solely the ON_RESUME
- *   re-check promoting *any* non-Granted phase to Granted once the OS reports the
- *   permission as held.
+ *   Note on the starting phase: the injected `isCameraGranted` checker reports
+ *   not-granted, and `shouldShowRequestPermissionRationale` is `false` in the
+ *   test process, so `initialPhase` yields [CameraPermissionPhase.Unknown] — the
+ *   rationale dialog, NOT HardDenied. The path under test is therefore
+ *   **Unknown → (grant) → Granted**. The HardDenied → Settings deep-link path is
+ *   covered by [CameraPermissionDeepLinkTest]; what matters here is solely the
+ *   ON_RESUME re-check promoting *any* non-Granted phase to Granted once the
+ *   checker reports the permission as held.
  *
  * Mechanism under test:
  *   [CameraPermissionGate] installs a [androidx.lifecycle.LifecycleEventObserver]
@@ -45,7 +42,9 @@ import org.junit.Test
  *   recomposes to show the content lambda (camera preview).
  *
  * Test strategy:
- *   1. Revoke camera permission (ensure we start with no permission).
+ *   1. Start with the injected `isCameraGranted` checker reporting not-granted
+ *      (ensure we begin with no permission) — see the `cameraGranted` field doc
+ *      (#117) for why this is a seam, not a real `revokeRuntimePermission`.
  *   2. Mount [CameraPermissionGate] in a real [ComponentActivity] so the
  *      lifecycle is controllable via [activityRule.scenario.moveToState].
  *   3. Assert a POSITIVE pre-state — the rationale dialog ("Camera access") is
@@ -54,7 +53,7 @@ import org.junit.Test
  *      `assertDoesNotExist` pass.
  *   4. Move the activity to [Lifecycle.State.STARTED] (simulates app going
  *      to background while the user is in Settings).
- *   5. Grant camera permission via [UiAutomation.grantRuntimePermission]
+ *   5. Flip the injected `isCameraGranted` checker to granted
  *      (simulates the user tapping "Allow" in OS Settings).
  *   6. Move the activity back to [Lifecycle.State.RESUMED] (simulates the
  *      user pressing Back to return from Settings).
@@ -71,14 +70,16 @@ class CameraPermissionOnResumeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
-    @Before
-    fun revokeCamera() {
-        InstrumentationRegistry.getInstrumentation().uiAutomation
-            .revokeRuntimePermission(
-                InstrumentationRegistry.getInstrumentation().targetContext.packageName,
-                Manifest.permission.CAMERA,
-            )
-    }
+    // Drives the gate's permission read via the [CameraPermissionGate] `isCameraGranted`
+    // seam (#117) instead of real OS runtime permission. The previous version revoked
+    // CAMERA in @Before to force the not-granted start state; on `develop` an earlier
+    // test (ErrorToneSemanticsTest) had already granted CAMERA in the shared
+    // instrumentation process, so revoking a *held* permission triggered an
+    // `ActivityManager` "permissions revoked" process kill and crashed the whole run.
+    // Flipping this flag (instead of granting via UiAutomation) keeps the real
+    // ON_RESUME re-check wiring under test while staying deterministic and independent
+    // of test-execution order.
+    private var cameraGranted = false
 
     @Test
     fun onResume_afterPermissionGranted_transitionsToGrantedWithoutExtraTap() {
@@ -90,13 +91,14 @@ class CameraPermissionOnResumeTest {
                     CameraPermissionGate(
                         onNavigateBack = {},
                         intentLauncher = fakeLauncher,
+                        isCameraGranted = { cameraGranted },
                     ) { Text("CAMERA CONTENT") }
                 }
             }
         }
 
-        // Step 3: Verify initial state with a POSITIVE assertion first — a fresh
-        // revoke yields the Unknown phase, which renders the rationale dialog.
+        // Step 3: Verify initial state with a POSITIVE assertion first — the
+        // not-granted seam yields the Unknown phase, which renders the rationale dialog.
         // Asserting the dialog title is present means a wrong starting phase (or
         // nothing rendered at all) fails loudly here, rather than the
         // assertDoesNotExist below passing vacuously.
@@ -108,11 +110,8 @@ class CameraPermissionOnResumeTest {
         composeRule.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
 
         // Step 5: Grant camera permission (simulates user tapping Allow in Settings).
-        InstrumentationRegistry.getInstrumentation().uiAutomation
-            .grantRuntimePermission(
-                InstrumentationRegistry.getInstrumentation().targetContext.packageName,
-                Manifest.permission.CAMERA,
-            )
+        // Flip the injected checker instead of a real OS grant — see the field doc (#117).
+        cameraGranted = true
 
         // Step 6: Move back to RESUMED (simulates Back press returning from Settings).
         // The DisposableEffect observer fires ON_RESUME → re-checks permission →
