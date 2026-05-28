@@ -337,10 +337,10 @@ not a recommendation to use a different metric than Scorecard does.
 **What Scorecard checks:** see the
 [Contributors check docs](https://github.com/ossf/scorecard/blob/c22063e786c11f9dd714d777a687ff7c4599b600/docs/checks.md#contributors).
 The check counts contributing companies or organizations from the
-project's recent contributors (in the last 30 commits, weighted to
-contributors with at least 5 commits), derived from the `company`
-field on contributor GitHub profiles **and their public GitHub
-organization membership**. A diverse contributor base reduces
+project's recent contributors (among contributors of the last 30
+commits, only those with at least 5 commits are counted), derived from
+the `company` field on contributor GitHub profiles **and their public
+GitHub organization membership**. A diverse contributor base reduces
 single-organization capture risk on dependencies the OpenSSF
 ecosystem cares about.
 
@@ -358,10 +358,6 @@ Pinned-Dependencies (every action SHA-pinned; every Gradle dep
 version-pinned with a lockfile), and Dependency-Update-Tool (Dependabot
 enabled in [`.github/dependabot.yml`](../.github/dependabot.yml)).
 The Contributors badge zero remains, accurately, zero.
-
-*Last verified against Scorecard
-[`c22063e`](https://github.com/ossf/scorecard/tree/c22063e786c11f9dd714d777a687ff7c4599b600)
-on 2026-05-28.*
 
 ### Token-Permissions — high, with evidence
 
