@@ -46,8 +46,9 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 - 194 → 218 JVM unit tests.
 - **RNG screenshot harness** added (#74 / SR-74) using Robolectric
   Native Graphics + golden-PNG diff. Covers icon variants, theme,
-  font-scale, and Coil image rendering — retires UAT §0 row 2,
-  §2 rows 1-2/4, §11 row 1, and v1.2 §11 Coil row.
+  font-scale, and Coil image rendering — retires UAT §0 rows 2-4,
+  §2 rows 1, 2, and 4, §11 last row (greyed-row 45% opacity check),
+  and v1.2 §11 Coil row.
 - **Scan-flow Compose UI tests** (#75 / SR-75) cover OFF-hit, OFF-miss
   timeout fallback, in-inventory remove, and not-in-inventory +
   switch-to-Add — retires UAT §7 (8 of 9), §8 (5 of 6), §11 (5), §12 (2).
@@ -56,8 +57,8 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
   retires UAT §4 (5 of 6), §5 (5 of 7), §6 (3 of 8).
 - **Rotation + error-tone tests + detekt rule** (#78 / SR-78) — config-change
   + error tone; the `ErrorToneRule` extracted to a standalone
-  `:detekt-rules` Gradle module with a proof test. Retires UAT §14 row 1,
-  §15 row 1.
+  `:detekt-rules` Gradle module with a proof test. Retires UAT §14
+  (configuration change row) and §15 (error tone).
 - **CI emulator job** (#79 / SR-79) on
   `reactivecircus/android-emulator-runner@v2.37.0`, API 35, PR-gating
   `connectedDebugAndroidTest` runs. ~5-8 min added per PR.
