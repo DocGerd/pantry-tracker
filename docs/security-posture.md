@@ -435,11 +435,14 @@ flow stabilising for Android-APK build artifacts; once it does, this
 document and `SHIPPING.md` will be updated together and the SLSA tag
 added to release notes.
 
-### Branch-Protection — configured
+### Branch-Protection — configured, with accepted gaps
 
-**What Scorecard checks:** the default branch (and ideally release
-branches) require PRs, status checks, and other administrative
-guardrails before merge.
+**What Scorecard checks:** see the
+[Branch-Protection check docs](https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection).
+The check inspects the default branch (and ideally release branches)
+for PR-only merges, status checks, approvers, codeowners-required
+review, stale-review dismissal, up-to-date-base enforcement, and
+last-push approval.
 
 **State at last review:** branch-protection ruleset 16948699 ("Protect
 main and develop") is active on this repository. It enforces:
@@ -460,6 +463,37 @@ for branches protected by a Repository Ruleset (which is what
 ruleset 16948699 is), older Scorecard versions may misreport this
 check as zero. The current state is verifiable via
 `gh api repos/DocGerd/pantry-tracker/rules/branches/main`.
+
+#### Accepted Scorecard gaps
+
+The Scorecard scan on 2026-05-28 at commit `6b792c7` reports
+Branch-Protection **3/10** — see the live result on
+[scorecard.dev/viewer](https://scorecard.dev/viewer/?uri=github.com/DocGerd/pantry-tracker).
+The six warnings split: two no-cost knobs are being enabled separately
+by the maintainer in the GitHub UI (see closing paragraph), and three
+are structural and deferred under the single-maintainer plus
+[`GOVERNANCE.md`](../GOVERNANCE.md) only-humans-merge-to-main rule:
+
+- **`require-approvers`** — would require at least one PR approval
+  before merge. The project has one maintainer and GitHub forbids
+  `event=APPROVE` on your own PR (returns 422). The compensating
+  control is the mandatory multi-agent review cycle described in
+  §"Code-Review — structural zero" above.
+- **`codeowners-required`** — would require review from a CODEOWNER on
+  any touched path. [`.github/CODEOWNERS`](../.github/CODEOWNERS) lists
+  only `@DocGerd`, so requiring a CODEOWNER review collapses to the
+  same self-APPROVE prohibition as `require-approvers`.
+- **`last-push-approval`** — would dismiss approvals and require a
+  fresh one whenever the PR head is updated. Without a second human
+  account able to approve in the first place, this knob has nothing
+  to gate on.
+
+The two non-structural knobs (`stale-review-dismissal`,
+`up-to-date-branches`) are being enabled separately by the maintainer
+in the GitHub UI for both `develop` and `main`, tracked in the same
+parent issue
+[#139](https://github.com/DocGerd/pantry-tracker/issues/139); once
+flipped, the Branch-Protection score is expected to move 3 → ~6.
 
 ### CII-Best-Practices — pursuing
 
