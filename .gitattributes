@@ -1,2 +1,19 @@
 # Treat PNG files as binary to prevent line-ending normalisation and diff noise.
 *.png binary
+
+# SR-144: Treat Jazzer seed-corpus and regression-input files as binary so Git
+# does not mangle line endings on Windows checkout. Jazzer's JUnit integration
+# explicitly calls this out as a checkout-day footgun — its own docs:
+#   https://github.com/CodeIntelligenceTesting/jazzer/blob/main/docs/dev-junit-implementation-details.md#resources-tests
+# > When adding these inputs files to a Git repository, consider creating a
+# > .gitattributes file containing `src/test/resources/** binary` or similar to
+# > explicitly mark the files as binary files. Otherwise Git might erroneously
+# > consider them text files, misinterpret bytes as line terminators and convert
+# > them on checkout. This would change the content of the inputs files and can
+# > lead to unexpected behavior.
+# Today's seeds are pure ASCII so it does not bite, but the moment Jazzer drops
+# a crashing input under that directory (the point of the regression workflow),
+# that file will likely contain bytes Git's CRLF auto-conversion would mangle
+# on Windows. Scoping to the Jazzer inputs path keeps other text resources
+# (screenshot goldens etc.) on their default text behaviour.
+app/src/test/resources/de/docgerdsoft/pantrytracker/data/remote/OffApiClientFuzzTestInputs/** binary

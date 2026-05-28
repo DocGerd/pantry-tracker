@@ -51,11 +51,14 @@ import kotlinx.serialization.SerializationException
  *     4 engine ignores `@FuzzTest`-annotated methods because the class has
  *     no JUnit 4 `@Test` annotations.
  *
- * Seed corpus: three minimal seeds under the inputs directory above —
- * minimal-valid-product, empty-object, truncated-JSON. Real OFF responses
- * captured during UAT are *not* checked in because they contain large image
- * URLs that bloat the repo; the schema is well-known and the minimal seed is
- * sufficient for Jazzer to mutate productively.
+ * Seed corpus: four minimal seeds under the inputs directory above —
+ * minimal-valid-product, status=0-miss-envelope, empty-object, and
+ * truncated-JSON. The status=0 seed is broken out as its own file because
+ * the valid-shape-miss case is something Jazzer would need many millions of
+ * iterations to discover on its own starting from the status=1 seed. Real
+ * OFF responses captured during UAT are *not* checked in because they
+ * contain large image URLs that bloat the repo; the schema is well-known
+ * and the minimal seeds are sufficient for Jazzer to mutate productively.
  */
 class OffApiClientFuzzTest {
 
