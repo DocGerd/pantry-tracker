@@ -90,25 +90,12 @@ jobs:
         if: steps.gate.outputs.ready == 'true' && !cancelled()
         run: ./gradlew --no-daemon detekt
 
-      # SR-169 phase 1: generate the JaCoCo statement-coverage report from the
-      # debug JVM unit tests and upload the XML as a build artifact. This does
-      # NOT gate the PR yet — the jacocoTestCoverageVerification minimum is 0.00
-      # (a measured baseline), and this report is informational. The follow-up
-      # raises the gate to 0.80, merges instrumented (emulator) coverage, and
-      # adds :app:jacocoTestCoverageVerification to the required status checks.
-      # `!cancelled()` mirrors the Detekt step so coverage is produced in the
-      # same iteration as a failing build/test step.
-      - name: JaCoCo coverage report (SR-169)
-        if: steps.gate.outputs.ready == 'true' && !cancelled()
-        run: ./gradlew --no-daemon :app:jacocoTestReport
-
-      - name: Upload JaCoCo coverage XML (SR-169)
-        if: steps.gate.outputs.ready == 'true' && !cancelled()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: jacoco-coverage-xml
-          path: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
-          if-no-files-found: error
+      # SR-180: coverage reporting/verification deliberately does NOT live here.
+      # A JVM-only report in this job shows a misleading ~18.74% (it cannot see
+      # the instrumented emulator tests), so the real COMBINED measurement was
+      # moved to the `androidTest` emulator job below, where the connected
+      # coverage `.ec` exists. The `build` required check therefore stays purely
+      # build / unit-test / lint / detekt.
 
   androidTest:
     runs-on: ubuntu-latest
@@ -133,3 +120,33 @@ jobs:
           target: google_apis
           arch: x86_64
           script: ./gradlew :app:connectedDebugAndroidTest
+
+      # SR-180: the emulator-runner step above ran connectedDebugAndroidTest with
+      # enableAndroidTestCoverage=true, leaving the instrumented coverage `.ec`
+      # under app/build/outputs/code_coverage/. It also leaves the Android SDK on
+      # the runner and Java is already set up by the setup-java step above, so we
+      # can run Gradle directly here. jacocoTestReport only dependsOn
+      # testDebugUnitTest (it does NOT re-run the connected tests), so this
+      # produces the JVM unit `.exec` on this runner and merges it with the
+      # connected `.ec` into one COMBINED report.
+      - name: Merge coverage (unit + instrumented) and report
+        if: ${{ !cancelled() }}
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:jacocoTestReport
+
+      - name: Upload merged JaCoCo XML
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: jacoco-coverage-xml
+          path: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          if-no-files-found: error
+
+      # INFORMATIONAL gate (SR-180). This `androidTest` job is NOT a required
+      # status check and NO ruleset was edited, so a coverage regression below
+      # 0.80 shows red here WITHOUT blocking merges — a deliberate maintainer
+      # decision to avoid coupling merges to emulator reliability. The OpenSSF
+      # Silver test_statement_coverage80 MUST is satisfied by the demonstrated
+      # combined 86.85% instruction coverage, not by a merge-blocking check.
+      - name: Verify coverage ≥ 80% (non-required signal)
+        if: ${{ !cancelled() }}
+        run: ./gradlew --no-daemon :app:jacocoTestCoverageVerification
