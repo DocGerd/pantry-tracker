@@ -30,7 +30,7 @@ audit-trail gate is the human's explicit click on "Merge pull request".
 ./gradlew :app:test                   # JVM unit tests (JUnit 4, Robolectric, Turbine)
 ./gradlew :app:detekt                 # static analysis; CI gates on this
 ./gradlew :app:lint                   # AGP Lint
-./gradlew :app:dependencies --write-locks   # regenerate gradle.lockfile (see .gitignore for day-to-day exclusion; SHIPPING.md for the release-tag exception)
+./gradlew :app:dependencies --write-locks   # regenerate app/gradle.lockfile (tracked on develop; see SHIPPING.md for the release-tag regen step)
 ```
 
 ## Working conventions
@@ -156,10 +156,14 @@ Full one-time setup: [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) §B.
 See [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md). The v1 path is
 section B (sideload of release APK). Two non-obvious bits:
 
-- **Dependency lockfile at release tags**: `app/gradle.lockfile` is gitignored
-  day-to-day but force-committed in a dedicated `chore(release): lock
-  dependencies` commit immediately before the tag, so post-hoc CVE forensics
-  has an immutable record of what shipped.
+- **Dependency lockfile**: `app/gradle.lockfile` is **tracked on `develop`**
+  per Gradle's "lockfiles should be checked in to source control" guidance;
+  dependabot keeps it current alongside `gradle/libs.versions.toml`. At a
+  release tag, `--write-locks` runs once more and commits the diff (if any)
+  in a dedicated `chore(release): lock dependencies` commit for post-hoc
+  CVE forensics. See [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md)
+  §"Release-tag dependency-lock procedure" and the "Things that have bitten"
+  lesson on lockfile tracking below for the full reasoning.
 - **Gradle wrapper upgrades**: `./gradlew wrapper --gradle-version X.Y.Z`
   alone drops `distributionSha256Sum`. Use the atomic two-flag form documented
   in SHIPPING.md "Note: `distributionSha256Sum` must move atomically …".
