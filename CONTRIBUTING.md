@@ -23,6 +23,8 @@ or a direct message to [@DocGerd](https://github.com/DocGerd), as described in
 
 ## First-time setup
 
+New here? [ROADMAP.md](ROADMAP.md) shows where the project is heading and what is explicitly out of scope.
+
 You need:
 
 - **JDK 21** on your `PATH`.

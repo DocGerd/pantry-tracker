@@ -30,6 +30,8 @@ and [§3 System Scope and Context](docs/architecture/03-system-scope-and-context
 Non-goals include multi-user sync, shopping lists, recipe planning, and
 expiry-date tracking.
 
+See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
+
 ## Screenshots
 
 _Screenshots are a follow-up._ Capturing them requires an emulator (or device)
