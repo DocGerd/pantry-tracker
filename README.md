@@ -51,6 +51,8 @@ manager). The full release-and-install procedure, including the signing-cert
 identity that all v1.0.x updates share, is in
 [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md).
 
+Verify a downloaded APK before installing — see [SHIPPING.md §Verifying a release APK signature](docs/release/SHIPPING.md).
+
 ## Build
 
 The project builds with the Gradle wrapper. You need **JDK 21** and an Android
