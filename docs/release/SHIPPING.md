@@ -207,6 +207,21 @@ first, which wipes their data).
 This is why R-5 in [arc42 §11](../architecture/11-risks-and-technical-debt.md)
 calls keystore loss a catastrophic risk.
 
+### Verifying a release APK signature
+
+Every release APK is signed with the project's lifetime signing certificate (SHA-256 `ec9a4bb8…b3d9`). Each GitHub Release also lists the APK's SHA-256. To verify a downloaded APK before sideloading:
+
+```bash
+# 1) integrity — compare against the SHA-256 on the Release page
+sha256sum app-release.apk
+
+# 2) authenticity — confirm the signing certificate
+apksigner verify --print-certs app-release.apk
+# expect: "Signer #1 certificate SHA-256 digest: ec9a4bb8…b3d9"
+```
+
+A mismatch on either check means the artifact is not an authentic release — do not install it. The signing identity is stable across all v1.x updates (see §B); a future change of key would be announced in the release notes for the affected version.
+
 ---
 
 ## C. Firebase App Distribution / Play Store
