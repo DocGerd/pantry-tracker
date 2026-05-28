@@ -103,3 +103,15 @@ direction is a well-argued issue or a clean pull request.
 - [`SECURITY.md`](SECURITY.md) — how to report a vulnerability.
 - [`CLAUDE.md`](CLAUDE.md) — the operational guide (workflow, tooling,
   project-local configuration).
+
+## Continuity & succession
+
+Pantry Tracker is single-maintainer today (bus factor = 1 — the same structural condition the Scorecard `Contributors` check surfaces, accept-risk per `docs/security-posture.md`). `access_continuity` is satisfied by a *documented plan*, not by headcount.
+
+**Trigger.** The continuity plan applies if the maintainer is unresponsive on issues or security advisories for **8 consecutive weeks**.
+
+**How the project continues.** The repository is public and Apache-2.0, so anyone may fork and continue without permission. A fork picking up maintenance should: (1) branch from the latest `develop`; (2) treat the GitHub issue tracker and `docs/` at the fork point as canonical; (3) **rotate signing keys** — the lifetime release signing cert (SHA-256 `ec9a4bb8…b3d9`) cannot move to a fork, so a continuation must issue updates under a new key using Android's v3 signature scheme key-rotation (existing users will need a clean install across the key boundary; document this in the fork's release notes).
+
+**Out-of-band contact.** The private security channel in `SECURITY.md` is the way to reach the maintainer if GitHub itself is the blocker.
+
+**What is canonical for handoff.** The `main` branch, the tagged releases, and the `docs/` tree (architecture, security-posture, release runbook) constitute the authoritative project state.
