@@ -105,8 +105,9 @@ verify "is this still true?" without trusting this document.
   declare explicit `permissions:` blocks. `ci.yml` declares
   `contents: read` at the workflow top level (covering every step
   uniformly); `security.yml` declares the same scope per-job (`osv-scan`
-  uses `contents: read`; `gitleaks` adds `pull-requests: read` for
-  comment posting). Neither job requests write scopes it does not need.
+  uses `contents: read`; `gitleaks` adds `pull-requests: read` so the
+  action can read PR metadata for the diff scan). Neither job requests
+  write scopes it does not need.
   See [SR-18](https://github.com/DocGerd/pantry-tracker/issues/18) for
   the historical reason this is explicit.
 - **Detekt + AGP Lint on every PR.** The `build` job in
@@ -186,8 +187,10 @@ verify "is this still true?" without trusting this document.
   reduces the attack surface of the shipped APK (dead-code removal),
   shrinks the artifact, and forces the test of every keep-rule we
   rely on. The `-PverifyR8=true` flag enables an optional post-build
-  inspection (`verifyR8KeepRules`) that asserts annotated classes
-  (`@Serializable`, `@Entity`) survived shrinking — see
+  task (`verifyR8KeepRules`) that runs
+  [`scripts/uat/verify-r8-keep-rules.sh`](../scripts/uat/verify-r8-keep-rules.sh)
+  after assembly to assert annotated classes (`@Serializable`, `@Entity`)
+  survived shrinking — see
   [SR-80](https://github.com/DocGerd/pantry-tracker/issues/80).
 - **Release-signing isolation.** The release keystore lives **outside**
   the repository and is referenced only via four Gradle properties
@@ -201,16 +204,19 @@ verify "is this still true?" without trusting this document.
   (SHA-256 `ec9a4bb8…b3d9`) is the lifetime identity for all v1.0.x and
   subsequent minor versions. Android refuses to install an APK signed
   by a different cert over an existing install, so cert rotation is a
-  user-visible breaking change. We document the cert SHA in every
-  release's GitHub Release notes so a user can verify a downloaded APK
-  via `apksigner verify --print-certs` before installing.
+  user-visible breaking change. From v1.2.0 onwards we document the
+  cert SHA in each release's GitHub Release notes so a user can verify
+  a downloaded APK via `apksigner verify --print-certs` before
+  installing; v1.0.0 / v1.1.0 predate this convention but were signed
+  with the same cert.
 - **Room schema migration emulator drive.** Every Room schema migration
   is exercised end-to-end on an emulator via
   [`scripts/uat/verify-migration-1-2.sh`](../scripts/uat/verify-migration-1-2.sh)
   before the release tag. JVM-only migration tests cannot catch
   device-level migration regressions (manifest-level component changes,
-  SQLite engine differences). See [`docs/release/SHIPPING.md`](release/SHIPPING.md)
-  §"Migration drive" for the full runbook.
+  SQLite engine differences). See
+  [`scripts/uat/README.md`](../scripts/uat/README.md) for the
+  `verify-migration-1-2.sh` runbook.
 - **Real-device UAT for HTTP-client changes.** JVM tests with
   `MockEngine` cannot reproduce CDN-specific behaviour like Open Food
   Facts' chunked transfer encoding. Any change that touches request /
@@ -220,8 +226,12 @@ verify "is this still true?" without trusting this document.
 - **No cleartext network traffic.** OFF is HTTPS-only. We do not pin
   the certificate (intentional — pinning would brick the app on a
   routine OFF cert rotation, which would be a denial-of-service against
-  every user). The `AndroidManifest.xml` `usesCleartextTraffic="false"`
-  default applies; we do not opt out.
+  every user). We ship an explicit
+  [`network_security_config.xml`](../app/src/main/res/xml/network_security_config.xml)
+  denying cleartext for every API level we support (`minSdk = 26`
+  covers API 26/27 where the platform default would otherwise allow it);
+  newer API levels' `usesCleartextTraffic="false"` default also applies
+  but we do not rely on it alone.
 
 ### Disclosure
 
@@ -349,11 +359,13 @@ produces.
 **What we do instead.**
 
 - **Lifetime cert identity.** The signing cert SHA-256
-  (`ec9a4bb8…b3d9`) is documented in every GitHub Release's notes (see
-  [v1.0.0 release notes](https://github.com/DocGerd/pantry-tracker/releases/tag/v1.0.0))
+  (`ec9a4bb8…b3d9`) is documented in each release's notes from v1.2.0
+  onwards (see
+  [v1.2.0 release notes](https://github.com/DocGerd/pantry-tracker/releases/tag/v1.2.0))
   and referenced from the design spec
   [`docs/superpowers/specs/2026-05-18-v1.1-fallbacks-and-undo-design.md`](superpowers/specs/2026-05-18-v1.1-fallbacks-and-undo-design.md).
-  A downloader can verify the cert via
+  v1.0.0 / v1.1.0 predate this convention but were signed with the
+  same cert. A downloader can verify the cert via
   `apksigner verify --print-certs app-release.apk` before installing.
 - **Build pipeline integrity.** Release builds are produced from a
   signed tag on `main`, with the `chore(release): lock dependencies`
