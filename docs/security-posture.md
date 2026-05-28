@@ -246,6 +246,62 @@ verify "is this still true?" without trusting this document.
   [`docs/security/`](security/). The current review note is
   [`security-review-2026-05-17.md`](security/security-review-2026-05-17.md).
 
+## Build-time vs. runtime exposure model — Dependabot triage policy
+
+Pantry Tracker has *zero* runtime network/parser dependencies that ship in
+the APK from the packages Dependabot flags against `settings.gradle.kts`. That
+file declares no runtime dependencies — only `pluginManagement` repositories
+and `dependencyResolutionManagement`. The Gradle plugin classpath it resolves
+pulls a separate graph of build-tool jars (the Android Gradle Plugin, the
+Kotlin Gradle plugin, KSP, detekt, …) that live ONLY on the developer machine
+and the CI runner — never packaged into the APK, never on an end-user device.
+
+Dependabot does not model this distinction; it reports CVEs against
+`settings.gradle.kts` with the same severity as runtime risks. They are not.
+
+**Triage policy:**
+
+1. For any Dependabot alert on `settings.gradle.kts`, first verify the
+   vulnerable package is absent from the shipped classpath:
+   `./gradlew :app:dependencies --configuration releaseRuntimeClasspath`
+   (the release variant is what ships; `debugRuntimeClasspath` is the
+   dev-install variant — check both). If the package returns zero matches in
+   each, the alert is build-time-only.
+2. If a plugin owner has shipped a *stable* version that pulls the patched
+   transitive, bump it in `gradle/libs.versions.toml` and re-verify with
+   `./gradlew :buildEnvironment --refresh-dependencies`. Do not adopt
+   pre-release (alpha/beta/rc) build tooling solely to clear a build-time CVE.
+3. If no upstream fix is available in a stable release, dismiss the Dependabot
+   alert with `dismissed_reason: tolerable_risk` (the GitHub API enum value)
+   referencing this section; note the lag so future-us revisits when the owner
+   ships.
+4. Severity-weighting reads as a *developer-machine compromise vector*
+   (medium — requires running a poisoned build script), NOT *end-user device
+   compromise* (zero impact).
+
+**2026-05-28 baseline (closed issue [#151](https://github.com/DocGerd/pantry-tracker/issues/151)):**
+All 28 open Dependabot alerts at this snapshot were build-time-only —
+`releaseRuntimeClasspath` and `debugRuntimeClasspath` both returned zero
+matches for every flagged family (`netty`, `bouncycastle`/`bcprov`/`bcpkix`,
+`jose4j`, `jdom2`, `commons-lang3`, `httpclient`). Their owners and disposition:
+
+| Family | Owner (plugin → transitive) | Disposition at snapshot |
+|---|---|---|
+| Netty (21 alerts, #2–#7, #9–#11, #13, #15–#16, #20–#28) | none — AGP 9.2.1 no longer pulls Netty into the plugin classpath at all | Dismissed: package absent from both the plugin classpath *and* the runtime classpath. |
+| Bouncy Castle ×3 (#17–#19) | AGP `com.android.tools.build:gradle:9.2.1` → `builder` / `apkzlib` → `bcprov-jdk18on:1.79`, `bcpkix-jdk18on:1.79` | Dismissed: latest stable AGP (9.2.1) still pins 1.79; 1.84 not yet pulled by any stable AGP. Revisit when AGP ≥ the release that bumps BouncyCastle to 1.84 lands. |
+| jose4j (#14) | AGP → `bundletool:1.18.3` → `jose4j:0.9.5` | Dismissed: no stable AGP yet pulls jose4j 0.9.6. Revisit when bundletool ≥ a release pulling 0.9.6 ships inside a stable AGP. |
+| jdom2 (#12) | AGP → `jetifier-processor:1.0.0-beta10` → `jdom2:2.0.6` | Dismissed: no stable AGP yet pulls jdom2 2.0.6.1. Revisit when jetifier-processor bumps. |
+| commons-lang3 (#8) | AGP → `commons-compress:1.27.1` → `commons-lang3:3.16.0` | Dismissed: no stable AGP yet pulls commons-lang3 3.18.0. Revisit when commons-compress bumps. |
+| httpclient (#1) | AGP → `sdklib` / `analytics-library:crash` → `httpclient` (declared 4.5.6, resolved to 4.5.14) | Dismissed: AGP 9.2.1 already resolves httpclient to **4.5.14**, past the 4.5.13 patched target — the CVE is already fixed in the resolved graph, and it never reaches the APK regardless. |
+
+The single lever for the surviving BouncyCastle/jose4j/jdom2/commons-lang3
+alerts is the Android Gradle Plugin version. AGP 9.2.1 was the latest *stable*
+release at this snapshot (only 9.3.0 *alphas* existed); none of those
+transitives are bumped to their patched versions in any stable AGP yet, so no
+`libs.versions.toml` bump could close them. They were dismissed as
+`tolerable_risk` per step 3 above, to be revisited when a stable AGP pulls the
+fixes.
+
 ## Structural OpenSSF Scorecard zeros — and what we do instead
 
 OpenSSF [Scorecard](https://github.com/ossf/scorecard) is a useful
