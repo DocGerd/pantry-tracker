@@ -1,0 +1,113 @@
+name: Release signing (cosign + SLSA provenance)
+
+# Triggered automatically when the maintainer publishes a GitHub Release
+# (after uploading the jarsigner-signed app-release.apk). This workflow
+# adds supply-chain-grade artifacts alongside the APK:
+#
+#   - app-release.apk.sig    -- keyless cosign signature (via Sigstore + OIDC)
+#   - app-release.apk.pem    -- ephemeral signing certificate from Fulcio
+#   - app-release.intoto.jsonl -- SLSA Build L3 provenance attestation
+#
+# Scope: v1.3.0 onward only. v1.0/v1.1/v1.2 were jarsigner-signed only and
+# are NOT re-signed retroactively -- the OIDC token wouldn't bind to the
+# original release-time identity. See SECURITY.md for the verification
+# command users run against the published artifacts.
+#
+# Trigger rationale: only `release: published` -- NOT workflow_dispatch.
+# A manual trigger would let any actor with workflow-trigger access sign
+# arbitrary blobs and reattach them to a release. The release-publish
+# event ties the workflow execution to a specific, immutable release
+# asset chosen by the maintainer.
+
+on:
+  release:
+    types: [published]
+
+# Default to read-only for the workflow; jobs opt in to the narrow extra
+# scopes they need (matches the OpenSSF "Token-Permissions" recommendation,
+# same pattern as scorecard.yml / security.yml).
+permissions: read-all
+
+concurrency:
+  # One signing run per tag. A re-publish of the same release replaces the
+  # in-flight signing run rather than racing it.
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  cosign-sign:
+    name: Cosign keyless signature
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC token used by cosign to authenticate to Fulcio
+      contents: write   # Upload .sig + .pem back to the release assets
+    outputs:
+      # SHA-256 of the APK in the format the SLSA generator expects:
+      # `<sha256sum>  <filename>` lines, base64-encoded.
+      hashes: ${{ steps.hash.outputs.hashes }}
+    steps:
+      - name: Install cosign
+        # v4.1.2 -- pinned by commit SHA per repo convention (ci.yml etc.).
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Download APK from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern 'app-release.apk' \
+            --dir .
+          test -f app-release.apk || { echo "::error::app-release.apk not found in release $TAG"; exit 1; }
+
+      - name: Sign APK keylessly with cosign
+        # --yes auto-confirms the keyless flow (no interactive browser step
+        # is possible in CI; the OIDC token from id-token: write is what
+        # authenticates to Fulcio for the ephemeral signing certificate).
+        run: |
+          cosign sign-blob --yes \
+            --output-signature app-release.apk.sig \
+            --output-certificate app-release.apk.pem \
+            app-release.apk
+
+      - name: Upload signature + certificate to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$TAG" \
+            --repo "${{ github.repository }}" \
+            app-release.apk.sig app-release.apk.pem
+
+      - name: Compute SHA-256 subject for SLSA provenance
+        # The SLSA generator expects base64-encoded `<sha256>  <filename>`
+        # lines as its `base64-subjects` input.
+        id: hash
+        run: |
+          echo "hashes=$(sha256sum app-release.apk | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+  provenance:
+    name: SLSA Build L3 provenance
+    needs: [cosign-sign]
+    permissions:
+      # Required by the reusable workflow:
+      actions: read     # Detect the GitHub Actions environment
+      id-token: write   # Sign the provenance attestation via Sigstore
+      contents: write   # Upload the .intoto.jsonl as a release asset
+    # NOTE on the version pin format: the SLSA generator MUST be referenced
+    # by a semver tag like @v2.1.0 -- NOT a commit SHA. This is an
+    # intentional exception to this repo's SHA-pinning convention; the
+    # slsa-verifier tooling that downstream users run validates the
+    # builder's ref against the tag, and a SHA pin breaks that verification
+    # chain. See:
+    # https://github.com/slsa-framework/slsa-github-generator#referencing-slsa-builders-and-generators
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.cosign-sign.outputs.hashes }}
+      # Attach the .intoto.jsonl back to the same release the cosign step
+      # signed against. `upload-tag-name` is required when not running on
+      # a `push: tags:` trigger -- this workflow runs on `release: published`
+      # so the generator has no automatic tag to attach to.
+      upload-assets: true
+      upload-tag-name: ${{ github.event.release.tag_name }}

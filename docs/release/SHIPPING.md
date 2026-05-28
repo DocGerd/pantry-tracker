@@ -269,6 +269,16 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 10. [ ] Install the release APK on your daily-driver device.
 
+> **Cosign + SLSA signing happens automatically (v1.3.0 onward).**
+> When the GitHub Release is published, [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
+> runs on the `release: published` event and attaches three additional
+> artifacts: `app-release.apk.sig` (keyless cosign signature),
+> `app-release.apk.pem` (Fulcio certificate), and
+> `app-release.intoto.jsonl` (SLSA Build L3 provenance). No manual
+> `cosign` step is needed from the releaser. The user-facing verification
+> command lives in [`SECURITY.md`](../../SECURITY.md). Releases v1.0.x /
+> v1.1.x / v1.2.x predate this workflow and are jarsigner-signed only.
+
 ---
 
 ## v1.2 release-cut checklist
