@@ -227,6 +227,7 @@ io.ktor:ktor-websockets:3.5.0=debugRuntimeClasspath,releaseRuntimeClasspath
 jakarta.inject:jakarta.inject-api:2.0.1=debugRuntimeClasspath,releaseRuntimeClasspath
 javax.inject:javax.inject:1=debugRuntimeClasspath,releaseRuntimeClasspath
 org.checkerframework:checker-qual:3.43.0=debugRuntimeClasspath,releaseRuntimeClasspath
+org.jacoco:org.jacoco.agent:0.8.14=debugRuntimeClasspath
 org.jetbrains.androidx.lifecycle:lifecycle-common:2.9.6=debugRuntimeClasspath,releaseRuntimeClasspath
 org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.9.6=debugRuntimeClasspath,releaseRuntimeClasspath
 org.jetbrains.androidx.lifecycle:lifecycle-runtime:2.9.6=debugRuntimeClasspath,releaseRuntimeClasspath
