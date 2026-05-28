@@ -54,7 +54,7 @@
 | `enhancement_responses` | Enhancement reports responded to | `Met` | Same — see closed issues. |
 | `report_archive` | Reports publicly archived | `Met` | GitHub Issues are public-archived. |
 | `vulnerability_report_process` | Vuln-report process documented | `Met` | See [SECURITY.md](https://github.com/DocGerd/pantry-tracker/blob/develop/SECURITY.md) §Reporting. |
-| `vulnerability_report_private` | Private channel for vuln reports | `Met` | claude@docgerdsoft.de listed in [SECURITY.md](https://github.com/DocGerd/pantry-tracker/blob/develop/SECURITY.md). |
+| `vulnerability_report_private` | Private channel for vuln reports | `Met` | Private channel (GitHub Security Advisory) documented in [SECURITY.md](https://github.com/DocGerd/pantry-tracker/blob/develop/SECURITY.md) §Reporting. |
 | `vulnerability_report_response` | Vuln reports responded to | `N/A` | No vuln reports received to date. |
 | `build` | Build system exists | `Met` | Gradle — see [`build.gradle.kts`](https://github.com/DocGerd/pantry-tracker/blob/develop/build.gradle.kts) and [`app/build.gradle.kts`](https://github.com/DocGerd/pantry-tracker/blob/develop/app/build.gradle.kts). |
 | `build_common_tools` | Common build tools | `Met` | Gradle + Android SDK — both standard. |

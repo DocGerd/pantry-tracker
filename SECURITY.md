@@ -9,9 +9,9 @@ Only the `main` branch is supported. There are no released versions yet.
 Please report security vulnerabilities **privately**. Do NOT open a public GitHub
 issue for security-sensitive findings.
 
-- **Email:** claude@docgerdsoft.de
-- **Alternative:** open a GitHub Security Advisory draft via
+- **Preferred:** open a GitHub Security Advisory draft via
   https://github.com/DocGerd/pantry-tracker/security/advisories/new
+  (a private channel that routes directly to the maintainer).
 
 ### What to include
 
@@ -30,8 +30,8 @@ rotation. The following are best-effort targets, not commitments:
 - Coordinated fix and disclosure: typically within **180 days**, longer for
   complex issues (we will agree on a timeline together).
 
-For time-sensitive issues, the GitHub Security Advisory channel is preferred —
-it routes to a notification channel I check more reliably than email.
+The GitHub Security Advisory channel is monitored on a best-effort basis;
+there is no on-call rotation, but reports are not dropped.
 
 ### Scope
 
