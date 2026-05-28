@@ -35,24 +35,50 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
         with:
           languages: ${{ matrix.language }}
-          # Build mode: source-only analysis (no Gradle invocation).
-          # The first cut of this workflow ran `:app:assembleDebug --no-daemon`
-          # under a CodeQL LD_PRELOAD tracer — the Android build itself
-          # succeeded but the Kotlin daemon compiles out-of-process and was
-          # not traced, producing an empty source archive at finalize-time
-          # ("no source code seen during build"). `build-mode: none` skips
-          # the trace step entirely and scans Kotlin/Java sources directly,
-          # which is the supported path for Android projects and removes the
-          # whole Gradle / setup-java / autobuild surface from this workflow.
-          build-mode: none
           # security-and-quality bundles the security-extended queries plus
           # maintainability/quality lints — broader than the default suite,
           # appropriate for a small app where we want maximum signal.
           queries: security-and-quality
+
+      # Build choice: manual `:app:assembleDebug` rather than `autobuild`,
+      # with the Kotlin compiler forced in-process for CodeQL tracing.
+      #
+      # Why not `autobuild`: it routinely fails to discover the AGP variant
+      # model on Android projects, producing an empty CodeQL DB.
+      #
+      # Why not `build-mode: none`: for the `java-kotlin` combined language,
+      # `none` only does dependency-graph analysis on the Java side and is
+      # not a Kotlin source extractor — on a 100% Kotlin codebase (this
+      # repo has zero `.java` sources) the finalize step fails with "no
+      # source code seen during build" because Kotlin extraction always
+      # requires a traced build.
+      #
+      # Why `kotlin.compiler.execution.strategy=in-process`: by default the
+      # Kotlin Gradle plugin spawns an out-of-process Kotlin compiler daemon
+      # for every build. That daemon JVM is started *outside* CodeQL's
+      # `LD_PRELOAD` tracer scope, so even though the Android Gradle build
+      # succeeds, the Kotlin compilation never gets traced and the source
+      # archive is empty at finalize. Forcing `in-process` runs the Kotlin
+      # compiler inside the same Gradle JVM (which IS under the tracer) —
+      # this is the canonical fix for the
+      # https://gh.io/troubleshooting-code-scanning/no-source-code-seen-during-build
+      # symptom on Kotlin Gradle projects.
+      - name: Build (Android debug, Kotlin compiler in-process)
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon \
+            -Pkotlin.compiler.execution.strategy=in-process
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
