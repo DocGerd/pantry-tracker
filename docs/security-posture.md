@@ -441,25 +441,38 @@ added to release notes.
 branches) require PRs, status checks, and other administrative
 guardrails before merge.
 
-**State at last review:** branch-protection ruleset 16948699 ("Protect
-main and develop") is active on this repository. It enforces:
+**State at last review:** branch-protection is enforced by two
+Repository Rulesets, split since 2026-05-28 (see #158):
 
-- PR-only merges (no direct push) on both `main` and `develop`.
-- `required_status_checks` includes the `build` job from `ci.yml`.
-- No deletion of either branch.
-- No non-fast-forward push (with one explicit exception — see below).
-- `required_linear_history` is **off** by design: release-prep merges
-  from `release/<version>` into `main` are non-fast-forward by
-  construction (they're merge commits that preserve the GitFlow
-  structure). Enabling linear history would block them. This trade-off
-  is documented in [`CLAUDE.md`](../CLAUDE.md) §"Things that have
-  bitten past sessions" → "GitFlow ruleset constraints for this repo".
+- **Ruleset 16948699 "Protect main"** — covers `refs/heads/main` only.
+  `strict_required_status_checks_policy: true` (PR head must be
+  up to date with `main` before merge).
+- **Ruleset 16993554 "Protect develop"** — covers `refs/heads/develop`
+  only. `strict_required_status_checks_policy: false` to avoid
+  integration-branch rebase churn (feature PRs land on develop
+  frequently; requiring up-to-date would force a rebase after every
+  intervening merge).
+
+Both rulesets share the same other rules: PR-only merges (no direct
+push), the `build` job from `ci.yml` as the only required status
+check, no deletion, no non-fast-forward push, and
+`dismiss_stale_reviews_on_push: true` (a PR approval is voided when
+new commits land, so the approval reflects the current head).
+`required_linear_history` is **off** on both by design: release-prep
+merges from `release/<version>` into `main` are non-fast-forward by
+construction (they're merge commits that preserve the GitFlow
+structure). Enabling linear history would block them. This trade-off
+is documented in [`CLAUDE.md`](../CLAUDE.md) §"Things that have
+bitten past sessions" → "GitFlow ruleset constraints for this repo".
 
 Because the GitHub legacy "Branch Protection Rules" API returns 404
-for branches protected by a Repository Ruleset (which is what
-ruleset 16948699 is), older Scorecard versions may misreport this
-check as zero. The current state is verifiable via
-`gh api repos/DocGerd/pantry-tracker/rules/branches/main`.
+for branches protected by a Repository Ruleset, older Scorecard
+versions may misreport these checks as zero. The current state is
+verifiable via:
+
+    gh api repos/DocGerd/pantry-tracker/rulesets
+    gh api repos/DocGerd/pantry-tracker/rulesets/16948699
+    gh api repos/DocGerd/pantry-tracker/rulesets/16993554
 
 ### CII-Best-Practices — pursuing
 
