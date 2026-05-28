@@ -564,6 +564,43 @@ parent issue
 [#139](https://github.com/DocGerd/pantry-tracker/issues/139); once
 flipped, the Branch-Protection score is expected to move 3 → ~6.
 
+#### Branch-Protection — structural ceiling under solo maintainership
+
+OpenSSF Scorecard alert
+[#1](https://github.com/DocGerd/pantry-tracker/security/code-scanning/1)
+reports a Branch-Protection score of 3/10 on `develop` and `main`. Six of
+the ten warnings are addressable; four are structurally blocked under solo
+maintainership:
+
+| Control | Branches | Why blocked |
+|---|---|---|
+| `require-approvers` (count ≥ 1) | develop, main | A solo maintainer's own PR cannot satisfy `approvers ≥ 1` — GitHub forbids self-approval (HTTP 422). Every PR would deadlock. |
+| `codeowners-review-required` | develop, main | Same root cause: a codeowners file would list the sole maintainer; their PRs cannot be approved. |
+| `last-push-approval` | develop, main | After every push (including the maintainer's own) a re-review by a different reviewer would be required. None exists. |
+
+The other six Branch-Protection warnings (`stale-review-dismissal` +
+`up-to-date-branches`, each on develop + main) are addressable today and are
+tracked in issue
+[#139](https://github.com/DocGerd/pantry-tracker/issues/139).
+
+**Future trigger to re-evaluate:** when a second person (co-maintainer or
+trusted contributor with merge rights) is onboarded, OR when the repo
+formally migrates from solo to multi-maintainer governance. At that point
+the four blocked controls become enable-without-deadlock and we should flip
+them. Until then this section documents the conscious accept-risk decision;
+the alert remains visible in Code-Scanning as a known structural finding.
+
+Scorecard linkage: `Branch-Protection` is held at score 3 by these four
+structural gaps. Note the [tiered-scoring caveat](https://github.com/ossf/scorecard/blob/main/docs/checks.md#branch-protection)
+— the check caps at Tier 1 (3/10) until the "require ≥ 1 reviewer" tier is
+satisfied, which is structurally infeasible solo. Enabling #139's two
+addressable knobs is correct on the merits (defence against the
+approve-then-force-push pattern) but, because they sit at a higher tier than
+the unmet reviewer requirement, did **not** move the headline score off 3 on
+the 2026-05-28 rescan. The 3 → ~6 figure in the preceding subsection was the
+pre-rescan estimate; the observed ceiling under solo maintainership is 3 and
+stands until co-maintainer onboarding.
+
 ### CII-Best-Practices — pursuing
 
 The OpenSSF Best Practices (formerly CII) badge is in the
