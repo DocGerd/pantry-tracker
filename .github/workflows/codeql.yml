@@ -14,7 +14,16 @@ on:
 
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  # Don't cancel in-progress runs: CodeQL uploads SARIF on cancel, and a
+  # partial run lands as an empty-results SARIF (rules_count: 0,
+  # results_count: 0) that GitHub flags as "Code scanning configuration
+  # error" in the Code Scanning UI. During PR-merge cascades on develop
+  # (e.g. 5 PRs in 15 min on 2026-05-28, #154→#156→#155→#157→#159), this
+  # produced 3 empty SARIFs that needed manual cleanup. Better to queue
+  # the second and later runs — small runner-time cost during cascades,
+  # no UI banners, and every commit gets a full CodeQL analysis (matters
+  # for the Scorecard SAST coverage metric). See #160 for full reasoning.
+  cancel-in-progress: false
 
 # Default to read-only at the workflow level; the analyze job below opts
 # in to the narrow extra scopes it actually needs. Matches the OpenSSF
