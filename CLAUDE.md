@@ -346,9 +346,13 @@ restructured to make the lesson load-bearing on its own.*
   default branch — feature PRs target develop and rely on the
   default-branch behaviour of `Closes #N` to auto-close issues on merge
   (GitHub only honours closing-keywords on merges to the default branch).
-  Keep `required_linear_history` *off* on ruleset 16948699 ("Protect main
-  and develop"): release-prep merges from `release/<version>` into `main`
-  are non-fast-forward by construction and would be blocked otherwise.
+  Branch protection is split across two Repository Rulesets since
+  2026-05-28 (#158): **16948699 "Protect main"** (strict up-to-date
+  *required*) and **16993554 "Protect develop"** (strict up-to-date
+  *not* required, to avoid integration-branch rebase churn). Keep
+  `required_linear_history` *off* on **both**: release-prep merges from
+  `release/<version>` into `main` are non-fast-forward by construction
+  and would be blocked otherwise.
 - **CodeQL Kotlin extraction needs three load-bearing build flags.**
   [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) runs the
   Gradle build under a CodeQL `LD_PRELOAD` tracer; for the tracer to
