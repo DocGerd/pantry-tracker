@@ -35,34 +35,24 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
         with:
           languages: ${{ matrix.language }}
+          # Build mode: source-only analysis (no Gradle invocation).
+          # The first cut of this workflow ran `:app:assembleDebug --no-daemon`
+          # under a CodeQL LD_PRELOAD tracer — the Android build itself
+          # succeeded but the Kotlin daemon compiles out-of-process and was
+          # not traced, producing an empty source archive at finalize-time
+          # ("no source code seen during build"). `build-mode: none` skips
+          # the trace step entirely and scans Kotlin/Java sources directly,
+          # which is the supported path for Android projects and removes the
+          # whole Gradle / setup-java / autobuild surface from this workflow.
+          build-mode: none
           # security-and-quality bundles the security-extended queries plus
           # maintainability/quality lints — broader than the default suite,
           # appropriate for a small app where we want maximum signal.
           queries: security-and-quality
-
-      # Build choice: manual `:app:assembleDebug` rather than `autobuild`.
-      # `autobuild` for `java-kotlin` is geared at vanilla JVM Gradle/Maven
-      # projects; for Android it routinely fails to discover the Android
-      # Gradle Plugin's variant model and the Android SDK on the runner,
-      # producing an empty CodeQL DB that silently scans nothing. The
-      # ubuntu-latest runner ships `$ANDROID_HOME` pre-populated, so a
-      # straight Gradle invocation against the existing `:app:assembleDebug`
-      # task (already exercised by ci.yml) is the most reliable signal.
-      - name: Build (Android debug)
-        run: |
-          chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
