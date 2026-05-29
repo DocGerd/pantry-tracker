@@ -28,14 +28,17 @@ jobs:
       # SR-138 wrapper-jar validation lives in its OWN workflow
       # (.github/workflows/wrapper-validation.yml), NOT here. It was split out
       # so OpenSSF Scorecard's Binary-Artifacts check reliably grants the
-      # gradle-wrapper.jar exemption: Scorecard inspects only the first workflow
-      # file (lexicographically) that runs the Gradle wrapper-validation action
-      # and requires a *successful* run of it on the branch-HEAD commit — which
-      # this heavy job (coupled to its ~10-min emulator androidTest) could not
+      # gradle-wrapper.jar exemption: Scorecard records only the first workflow
+      # file its file-walk returns that runs the Gradle wrapper-validation
+      # action (in practice ci.yml sorts before wrapper-validation.yml, though
+      # that ordering is GitHub-tarball behavior, not a Scorecard guarantee), and
+      # requires a *successful* run of it on the branch-HEAD commit — which this
+      # heavy job (coupled to its ~10-min emulator androidTest) could not
       # reliably provide, and whose `cancel-in-progress` cancelled HEAD's push
-      # run on rapid merges. The dedicated workflow runs on push + PR; a
-      # tampered wrapper jar is still surfaced as a red (required) check before
-      # merge. The SR-5 guard below is a SEPARATE concern (it validates the
+      # run on rapid merges. The dedicated workflow runs on push + PR; a tampered
+      # wrapper jar is still surfaced as a red check before merge (and, once
+      # registered on the branch-protection rulesets, a merge-blocking required
+      # check). The SR-5 guard below is a SEPARATE concern (it validates the
       # distribution pin in gradle-wrapper.properties, not the jar) and stays.
 
       # SR-5 guard: a bare-flag `./gradlew wrapper --gradle-version X.Y.Z`

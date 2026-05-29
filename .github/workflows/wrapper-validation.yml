@@ -10,11 +10,16 @@ name: Wrapper validation
 #
 #   1. Scorecard's exemption (checks/raw/binary_artifact.go ->
 #      gradleWrapperValidated) is granted only when the LATEST COMMIT on the
-#      scanned branch has a SUCCESSFUL run of the workflow containing
-#      `gradle/actions/wrapper-validation`. Scorecard inspects only the FIRST
-#      workflow file (lexicographic order) that uses the action, so the action
-#      MUST NOT also appear in ci.yml — otherwise Scorecard checks ci.yml's
-#      runs and ignores this file.
+#      scanned branch has a SUCCESSFUL run of the workflow that runs the Gradle
+#      wrapper-validation action. Scorecard records only the FIRST such workflow
+#      file its file-walk returns (checkWorkflowValidatesGradleWrapper stops at
+#      the first match), so the action MUST NOT also appear as a `uses:` step in
+#      ci.yml — otherwise Scorecard checks ci.yml's runs and ignores this file.
+#      In practice GitHub's source tarball yields files in lexicographic order
+#      (ci.yml before wrapper-validation.yml), but that ordering is GitHub
+#      behavior, not a Scorecard guarantee. Scorecard matches `uses:` steps via
+#      actionlint, so a prose mention of the action name (like ci.yml's comment)
+#      does NOT count — only a real `uses:` step does.
 #
 #   2. Tying the exemption to ci.yml coupled it to ci.yml's ~10-min emulator
 #      `androidTest` job: an emulator flake on a develop-HEAD commit denied the
