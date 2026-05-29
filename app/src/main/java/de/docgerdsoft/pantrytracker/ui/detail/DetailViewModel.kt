@@ -107,6 +107,21 @@ class DetailViewModel(
         }
     }
 
+    /** Saves the opt-in restock settings (#191). [lowLimit] null clears
+     *  tracking; the repository clamps lowLimit >= 0 and defaultBuyAmount >= 1. */
+    @Suppress("TooGenericExceptionCaught")
+    fun saveRestockSettings(lowLimit: Int?, defaultBuyAmount: Int) {
+        viewModelScope.launch {
+            try {
+                repository.setRestockSettings(productId, lowLimit, defaultBuyAmount)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                surfaceError("save restock settings", e)
+            }
+        }
+    }
+
     @Suppress("TooGenericExceptionCaught")
     fun stepperDelta(delta: Int) {
         if (delta == 0) return

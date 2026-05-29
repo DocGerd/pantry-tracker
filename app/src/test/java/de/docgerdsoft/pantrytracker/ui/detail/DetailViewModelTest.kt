@@ -96,6 +96,33 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun saveRestockSettings_persistsClampedValues() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product()) // id = 1
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = 2, defaultBuyAmount = 0) // 0 clamps to 1
+        advanceUntilIdle()
+        val saved = repo.findById(1L)!!
+        assertEquals(2, saved.lowLimit)
+        assertEquals(1, saved.defaultBuyAmount) // 0 clamped to 1
+        assertEquals(listOf(Triple(1L, 2, 0)), repo.restockCalls)
+    }
+
+    @Test
+    fun saveRestockSettings_withNullLowLimit_clearsTracking() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product()) // id = 1
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = 3, defaultBuyAmount = 1)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = null, defaultBuyAmount = 1)
+        advanceUntilIdle()
+        assertEquals(null, repo.findById(1L)!!.lowLimit)
+    }
+
+    @Test
     fun stepperDelta_positive_callsApplyDeltaPositive() = runTest {
         val repo = FakeRepo()
         val vm = DetailViewModel(repo, productId = 7L)
