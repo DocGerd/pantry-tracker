@@ -12,6 +12,10 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+### Changed
+
+- Home list rows now show the manufacturer beneath the product name (#190).
+
 ## [1.2.0] — 2026-05-28
 
 ### Added
