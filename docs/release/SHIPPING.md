@@ -284,15 +284,15 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 10. [ ] Install the release APK on your daily-driver device.
 
-> **Cosign + SLSA signing happens automatically (v1.3.0 onward).**
-> When the GitHub Release is published, [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
-> runs on the `release: published` event and attaches three additional
-> artifacts: `app-release.apk.sig` (keyless cosign signature),
-> `app-release.apk.pem` (Fulcio certificate), and
-> `app-release.apk.intoto.jsonl` (SLSA Build L3 provenance). No manual
-> `cosign` step is needed from the releaser. The user-facing verification
-> command lives in [`SECURITY.md`](../../SECURITY.md). Releases v1.0.x /
-> v1.1.x / v1.2.x predate this workflow and are jarsigner-signed only.
+> **Release verification (all versions).** Each `app-release.apk` is signed
+> with the lifetime Android cert (`ec9a4bb8…b3d9`) and its SHA-256 is recorded
+> in the release notes — verify with `apksigner verify --print-certs` +
+> `sha256sum`. GitHub immutable releases also auto-generate a Sigstore artifact
+> attestation per asset (`gh attestation verify app-release.apk -R
+> DocGerd/pantry-tracker`, gh ≥ 2.49). The former cosign + SLSA-generator
+> `release.yml` was **retired** (broken under cosign v4, and its
+> attach-after-publish design is incompatible with immutable releases —
+> issue #210). See [`SECURITY.md`](../../SECURITY.md).
 
 ---
 
@@ -461,11 +461,12 @@ v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
        [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure))
        — one commit on `main` immediately before the tag.
 7. [ ] Tag: `git tag -a v1.3.0 -m "v1.3.0 release" && git push origin v1.3.0`
-8. [ ] Create the GitHub Release attaching `app-release.apk`:
-       `gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
-       — the **first** release to auto-trigger
-       [`release.yml`](../../.github/workflows/release.yml) (cosign + SLSA
-       provenance).
+8. [ ] Create the GitHub Release **one-shot**, with the APK attached at
+       creation (immutable releases reject adding assets after publish —
+       never the two-step):
+       `gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk --title "v1.3.0 …" --notes-file <notes>`.
+       GitHub auto-generates a Sigstore artifact attestation for the asset; the
+       former cosign + SLSA `release.yml` was retired (issue #210).
 
 ---
 

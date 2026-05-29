@@ -47,37 +47,42 @@ Out of scope:
   optionally let us know so we can pin/upgrade.
 - Vulnerabilities requiring root access on a user's device.
 
-## Verifying release signatures (v1.3.0 onward)
+## Verifying a release
 
-Starting with v1.3.0, the `app-release.apk` published to each GitHub
-Release is accompanied by a [keyless cosign](https://docs.sigstore.dev/cosign/signing/signing_with_blobs/)
-signature and [SLSA Build L3](https://slsa.dev/spec/v1.0/levels#build-l3)
-provenance attestation. Both are produced by
-[`.github/workflows/release.yml`](.github/workflows/release.yml) on
-`release: published` — there is no manual signing step for the maintainer.
-
-To verify the APK before installing, download all four assets from the
-release page (`app-release.apk`, `app-release.apk.sig`, `app-release.apk.pem`,
-`app-release.apk.intoto.jsonl`) and run:
+Every `app-release.apk` on a GitHub Release is signed with the project's
+**lifetime Android signing certificate** (SHA-256 `ec9a4bb8…b3d9`, unchanged
+since v1.0.0), and its **SHA-256** is recorded in that release's notes. To
+verify a download before installing:
 
 ```bash
-cosign verify-blob \
-  --certificate app-release.apk.pem \
-  --signature app-release.apk.sig \
-  --certificate-identity-regexp 'https://github.com/DocGerd/pantry-tracker/.*' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  app-release.apk
+# 1) integrity — compare against the SHA-256 printed on the Release page
+sha256sum app-release.apk
+
+# 2) authenticity — confirm the signing certificate
+apksigner verify --print-certs app-release.apk
+# expect: "Signer #1 certificate SHA-256 digest: ec9a4bb8…b3d9"
 ```
 
-Successful verification prints `Verified OK` and exits 0. A failure means
-either the APK was modified after signing, or the signature did not come
-from a GitHub Actions workflow in this repository.
+A mismatch on either check means the artifact is not an authentic release —
+do not install it. The signing identity is stable across all v1.x updates; a
+future key change would be announced in the affected release's notes.
 
-Releases v1.0.x / v1.1.x / v1.2.x predate this workflow and are signed
-**only** with the Android jarsigner keystore (cert SHA-256
-`ec9a4bb8…b3d9`). They have no cosign signature or SLSA attestation;
-they were not retroactively signed because an OIDC token minted today
-cannot bind to the original release-time identity.
+**Build/asset attestation.** Because this repository has GitHub immutable
+releases enabled, GitHub automatically generates a Sigstore-backed
+[artifact attestation](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+binding each release asset's digest to the tag and commit. With `gh` ≥ 2.49:
+
+```bash
+gh attestation verify app-release.apk -R DocGerd/pantry-tracker
+```
+
+> An earlier `.github/workflows/release.yml` attempted additional keyless
+> cosign + SLSA-generator artifacts, but that attach-after-publish design is
+> incompatible with immutable releases and has been retired (issue #210); the
+> auto-generated attestation above supersedes its integrity role. Adding
+> *source-level* build provenance (reproducible builds, or CI-side signing) is
+> tracked in #210. Releases v1.0.x–v1.2.x are jarsigner-signed with the same
+> lifetime cert.
 
 ## See also
 
