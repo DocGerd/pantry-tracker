@@ -87,7 +87,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             return null
         }
         for (host in OFF_HOSTS) {
-            when (val r = lookupOnce(host.baseUrl, barcode)) {
+            when (val r = lookupOnce(host, barcode)) {
                 is HostResult.Found -> return OffLookupResult(r.product, host)
                 HostResult.NotFound -> continue
                 HostResult.Error -> return null // don't multiply downtime by 4 across sister hosts
@@ -103,7 +103,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     }
 
     /**
-     * Performs a single-host OFF v2 product lookup against [baseUrl]. Caller
+     * Performs a single-host OFF v2 product lookup against [host]. Caller
      * [lookup] dispatches one call to this helper per host in [OFF_HOSTS],
      * advancing on [HostResult.NotFound] and short-circuiting on
      * [HostResult.Error].
@@ -130,7 +130,10 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
      *   product, IOException, parse error, engine-runtime IAE — all logged,
      *   chain short-circuits). Throws only [CancellationException].
      */
-    private suspend fun lookupOnce(baseUrl: String, barcode: String): HostResult {
+    private suspend fun lookupOnce(host: OffHost, barcode: String): HostResult {
+        // Taking the OffHost (not a raw String) carries the compiler-enforced
+        // host invariant all the way to the request-building seam (#61 review).
+        val baseUrl = host.baseUrl
         // Component URL builder so each path segment is percent-encoded
         // explicitly (SR-2). Built outside the `try` so any IAE is a
         // programmer error (e.g. malformed baseUrl constant) and surfaces

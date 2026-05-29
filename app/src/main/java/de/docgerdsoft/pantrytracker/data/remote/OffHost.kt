@@ -12,6 +12,13 @@ package de.docgerdsoft.pantrytracker.data.remote
  * rehydrate cache rows persisted under the older string schema (the stored
  * value is the baseUrl, so no data migration is needed — see
  * `Converters.stringToOffHost`).
+ *
+ * Because the stored value IS `baseUrl`, this literal doubles as the on-disk
+ * cache key, not just a request URL: editing a `baseUrl` string is a
+ * persistence-format change that orphans every existing cache row for that host
+ * (they become "unknown host" and degrade to a re-fetch via
+ * `Converters.stringToOffHost`). Treat a URL edit as a schema change, not a typo
+ * fix.
  */
 enum class OffHost(val baseUrl: String) {
     FOOD("https://world.openfoodfacts.org/"),

@@ -22,6 +22,13 @@ class Converters {
     // silently inventing a host. The OFF cache is non-load-bearing (worst case:
     // a cache miss re-walks the chain), so a thrown read here degrades to a
     // re-fetch, not data loss.
+    //
+    // SAFE ONLY while every reader of off_lookup_cache catches this throw: the
+    // single reader today (ProductRepositoryImpl.lookupForPreview's cache-read
+    // try/catch, PR #60 finding I2) treats it as a cache miss. A future reader
+    // that calls findByBarcode outside a catch — or adds an observe…(): Flow
+    // query the UI collects — would turn this into an uncaught crash on a Room
+    // query thread. Keep that catch when adding cache readers.
     @TypeConverter
     fun stringToOffHost(value: String?): OffHost? =
         value?.let { stored ->
