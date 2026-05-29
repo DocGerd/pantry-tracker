@@ -26,7 +26,7 @@ sealed interface SnackbarEvent {
     /**
      * Emitted when the actual `repository.delete` call threw (non-cancellation).
      * Carries the user-visible [name] so the collector can render
-     * `"Could not delete <name>"`. The pending-delete dialog has already been
+     * `"Couldn't delete: <name>"`. The pending-delete dialog has already been
      * cleared by the time this fires — the UI must not be left in a
      * half-confirmed state on failure.
      */
@@ -35,7 +35,7 @@ sealed interface SnackbarEvent {
     /**
      * Emitted when the actual `repository.restore` call (invoked from the
      * snackbar UNDO action) threw (non-cancellation). Carries the user-visible
-     * [name] so the collector can render `"Could not undo delete of <name>"`.
+     * [name] so the collector can render `"Couldn't restore: <name>"`.
      * The row stays deleted — UNDO is best-effort and we tell the user instead
      * of silently failing.
      */
