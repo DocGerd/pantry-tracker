@@ -280,16 +280,14 @@ restructured to make the lesson load-bearing on its own.*
   is deleted or the `pantry.ErrorTone` entry leaves `detekt-config.yml`.
 - **Before-PR checklist for UAT scripts & instrumented tests lives in
   [`scripts/uat/README.md`](scripts/uat/README.md) §"Before-PR end-to-end
-  checklist".** Always-on reminder of what's there: any bash script with
-  PATH-resolved binaries, `gh`-CLI calls, or logcat regex scanning needs a
-  fresh-shell (non-interactive) run before merge — static gates +
-  "BUILD SUCCESSFUL" miss PATH hangs, the `mktemp`/`--clobber` download race,
-  and logcat false-positives. For filtering one instrumented test:
-  `connectedDebugAndroidTest` rejects `--tests` (use
-  `-Pandroid.testInstrumentationRunnerArguments.class=<FQN>`), and you must
-  `adb uninstall` **both** `de.docgerdsoft.pantrytracker` and `.test` first or
-  a stale release-signed install yields a silent `0 tests` run. Consult that
-  section before adding a script or filtering an instrumented test.
+  checklist".** Consult it when adding/changing a UAT script or filtering one
+  instrumented test: static gates + "BUILD SUCCESSFUL" do NOT catch the
+  fresh-shell PATH/`gh`/logcat footguns or the `connectedDebugAndroidTest`
+  flag + stale-install footguns — a non-interactive fresh-shell run is
+  required before merge. (Full detail + copy-paste commands live in that
+  README section; kept there, not here, to stay out of every-session context.)
+  Eviction criterion: when that README section is deleted or the `scripts/uat/`
+  automation track is retired.
 - **Revoking a HELD runtime permission kills the shared `androidTest` process.**
   Signature: the in-flight test reports as FAILED, then the run aborts with no
   logcat for the crashed pid (`ActivityManager: Killing <pid>: permissions

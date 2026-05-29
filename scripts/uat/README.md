@@ -200,7 +200,7 @@ are **necessary but not sufficient**. The implementer's shell usually has
 runner, a different agent, a colleague's box) usually does **not**. Before a PR
 that adds or changes a script here, or runs instrumented tests, complete this:
 
-### For any new/changed bash script
+### For adding or changing a bash script
 
 Run it **in a non-interactive shell on a fresh host** (not just the authoring
 shell) before declaring it ready. Three real bugs (SR-81's
