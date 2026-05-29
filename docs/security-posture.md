@@ -484,12 +484,18 @@ produces.
   maintainer's workstation from a keystore stored outside any
   version-controlled or CI-accessible location.
 
-SLSA provenance attestation for sideload APKs is on the backlog as a
-future hardening step. Adoption is gated on the
-[GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
-flow stabilising for Android-APK build artifacts; once it does, this
-document and `SHIPPING.md` will be updated together and the SLSA tag
-added to release notes.
+**Auto-attestation (active).** With GitHub immutable releases enabled, each
+release asset now receives an automatic Sigstore-backed
+[artifact attestation](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+binding its digest to the tag + commit (verify with `gh attestation verify
+app-release.apk -R DocGerd/pantry-tracker`). An earlier cosign + SLSA-generator
+`.github/workflows/release.yml` was attempted but **retired** — its
+attach-after-publish design is incompatible with immutable releases, and the
+cosign step was broken under cosign v4 (issue #210). **Source-level build
+provenance** (proving how/where the binary was built) remains a future step,
+gated on either reproducible builds (keystore stays offline) or CI-side
+signing (keystore in CI secrets). Scorecard Signed-Releases stays partial
+regardless, as it does not recognize Android APK signing.
 
 ### Branch-Protection — configured, with accepted gaps
 
