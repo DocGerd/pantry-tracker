@@ -123,9 +123,10 @@ jobs:
       # #202: the `build` job caches Gradle via setup-gradle but this emulator job
       # did not, so it paid a cold dependency download and re-assembled the app +
       # test APK from scratch (the "double-assemble"). Adding the same SHA-pinned
-      # action restores the dependency cache on any branch immediately; build-cache
-      # reuse (recompile FROM-CACHE) lands once a default-branch run has populated
-      # the cache (develop/PR runs are read-only by default). Coverage-neutral.
+      # action restores the shared Gradle User Home (dependency + build cache)
+      # populated by prior runs; non-default branches are read-only by default, so
+      # the full reuse benefit (deps restored, recompile FROM-CACHE) lands after
+      # develop/main has run this job once. Coverage-neutral.
       - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
 
       - name: Enable KVM
@@ -135,13 +136,18 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       # #201: cache the AVD Quick Boot snapshot so each run resumes a warm emulator
-      # (~6-15s) instead of paying a full cold boot (the long pole, ~563s of an
-      # ~11m job). Two-step pattern from the reactivecircus/android-emulator-runner
-      # README: (1) restore the cache; (2) on a MISS only, boot once and save a
-      # snapshot; (3) the real run resumes from it. The cache key encodes
-      # api-level/target/arch so a system-image bump invalidates it. actions/cache
-      # is SHA-pinned per the repo's Pinned-Dependencies convention. Coverage-neutral
-      # — the run step still executes :app:connectedDebugAndroidTest unchanged.
+      # (projected ~6-15s) instead of paying a full cold boot (the long pole,
+      # ~563s of an ~11m job per the #200 spike). Two-step pattern from the
+      # reactivecircus/android-emulator-runner README: (1) restore the cache;
+      # (2) on a MISS only, boot once and save a snapshot; (3) the real run
+      # resumes from it. The key is suffixed with hashFiles() over this workflow
+      # file so any api-level/target/arch bump (they live here) auto-invalidates
+      # the snapshot — and editing the file is the escape hatch for a corrupt
+      # cached snapshot, since actions/cache never overwrites an existing key
+      # (no restore-keys, deliberately, so the suffix change isn't silently
+      # overridden by a prefix-match fallback). SHA-pinned per the repo's
+      # Pinned-Dependencies convention. Coverage-neutral — the run step still
+      # executes :app:connectedDebugAndroidTest unchanged.
       - name: AVD cache
         id: avd-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
@@ -149,7 +155,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-35-google_apis-x86_64
+          key: avd-35-google_apis-x86_64-${{ hashFiles('.github/workflows/ci.yml') }}
 
       - name: Create AVD snapshot (cache miss only)
         if: steps.avd-cache.outputs.cache-hit != 'true'
