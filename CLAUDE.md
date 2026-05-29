@@ -403,3 +403,25 @@ restructured to make the lesson load-bearing on its own.*
   Kotlin DSL resolution prefers package roots over Gradle extensions,
   or when `build.gradle.kts` is replaced by an alternative build
   system.
+- **Robolectric tests add 0% to the on-the-fly JaCoCo report.** The
+  Gradle `jacoco` plugin instruments classes at load time via its
+  on-the-fly agent, but Robolectric's sandbox classloader reloads app
+  classes from the original (un-instrumented) bytes, so the coverage
+  probes never fire. Symptom: a class heavily exercised *only* by a
+  `@RunWith(RobolectricTestRunner)` test (or the RNG screenshot tests)
+  shows 0% in `jacocoTestReport`. Verified empirically in #182 — a
+  passing Robolectric test calling `Converters` left the whole report
+  at 0 covered / 15360 missed. Consequence: only **plain-JVM**
+  (non-Robolectric) tests move the JVM-only number; the Compose UI
+  screens (~69% of all instructions) and anything needing
+  Robolectric/`Context` are unreachable for JVM-only coverage under the
+  current build config. The combined 86.85% that clears the OpenSSF
+  Silver `test_statement_coverage80` MUST comes from the **emulator
+  `androidTest` `.ec`**, not Robolectric JVM tests. Do NOT run
+  `:app:jacocoTestCoverageVerification` off-emulator — its 0.80 gate
+  fails on the JVM-only ~19–25% BY DESIGN. To credit Robolectric/
+  Compose-UI lines on the JVM you'd need JaCoCo **offline
+  instrumentation** in `app/build.gradle.kts` — a maintainer build
+  decision, deliberately not actioned in #182. Eviction criterion:
+  `app/build.gradle.kts` switches to JaCoCo offline instrumentation, or
+  the on-the-fly `jacoco` plugin is replaced.
