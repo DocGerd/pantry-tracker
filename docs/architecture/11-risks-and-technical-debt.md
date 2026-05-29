@@ -24,7 +24,11 @@
 | TD-7 | **No deletion confirmation copy mentions data loss is undoable** | User might delete by accident | Acceptable per spec (`DeleteConfirmDialog` says "Cannot be undone in v1"). Consider in-app undo (snackbar with UNDO) in v1.1. |
 | TD-8 | **No tests on real device CI** | Compose UI test compile-only via `assembleDebugAndroidTest`; emulator runs are manual | ADR-010 — explicit, not accidental. Revisit when reproducibility of UI tests becomes the bottleneck. |
 | TD-9 | **Two `FakeRepository` types share signature drift risk** | See TD-5 | Same as TD-5. |
-| TD-10 | **OFF response parse not bounded against algorithmic-complexity DoS** | The v1.2 streamed body cap (256 KB) protects bulk size only — `kotlinx.serialization`'s `decodeFromString` has no depth limit, so hostile JSON shapes within the cap (e.g. `[[[[…]]]]` 100k deep, or a single 200 KB field) can risk `StackOverflowError`. `StackOverflowError` is an `Error`, not an `Exception`, so it bypasses the existing catch arms in `lookupOnce` and crashes the coroutine. Surfaced by silent-failure-hunter review on PR #58. | Tracked as [#59](https://github.com/DocGerd/pantry-tracker/issues/59) for v1.3+. Spec §"Non-goals" explicitly defers wire-level DoS (gzip-bomb out of scope); algorithmic-complexity DoS is similarly out of scope for v1.2. |
+| TD-10 | ~~**OFF response parse not bounded against algorithmic-complexity DoS**~~ Resolved in v1.3 (#59): `OffApiClient.enforceMaxNestingDepth` runs an O(n) structural depth pre-scan before `decodeFromString`, capping nesting at `MAX_JSON_DEPTH=64`. SR-59 bounds complexity DoS; SR-24 (v1.2) already bounds size DoS — together they close the full input-validation surface. The TypeConverter `Converters.stringToOffHost` also adds loud-on-corruption rehydration for cached host values. | Closed. |
+
+## 11.2.1 v1.3 security hardening notes
+
+**SR-59** bounds OFF response nesting depth at `MAX_JSON_DEPTH=64` via an O(n) pre-scan before parse; complements the SR-24 256 KB body cap — size DoS and complexity DoS are now both bounded. **SR-61** type-encodes the OFF host invariant as an `OffHost` enum, removing the "bogus host string" failure mode from the type system and the Room cache rehydration path. Both changes are in `OffApiClient.kt` + `Converters.kt`.
 
 ## 11.3 Risks explicitly accepted
 

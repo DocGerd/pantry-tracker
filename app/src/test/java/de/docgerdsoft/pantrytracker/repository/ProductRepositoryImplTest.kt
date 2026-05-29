@@ -6,6 +6,7 @@ import app.cash.turbine.test
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.local.OffLookupCacheEntry
 import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.data.remote.OffHost
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
@@ -338,7 +339,7 @@ class ProductRepositoryImplTest {
                 name = "Cached Cookies",
                 brand = "CacheBrand",
                 imageUrl = "https://images.openfoodfacts.org/cookies.jpg",
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = now.minus(1.seconds), // 1 second old, well within TTL
             ),
         )
@@ -361,7 +362,7 @@ class ProductRepositoryImplTest {
                 brands = "FreshBrand",
                 imageUrl = "https://images.openfoodfacts.org/x.jpg",
             ),
-            host = "https://world.openpetfoodfacts.org/",
+            host = OffHost.PET_FOOD,
         )
 
         val candidate = repo.lookupForPreview("0123456789") as ScanCandidate.FromOff
@@ -372,7 +373,7 @@ class ProductRepositoryImplTest {
         assertEquals("Fresh Cookies", written.name)
         assertEquals("FreshBrand", written.brand)
         assertEquals("https://images.openfoodfacts.org/x.jpg", written.imageUrl)
-        assertEquals("https://world.openpetfoodfacts.org/", written.resolvingHost)
+        assertEquals(OffHost.PET_FOOD, written.resolvingHost)
         assertEquals(clock.now(), written.fetchedAt)
     }
 
@@ -386,7 +387,7 @@ class ProductRepositoryImplTest {
                 name = "Old Cookies",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = now.minus(30.days).minus(1.milliseconds), // just past TTL
             ),
         )
@@ -418,7 +419,7 @@ class ProductRepositoryImplTest {
                 name = "Boundary Cookies",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = now.minus(30.days), // exactly TTL old
             ),
         )
@@ -445,7 +446,7 @@ class ProductRepositoryImplTest {
                 name = "CacheName",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = clock.now(),
             ),
         )
@@ -465,7 +466,7 @@ class ProductRepositoryImplTest {
                 name = "StaleCache",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = clock.now(),
             ),
         )
@@ -493,7 +494,7 @@ class ProductRepositoryImplTest {
                 name = "Unrelated",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = clock.now(),
             ),
         )
@@ -903,7 +904,7 @@ class ProductRepositoryImplTest {
     private class FakeOffLookup : OffLookup {
         private val responses = mutableMapOf<String, OffLookupResult>()
         var lookupCallCount = 0
-        fun stub(code: String, product: OffProduct, host: String = "https://world.openfoodfacts.org/") {
+        fun stub(code: String, product: OffProduct, host: OffHost = OffHost.FOOD) {
             responses[code] = OffLookupResult(product, host)
         }
         override suspend fun lookup(barcode: String): OffLookupResult? {

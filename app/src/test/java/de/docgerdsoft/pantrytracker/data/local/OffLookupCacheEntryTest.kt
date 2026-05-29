@@ -1,5 +1,6 @@
 package de.docgerdsoft.pantrytracker.data.local
 
+import de.docgerdsoft.pantrytracker.data.remote.OffHost
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -17,7 +18,7 @@ class OffLookupCacheEntryTest {
         name = name,
         brand = "CacheBrand",
         imageUrl = "https://images.openfoodfacts.org/cookies.jpg",
-        resolvingHost = "https://world.openfoodfacts.org/",
+        resolvingHost = OffHost.FOOD,
         fetchedAt = Instant.fromEpochMilliseconds(1_000_000L),
     )
 
@@ -28,7 +29,7 @@ class OffLookupCacheEntryTest {
         assertEquals("Cookies", e.name)
         assertEquals("CacheBrand", e.brand)
         assertEquals("https://images.openfoodfacts.org/cookies.jpg", e.imageUrl)
-        assertEquals("https://world.openfoodfacts.org/", e.resolvingHost)
+        assertEquals(OffHost.FOOD, e.resolvingHost)
         assertEquals(Instant.fromEpochMilliseconds(1_000_000L), e.fetchedAt)
     }
 
