@@ -18,8 +18,10 @@ interface ProductRepository {
     /**
      * Saves the opt-in restock settings for [productId]. [lowLimit] null clears
      * tracking (item leaves the buying list); a non-null value is clamped to >= 0.
-     * [defaultBuyAmount] is clamped to >= 1. Stamps `updatedAt`. Silently no-ops on
-     * unknown id (consistent with [rename] / [applyDelta]).
+     * [defaultBuyAmount] is clamped to >= 1. Stamps `updatedAt` when a value
+     * actually changes. Silently no-ops when [productId] does not exist, or when
+     * the clamped values equal the current ones (no write, `updatedAt` is not
+     * bumped) — consistent with [rename] / [applyDelta].
      */
     suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int)
     suspend fun findById(id: Long): Product?
