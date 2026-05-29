@@ -12,6 +12,8 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-05-29
+
 ### Added
 
 - Per-item low-stock limits with an auto-generated buying list and one-tap restock (#191).
