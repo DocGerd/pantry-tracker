@@ -33,7 +33,7 @@ class HomeScreenTest {
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
-            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}) } }
+            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}, onBuyListClick = {}) } }
         }
 
         composeRule.onNodeWithText("Coke 0.5L").assertIsDisplayed()
@@ -58,7 +58,7 @@ class HomeScreenTest {
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
-            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}) } }
+            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}, onBuyListClick = {}) } }
         }
 
         // Target the FAB explicitly via its contentDescription, not the

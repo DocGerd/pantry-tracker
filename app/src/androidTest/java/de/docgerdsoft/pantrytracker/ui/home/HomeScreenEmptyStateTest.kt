@@ -38,6 +38,7 @@ class HomeScreenEmptyStateTest {
                         onScanAddClick = {},
                         onScanRemoveClick = {},
                         onProductClick = {},
+                        onBuyListClick = {},
                     )
                 }
             }
@@ -62,6 +63,7 @@ class HomeScreenEmptyStateTest {
                         onScanAddClick = {},
                         onScanRemoveClick = {},
                         onProductClick = {},
+                        onBuyListClick = {},
                     )
                 }
             }
@@ -95,6 +97,7 @@ class HomeScreenEmptyStateTest {
                         onScanAddClick = {},
                         onScanRemoveClick = {},
                         onProductClick = {},
+                        onBuyListClick = {},
                     )
                 }
             }
