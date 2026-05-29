@@ -87,8 +87,22 @@ interface ProductRepository {
     suspend fun applyDelta(productId: Long, delta: Int)
     suspend fun rename(productId: Long, newName: String)
     suspend fun delete(productId: Long)
+    fun observeBuyingList(): Flow<List<Product>>
+    suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int)
 }
 ```
+
+The **buying list (#191) is computed state, not a stored table.**
+`observeBuyingList()` is a reactive DAO query
+(`WHERE lowLimit IS NOT NULL AND quantity <= lowLimit`) over the same
+`products` table, so it can never drift from the live stock counts. The
+opt-in columns `lowLimit: Int?` (null ⇒ untracked, never listed) and
+`defaultBuyAmount: Int` arrived in `MIGRATION_2_3`. One-tap restock
+(`BuyListViewModel.onBought`) **reuses the existing `applyDelta`** —
+there is no second increment code path — so the item naturally falls off
+the list as its quantity rises above `lowLimit`. `setRestockSettings`
+clamps `lowLimit >= 0` / `defaultBuyAmount >= 1` and no-ops (no
+`updatedAt` bump) when nothing changed, mirroring `rename` / `applyDelta`.
 
 `ProductRepositoryImpl` composes:
 - a `ProductDao` (Room) for all local reads/writes
