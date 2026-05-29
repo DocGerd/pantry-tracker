@@ -120,17 +120,62 @@ jobs:
       # job's setup-android.
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699  # v4.0.1
 
+      # #202: the `build` job caches Gradle via setup-gradle but this emulator job
+      # did not, so it paid a cold dependency download and re-assembled the app +
+      # test APK from scratch (the "double-assemble"). Adding the same SHA-pinned
+      # action restores the dependency cache on any branch immediately; build-cache
+      # reuse (recompile FROM-CACHE) lands once a default-branch run has populated
+      # the cache (develop/PR runs are read-only by default). Coverage-neutral.
+      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # #201: cache the AVD Quick Boot snapshot so each run resumes a warm emulator
+      # (~6-15s) instead of paying a full cold boot (the long pole, ~563s of an
+      # ~11m job). Two-step pattern from the reactivecircus/android-emulator-runner
+      # README: (1) restore the cache; (2) on a MISS only, boot once and save a
+      # snapshot; (3) the real run resumes from it. The cache key encodes
+      # api-level/target/arch so a system-image bump invalidates it. actions/cache
+      # is SHA-pinned per the repo's Pinned-Dependencies convention. Coverage-neutral
+      # — the run step still executes :app:connectedDebugAndroidTest unchanged.
+      - name: AVD cache
+        id: avd-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-35-google_apis-x86_64
+
+      - name: Create AVD snapshot (cache miss only)
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.37.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
+      # The run step MUST switch the action default `-no-snapshot` → `-no-snapshot-save`
+      # (load the cached snapshot on boot but don't overwrite it on exit); with the
+      # default `-no-snapshot` the cached snapshot is never loaded and the cache is a
+      # silent no-op. `force-avd-creation: false` keeps the restored AVD from being
+      # clobbered. See the #201 spike gotcha.
       - uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.37.0
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest
 
       # SR-180: the emulator-runner step above ran connectedDebugAndroidTest with
