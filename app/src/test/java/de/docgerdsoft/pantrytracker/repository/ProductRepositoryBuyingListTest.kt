@@ -95,6 +95,25 @@ class ProductRepositoryBuyingListTest {
     }
 
     @Test
+    fun `buying list is ordered most-urgent-first then case-insensitive alphabetical`() = runTest {
+        // Distinct quantities exercise the primary `quantity ASC` sort; the two
+        // qty=1 rows ("apple" vs "Banana") exercise the `name COLLATE NOCASE`
+        // tiebreak — lowercase must NOT sort after uppercase.
+        val zero = repo.addNew(name = "Zucchini", initialQuantity = 0)
+        val bananaCap = repo.addNew(name = "Banana", initialQuantity = 1)
+        val appleLower = repo.addNew(name = "apple", initialQuantity = 1)
+        listOf(zero, bananaCap, appleLower).forEach {
+            repo.setRestockSettings(it, lowLimit = 5, defaultBuyAmount = 1) // all below limit ⇒ on the list
+        }
+        repo.observeBuyingList().test {
+            val names = awaitItem().map { it.name }
+            // quantity 0 first; then the two qty=1 rows alphabetically (case-insensitive).
+            assertEquals(listOf("Zucchini", "apple", "Banana"), names)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `setRestockSettings on unchanged values does not bump updatedAt`() = runTest {
         val id = repo.addNew(name = "Milk", initialQuantity = 1)
         repo.setRestockSettings(id, lowLimit = 2, defaultBuyAmount = 3)
