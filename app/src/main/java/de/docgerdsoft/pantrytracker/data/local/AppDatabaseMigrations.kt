@@ -33,6 +33,10 @@ internal val MIGRATION_1_2: Migration = object : Migration(1, 2) {
  * checks column name + affinity + nullability, not the `DEFAULT` clause, so the
  * `DEFAULT 1` needed to back-fill existing rows doesn't break validation.
  */
+// MagicNumber: the (2, 3) pair is a schema-version identity, not a tunable
+// constant — MIGRATION_1_2's (1, 2) only escaped because 1/2 are in detekt's
+// default ignore list; 3 is not.
+@Suppress("MagicNumber")
 internal val MIGRATION_2_3: Migration = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE `products` ADD COLUMN `lowLimit` INTEGER")

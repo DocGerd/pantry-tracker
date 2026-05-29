@@ -23,6 +23,12 @@ private val logger: Logger = Logger.getLogger("ProductRepositoryImpl")
 // Spec calls for lazy eviction on read; no scheduled cleanup job.
 private val OFF_CACHE_TTL: Duration = 30.days
 
+// TooManyFunctions: mirrors the ProductRepository contract one-for-one (CRUD,
+// search, OFF preview, restore, and #191's buying-list / restock methods); the
+// file-scope capOffText/gateImageUrl helpers already keep the count minimal.
+// Splitting it to satisfy the 12-method threshold would fragment the single
+// implementation of one cohesive interface.
+@Suppress("TooManyFunctions")
 class ProductRepositoryImpl(
     private val dao: ProductDao,
     private val offLookup: OffLookup,

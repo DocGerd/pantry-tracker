@@ -3,6 +3,11 @@ package de.docgerdsoft.pantrytracker.repository
 import de.docgerdsoft.pantrytracker.data.local.Product
 import kotlinx.coroutines.flow.Flow
 
+// TooManyFunctions: this is the single repository contract for the whole app —
+// CRUD, search, OFF preview, undo/restore, and (#191) the buying-list / restock
+// surface. Splitting it into role interfaces purely to satisfy the 12-method
+// threshold would scatter one cohesive abstraction for no readability gain.
+@Suppress("TooManyFunctions")
 interface ProductRepository {
     fun observeProducts(): Flow<List<Product>>
     fun search(query: String): Flow<List<Product>>
