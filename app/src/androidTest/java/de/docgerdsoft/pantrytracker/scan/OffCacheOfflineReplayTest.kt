@@ -12,6 +12,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import de.docgerdsoft.pantrytracker.PantryTrackerNavGraph
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
+import de.docgerdsoft.pantrytracker.data.remote.OffHost
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
@@ -232,7 +233,7 @@ class OffCacheOfflineReplayTest {
         fun goOnline(
             barcode: String,
             product: OffProduct,
-            host: String = "https://world.openfoodfacts.org/",
+            host: OffHost = OffHost.FOOD,
         ) {
             stubs = stubs + (barcode to OffLookupResult(product, host))
         }
