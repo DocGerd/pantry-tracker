@@ -2,9 +2,10 @@
 
 [![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![codecov](https://codecov.io/gh/DocGerd/pantry-tracker/branch/main/graph/badge.svg)](https://codecov.io/gh/DocGerd/pantry-tracker)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DocGerd/pantry-tracker/badge)](https://scorecard.dev/viewer/?uri=github.com/DocGerd/pantry-tracker)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13017/badge)](https://www.bestpractices.dev/projects/13017)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A single-user Android app for tracking what's in your kitchen pantry. Point the
 phone at a product barcode, the app resolves it against

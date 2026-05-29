@@ -153,6 +153,22 @@ jobs:
           path: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
           if-no-files-found: error
 
+      # #198: publish the SAME merged (unit + instrumented) JaCoCo report to
+      # Codecov, which powers the README coverage badge and PR coverage
+      # annotations. `fail_ci_if_error: false` (also the action default, set
+      # explicitly here as a guard) keeps a not-yet-configured CODECOV_TOKEN or
+      # a transient Codecov outage from failing the build — until the maintainer
+      # registers the repo on codecov.io and adds the CODECOV_TOKEN secret, this
+      # step is a non-failing no-op and the badge reads "unknown". Token-based
+      # upload (no `id-token: write`), so Token-Permissions stays 10/10.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
+        with:
+          files: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
       # INFORMATIONAL gate (SR-180). This `androidTest` job is NOT a required
       # status check and NO ruleset was edited, so a coverage regression below
       # 0.80 shows red here WITHOUT blocking merges — a deliberate maintainer
