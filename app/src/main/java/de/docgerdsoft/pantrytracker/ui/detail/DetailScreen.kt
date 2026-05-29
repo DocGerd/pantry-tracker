@@ -208,13 +208,27 @@ private fun ProductBody(
 }
 
 /**
+ * Pure parse of the two restock fields into the `(lowLimit, defaultBuyAmount)`
+ * the repository expects. Blank or unparsable [lowLimitText] ⇒ `null` (clears
+ * tracking); [buyAmountText] parses via `toIntOrNull() ?: 1`. Whitespace is
+ * trimmed. Extracted as `internal` so the parse rules are unit-testable without
+ * driving the Compose tree. The repository still clamps lowLimit >= 0 and
+ * defaultBuyAmount >= 1 — this only collects intent.
+ */
+internal fun parseRestockInput(lowLimitText: String, buyAmountText: String): Pair<Int?, Int> {
+    val newLimit = lowLimitText.trim().toIntOrNull() // blank or unparsable ⇒ null ⇒ clears tracking
+    val newBuy = buyAmountText.trim().toIntOrNull() ?: 1
+    return newLimit to newBuy
+}
+
+/**
  * #191: opt-in low-stock limit + default buy amount editing. Commits on
- * focus-loss (mirroring the name field). An empty low-limit field clears
- * tracking (`null`); buy-amount parses via `toIntOrNull() ?: 1`. The repository
- * clamps lowLimit >= 0 and defaultBuyAmount >= 1 — this UI just collects intent.
+ * focus-loss (mirroring the name field). Parsing is delegated to
+ * [parseRestockInput]; a commit only fires `onSave` when the parsed values
+ * differ from the persisted ones.
  */
 @Composable
-private fun RestockSettings(product: Product, onSave: (Int?, Int) -> Unit) {
+internal fun RestockSettings(product: Product, onSave: (Int?, Int) -> Unit) {
     // Seed from the row; reset when the persisted values change externally.
     var lowLimitText by remember(product.lowLimit) {
         mutableStateOf(product.lowLimit?.toString() ?: "")
@@ -224,8 +238,7 @@ private fun RestockSettings(product: Product, onSave: (Int?, Int) -> Unit) {
     }
 
     fun commit() {
-        val newLimit = lowLimitText.trim().toIntOrNull() // blank or unparsable ⇒ null ⇒ clears tracking
-        val newBuy = buyAmountText.trim().toIntOrNull() ?: 1
+        val (newLimit, newBuy) = parseRestockInput(lowLimitText, buyAmountText)
         if (newLimit != product.lowLimit || newBuy != product.defaultBuyAmount) {
             onSave(newLimit, newBuy)
         }
