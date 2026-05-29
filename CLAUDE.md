@@ -342,6 +342,24 @@ restructured to make the lesson load-bearing on its own.*
   `:app:connectedDebugAndroidTest` on a local emulator (or push and let the
   CI emulator job at `.github/workflows/ci.yml` run
   `reactivecircus/android-emulator-runner` before declaring ready).
+- **Filtering a single instrumented test locally has two footguns** — both
+  surfaced only on a real emulator run during #191's `MIGRATION_2_3`
+  verification, never in the JVM gate or an implementer self-report. (1)
+  **`:app:connectedDebugAndroidTest` rejects Gradle's `--tests` flag**
+  ("Unknown command-line option '--tests'") — that flag is only for JVM
+  `Test` tasks like `:app:testDebugUnitTest`. Filter instrumented tests with
+  `-Pandroid.testInstrumentationRunnerArguments.class=<fully.qualified.Class>`.
+  (2) **`INSTALL_FAILED_UPDATE_INCOMPATIBLE: … signatures do not match`** — a
+  leftover install of `de.docgerdsoft.pantrytracker` from a prior session
+  (e.g. the *release*-signed sideload APK) blocks the *debug*-keystore-signed
+  test APK; the tell-tale is `Starting 0 tests / Finished 0 tests` with a fast
+  `BUILD FAILED`, so nothing actually ran. Fix: `adb uninstall
+  de.docgerdsoft.pantrytracker` **and** `adb uninstall
+  de.docgerdsoft.pantrytracker.test` before `connectedDebugAndroidTest`. Both
+  present as a code/test failure but are CLI-flag / device-state issues, so a
+  verbatim retry just fails again. Eviction criterion: a "before-PR
+  end-to-end" checklist in `scripts/uat/README.md` encodes the uninstall +
+  class-filter steps.
 - **GitFlow ruleset constraints for this repo.** Keep `develop` as the
   default branch — feature PRs target develop and rely on the
   default-branch behaviour of `Closes #N` to auto-close issues on merge
