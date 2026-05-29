@@ -425,6 +425,45 @@ automated.
 
 ---
 
+## v1.3 release-cut checklist
+
+v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
+`lowLimit` + `defaultBuyAmount` columns to `products`, #191). Cut on a
+`release/1.3.0` branch off `develop`, PR'd into **both** `main` and `develop`
+(GitFlow).
+
+1. [ ] `release/1.3.0` off `develop`; `app/build.gradle.kts` bumped to
+       `versionCode = 5`, `versionName = "1.3.0"`; CHANGELOG `[Unreleased]`
+       promoted to `[1.3.0]`.
+2. [ ] Bridge signing properties if `GRADLE_USER_HOME` is redirected (see
+       Common gotchas).
+3. [ ] **Verify the v2 → v3 upgrade-install** on the emulator:
+       ```bash
+       scripts/uat/verify-migration-2-3.sh                  # emulator already running
+       BOOT_EMULATOR=1 scripts/uat/verify-migration-2-3.sh  # boot the AVD first
+       ```
+       Downloads the v1.2.0 release APK, seeds 2 rows, builds + installs v1.3
+       on top, and asserts the rows survive + the two new columns back-fill
+       (`lowLimit` NULL, `defaultBuyAmount` 1). Exits non-zero on any failure.
+       It also leaves a signed `app-release.apk` as a byproduct, so it doubles
+       as the build + signing-continuity check — `install -r` over v1.2.0 only
+       succeeds if both are signed with the lifetime keystore.
+4. [ ] Confirm the signature: `apksigner verify --print-certs
+       app/build/outputs/apk/release/app-release.apk` shows cert SHA-256
+       `ec9a4bb8…b3d9`. Run `scripts/uat/verify-r8-keep-rules.sh` (SR-80).
+5. [ ] A human merges the `release/1.3.0` PRs into `main` AND `develop`.
+6. [ ] **Lock dependencies for the tag** (see
+       [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure))
+       — one commit on `main` immediately before the tag.
+7. [ ] Tag: `git tag -a v1.3.0 -m "v1.3.0 release" && git push origin v1.3.0`
+8. [ ] Create the GitHub Release attaching `app-release.apk`:
+       `gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
+       — the **first** release to auto-trigger
+       [`release.yml`](../../.github/workflows/release.yml) (cosign + SLSA
+       provenance).
+
+---
+
 ## Common gotchas
 
 | Symptom | Cause | Fix |
