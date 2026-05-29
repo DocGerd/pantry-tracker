@@ -116,6 +116,15 @@ class DetailScreenTest {
         override fun observeById(id: Long): Flow<Product?> = flow.asStateFlow()
         override fun observeProducts(): Flow<List<Product>> = MutableStateFlow(emptyList())
         override fun search(query: String): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) {
+            flow.value?.let { p ->
+                flow.value = p.copy(
+                    lowLimit = lowLimit?.coerceAtLeast(0),
+                    defaultBuyAmount = defaultBuyAmount.coerceAtLeast(1),
+                )
+            }
+        }
         override suspend fun findById(id: Long): Product? = flow.value
         override suspend fun findLocalByBarcode(code: String): Product? = null
         override suspend fun lookupForPreview(code: String): ScanCandidate? = null

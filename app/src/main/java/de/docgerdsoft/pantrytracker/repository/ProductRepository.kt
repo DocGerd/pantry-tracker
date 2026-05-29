@@ -3,9 +3,27 @@ package de.docgerdsoft.pantrytracker.repository
 import de.docgerdsoft.pantrytracker.data.local.Product
 import kotlinx.coroutines.flow.Flow
 
+// TooManyFunctions: this is the single repository contract for the whole app —
+// CRUD, search, OFF preview, undo/restore, and (#191) the buying-list / restock
+// surface. Splitting it into role interfaces purely to satisfy the 12-method
+// threshold would scatter one cohesive abstraction for no readability gain.
+@Suppress("TooManyFunctions")
 interface ProductRepository {
     fun observeProducts(): Flow<List<Product>>
     fun search(query: String): Flow<List<Product>>
+
+    /** Reactive buying list: items with a non-null lowLimit at or below it. */
+    fun observeBuyingList(): Flow<List<Product>>
+
+    /**
+     * Saves the opt-in restock settings for [productId]. [lowLimit] null clears
+     * tracking (item leaves the buying list); a non-null value is clamped to >= 0.
+     * [defaultBuyAmount] is clamped to >= 1. Stamps `updatedAt` when a value
+     * actually changes. Silently no-ops when [productId] does not exist, or when
+     * the clamped values equal the current ones (no write, `updatedAt` is not
+     * bumped) — consistent with [rename] / [applyDelta].
+     */
+    suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int)
     suspend fun findById(id: Long): Product?
     fun observeById(id: Long): Flow<Product?>
     suspend fun findLocalByBarcode(code: String): Product?

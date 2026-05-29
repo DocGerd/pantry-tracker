@@ -23,6 +23,12 @@ private val logger: Logger = Logger.getLogger("ProductRepositoryImpl")
 // Spec calls for lazy eviction on read; no scheduled cleanup job.
 private val OFF_CACHE_TTL: Duration = 30.days
 
+// TooManyFunctions: mirrors the ProductRepository contract one-for-one (CRUD,
+// search, OFF preview, restore, and #191's buying-list / restock methods); the
+// file-scope capOffText/gateImageUrl helpers already keep the count minimal.
+// Splitting it to satisfy the 12-method threshold would fragment the single
+// implementation of one cohesive interface.
+@Suppress("TooManyFunctions")
 class ProductRepositoryImpl(
     private val dao: ProductDao,
     private val offLookup: OffLookup,
@@ -33,6 +39,23 @@ class ProductRepositoryImpl(
     override fun observeProducts(): Flow<List<Product>> = dao.observeAll()
 
     override fun search(query: String): Flow<List<Product>> = dao.search(query)
+
+    override fun observeBuyingList(): Flow<List<Product>> = dao.observeBuyingList()
+
+    override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) {
+        val current = dao.findById(productId) ?: return // unknown id no-ops, per contract
+        val safeLimit = lowLimit?.coerceAtLeast(0)
+        val safeBuy = defaultBuyAmount.coerceAtLeast(1)
+        // No-op (and no updatedAt bump) when nothing actually changed.
+        if (current.lowLimit == safeLimit && current.defaultBuyAmount == safeBuy) return
+        dao.upsert(
+            current.copy(
+                lowLimit = safeLimit,
+                defaultBuyAmount = safeBuy,
+                updatedAt = clock.now(),
+            ),
+        )
+    }
 
     override suspend fun findById(id: Long): Product? = dao.findById(id)
 

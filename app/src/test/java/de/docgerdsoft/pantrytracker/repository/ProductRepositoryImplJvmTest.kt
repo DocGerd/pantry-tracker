@@ -468,6 +468,12 @@ class ProductRepositoryImplJvmTest {
         override fun search(query: String): Flow<List<Product>> =
             all.map { list -> list.filter { it.name.contains(query, ignoreCase = true) } }
 
+        override fun observeBuyingList(): Flow<List<Product>> =
+            all.map { list ->
+                list.filter { it.lowLimit != null && it.quantity <= it.lowLimit }
+                    .sortedWith(compareBy({ it.quantity }, { it.name.lowercase() }))
+            }
+
         override suspend fun upsert(product: Product): Long {
             val id = if (product.id == 0L) nextId++ else product.id
             rows[id] = product.copy(id = id)

@@ -16,6 +16,11 @@ data class Product(
     val brand: String? = null,
     val imageUrl: String? = null,
     val quantity: Int,
+    // #191: opt-in restock tracking. lowLimit null ⇒ never tracked, never on the
+    // buying list. defaultBuyAmount is how much one "Bought" tap adds; defaults to
+    // 1 so the migration is safe for existing rows.
+    val lowLimit: Int? = null,
+    val defaultBuyAmount: Int = 1,
     val createdAt: Instant,
     val updatedAt: Instant,
 )

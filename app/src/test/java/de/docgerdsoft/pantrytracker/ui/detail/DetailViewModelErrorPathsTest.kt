@@ -135,6 +135,29 @@ class DetailViewModelErrorPathsTest {
         assertNull(vm.uiState.value.error)
     }
 
+    // --- saveRestockSettings error + cancellation rethrow (#191) ---------
+
+    @Test
+    fun saveRestockSettings_repoThrows_surfacesCouldntError() = runTest {
+        val repo = ErrorRepo(findByIdResult = product(), setRestockError = RuntimeException("disk full"))
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = 2, defaultBuyAmount = 3)
+        advanceUntilIdle()
+        assertEquals("Couldn't save restock settings: disk full", vm.uiState.value.error)
+    }
+
+    @Test
+    fun saveRestockSettings_repoCancelled_doesNotSetError() = runTest {
+        val repo = ErrorRepo(findByIdResult = product(), setRestockError = CancellationException("x"))
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = 2, defaultBuyAmount = 3)
+        advanceUntilIdle()
+        // CE takes the rethrow arm, so no "Couldn't …" message is stamped.
+        assertNull(vm.uiState.value.error)
+    }
+
     @Test
     fun confirmDelete_repoCancelled_doesNotSetError_andClearsDialog() = runTest {
         val repo = ErrorRepo(findByIdResult = product(), deleteError = CancellationException("x"))
@@ -156,6 +179,7 @@ class DetailViewModelErrorPathsTest {
         private val renameError: Throwable? = null,
         private val deltaError: Throwable? = null,
         private val deleteError: Throwable? = null,
+        private val setRestockError: Throwable? = null,
     ) : ProductRepository {
 
         override fun observeById(id: Long): Flow<Product?> =
@@ -182,6 +206,10 @@ class DetailViewModelErrorPathsTest {
         // Unused by these tests — satisfy the interface.
         override fun observeProducts(): Flow<List<Product>> = MutableStateFlow(emptyList())
         override fun search(query: String): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) {
+            setRestockError?.let { throw it }
+        }
         override suspend fun findLocalByBarcode(code: String): Product? = null
         override suspend fun lookupForPreview(code: String): ScanCandidate? = null
         override suspend fun addNew(

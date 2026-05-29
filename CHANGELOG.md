@@ -12,6 +12,10 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+### Added
+
+- Per-item low-stock limits with an auto-generated buying list and one-tap restock (#191).
+
 ### Changed
 
 - Home list rows now show the manufacturer beneath the product name (#190).

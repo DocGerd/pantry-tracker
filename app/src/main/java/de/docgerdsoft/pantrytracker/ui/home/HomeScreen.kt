@@ -20,12 +20,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -62,13 +64,23 @@ fun HomeScreen(
     onScanAddClick: () -> Unit,
     onScanRemoveClick: () -> Unit,
     onProductClick: (Long) -> Unit,
+    onBuyListClick: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     SnackbarEventCollector(viewModel, snackbarHostState)
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Pantry Tracker") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Pantry Tracker") },
+                actions = {
+                    IconButton(onClick = onBuyListClick) {
+                        Icon(Icons.Filled.ShoppingCart, contentDescription = "Buying list")
+                    }
+                },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { viewModel.openAddSheet() }) {
