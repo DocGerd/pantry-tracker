@@ -182,6 +182,8 @@ class DetailViewModelErrorPathsTest {
         // Unused by these tests — satisfy the interface.
         override fun observeProducts(): Flow<List<Product>> = MutableStateFlow(emptyList())
         override fun search(query: String): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) = Unit
         override suspend fun findLocalByBarcode(code: String): Product? = null
         override suspend fun lookupForPreview(code: String): ScanCandidate? = null
         override suspend fun addNew(

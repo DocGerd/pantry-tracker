@@ -238,6 +238,18 @@ class DetailViewModelTest {
 
         override fun observeProducts(): Flow<List<Product>> = MutableStateFlow(emptyList())
         override fun search(query: String): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+
+        val restockCalls = mutableListOf<Triple<Long, Int?, Int>>()
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) {
+            restockCalls += Triple(productId, lowLimit, defaultBuyAmount)
+            val current = flow.value ?: return
+            val safeLimit = lowLimit?.coerceAtLeast(0)
+            val safeBuy = defaultBuyAmount.coerceAtLeast(1)
+            if (current.lowLimit == safeLimit && current.defaultBuyAmount == safeBuy) return
+            flow.value = current.copy(lowLimit = safeLimit, defaultBuyAmount = safeBuy)
+        }
+
         override suspend fun findById(id: Long): Product? = flow.value
         override suspend fun findLocalByBarcode(code: String): Product? = null
         override suspend fun lookupForPreview(code: String): ScanCandidate? = null

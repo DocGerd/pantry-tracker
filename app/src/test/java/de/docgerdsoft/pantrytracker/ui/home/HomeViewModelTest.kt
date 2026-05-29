@@ -299,6 +299,8 @@ class HomeViewModelTest {
             lastSearchQuery = query
             return all.asStateFlow()
         }
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) = Unit
         override fun observeById(id: Long): Flow<Product?> =
             MutableStateFlow(all.value.firstOrNull { it.id == id }).asStateFlow()
 

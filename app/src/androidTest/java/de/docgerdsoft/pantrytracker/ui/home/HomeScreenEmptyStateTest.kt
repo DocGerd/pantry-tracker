@@ -109,6 +109,8 @@ class HomeScreenEmptyStateTest {
         override fun search(query: String): Flow<List<Product>> =
             MutableStateFlow(flow.value.filter { it.name.contains(query, ignoreCase = true) })
                 .asStateFlow()
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) = Unit
         override fun observeById(id: Long): Flow<Product?> =
             MutableStateFlow(flow.value.firstOrNull { it.id == id }).asStateFlow()
         override suspend fun findById(id: Long): Product? =

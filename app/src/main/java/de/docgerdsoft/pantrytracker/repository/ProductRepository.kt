@@ -6,6 +6,17 @@ import kotlinx.coroutines.flow.Flow
 interface ProductRepository {
     fun observeProducts(): Flow<List<Product>>
     fun search(query: String): Flow<List<Product>>
+
+    /** Reactive buying list: items with a non-null lowLimit at or below it. */
+    fun observeBuyingList(): Flow<List<Product>>
+
+    /**
+     * Saves the opt-in restock settings for [productId]. [lowLimit] null clears
+     * tracking (item leaves the buying list); a non-null value is clamped to >= 0.
+     * [defaultBuyAmount] is clamped to >= 1. Stamps `updatedAt`. Silently no-ops on
+     * unknown id (consistent with [rename] / [applyDelta]).
+     */
+    suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int)
     suspend fun findById(id: Long): Product?
     fun observeById(id: Long): Flow<Product?>
     suspend fun findLocalByBarcode(code: String): Product?
