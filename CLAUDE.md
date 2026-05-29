@@ -391,6 +391,28 @@ restructured to make the lesson load-bearing on its own.*
   got 3→3) and #144 (predicted 0→10, got 0→0). Eviction criterion:
   when Scorecard publishes per-check eligibility hints in the
   workflow output (would make pre-prediction unnecessary).
+- **Scorecard Pinned-Dependencies cannot be satisfied for the SLSA
+  provenance generator — and you must NOT "fix" it by SHA-pinning.**
+  `release.yml`'s `provenance` job references the SLSA generator
+  reusable workflow (`slsa-framework/slsa-github-generator/.github/
+  workflows/generator_generic_slsa3.yml`) by a **semver tag
+  (`@vX.Y.Z`), never a commit SHA**. This is mandatory:
+  `slsa-verifier` (which downstream users run) resolves the
+  trusted-builder identity from the ref, so a SHA pin silently breaks
+  SLSA Build-L3 provenance verification for released APKs (upstream
+  `slsa-verifier#12`, unresolved; the constraint is restated inline at
+  `release.yml`'s `provenance` job, ~L104-110). Scorecard's
+  Pinned-Dependencies check does **not** exempt it, so it permanently
+  caps that check at 9/10 and keeps code-scanning alert #14 alive
+  across rescans (confirmed: re-fired after the 2026-05-29 rescan even
+  though the cosign-installer on the same file IS SHA-pinned). Correct
+  disposition: leave the tag pin and **dismiss the alert as
+  `won't fix`** — and note the literal code-scanning `dismissed_reason`
+  is `won't fix` (space + apostrophe), NOT `wont_fix` (which 422s);
+  comment ≤280 chars. Bitten 2026-05-29 (#14 dismissed; the
+  2026-05-28 security-alert-backlog plan doc's `wont_fix` value would
+  have failed). Eviction criterion: `slsa-verifier#12` ships hash-pin
+  support, or `release.yml` stops using the SLSA generator.
 - **`.kts` + `java.time.Duration` inside a Gradle DSL block needs
   an explicit import.** Fully-qualified `java.time.Duration.ofMinutes(N)`
   may fail with `Unresolved reference 'time'` inside task-config
