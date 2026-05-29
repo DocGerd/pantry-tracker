@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.screenshot
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -84,8 +85,10 @@ class GreyedRowScreenshotTest {
 
     /**
      * Minimal reproduction of the `ProductRow` composable from HomeScreen.
-     * Kept in sync structurally with the production layout (Row + Text + weight(1f) + alpha).
-     * A structural divergence would show up in the golden diff.
+     * Kept in sync structurally with the production layout (Row + Column + weight(1f) + alpha).
+     * The alpha is applied to the Column wrapping the name Text, mirroring the production
+     * layout where dimming spans the entire name/brand column. A structural divergence
+     * would show up in the golden diff.
      */
     @Composable
     private fun ProductRowPreview(name: String, quantity: Int, alpha: Float) {
@@ -96,13 +99,16 @@ class GreyedRowScreenshotTest {
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = name,
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .alpha(alpha),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+            ) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
             Text(
                 text = "×$quantity",
                 style = MaterialTheme.typography.titleMedium,

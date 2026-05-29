@@ -12,6 +12,10 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+### Changed
+
+- Home list rows now show the manufacturer beneath the product name (#190).
+
 ### Security
 
 - Bound OFF response JSON nesting depth (#59) and type-encode the OFF
