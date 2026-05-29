@@ -87,7 +87,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             return null
         }
         for (host in OFF_HOSTS) {
-            when (val r = lookupOnce(host, barcode)) {
+            when (val r = lookupOnce(host.baseUrl, barcode)) {
                 is HostResult.Found -> return OffLookupResult(r.product, host)
                 HostResult.NotFound -> continue
                 HostResult.Error -> return null // don't multiply downtime by 4 across sister hosts
@@ -279,12 +279,9 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         internal class OversizedResponseException(size: Long) :
             IOException("OFF response body exceeds cap: $size bytes")
 
-        private val OFF_HOSTS: List<String> = listOf(
-            "https://world.openfoodfacts.org/",
-            "https://world.openbeautyfacts.org/",
-            "https://world.openpetfoodfacts.org/",
-            "https://world.openproductsfacts.org/",
-        )
+        // #61: the host set is the enum's entry list. Was a List<String> whose
+        // elements had to match OffHost.baseUrl by convention; now they ARE the hosts.
+        private val OFF_HOSTS: List<OffHost> = OffHost.entries
         private const val OFF_FIELDS = "code,product_name,brands,image_url,status"
 
         // HTTP 404 is the only "not found" signal we distinguish from a generic

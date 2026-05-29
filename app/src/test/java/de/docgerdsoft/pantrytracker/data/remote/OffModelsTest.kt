@@ -7,6 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
+
 /**
  * Pure-JVM coverage for the OFF wire/transport DTOs ([OffProduct],
  * [OffApiEnvelope], [OffLookupResult]) — field defaults, the `@SerialName`
@@ -99,13 +100,13 @@ class OffModelsTest {
     fun offLookupResult_pairsProductWithResolvingHost() {
         val result = OffLookupResult(
             product = OffProduct(productName = "Coke"),
-            resolvingHost = "https://world.openfoodfacts.org/",
+            resolvingHost = OffHost.FOOD,
         )
         assertEquals("Coke", result.product.productName)
-        assertEquals("https://world.openfoodfacts.org/", result.resolvingHost)
+        assertEquals(OffHost.FOOD, result.resolvingHost)
         // copy() that changes the host must preserve the product reference.
-        val rehosted = result.copy(resolvingHost = "https://world.openpetfoodfacts.org/")
-        assertEquals("https://world.openpetfoodfacts.org/", rehosted.resolvingHost)
+        val rehosted = result.copy(resolvingHost = OffHost.PET_FOOD)
+        assertEquals(OffHost.PET_FOOD, rehosted.resolvingHost)
         assertEquals(result.product, rehosted.product)
     }
 }

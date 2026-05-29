@@ -4,6 +4,7 @@ import de.docgerdsoft.pantrytracker.data.local.OffLookupCacheDao
 import de.docgerdsoft.pantrytracker.data.local.OffLookupCacheEntry
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.local.ProductDao
+import de.docgerdsoft.pantrytracker.data.remote.OffHost
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
 import de.docgerdsoft.pantrytracker.data.remote.OffProduct
@@ -269,7 +270,7 @@ class ProductRepositoryImplJvmTest {
         off.stub(
             "555",
             OffProduct(productName = "Sprite", brands = "Coca-Cola", imageUrl = "https://img/x.jpg"),
-            host = "https://world.openpetfoodfacts.org/",
+            host = OffHost.PET_FOOD,
         )
         val candidate = repo.lookupForPreview("555") as ScanCandidate.FromOff
         assertEquals("Sprite", candidate.name)
@@ -277,7 +278,7 @@ class ProductRepositoryImplJvmTest {
         assertEquals("https://img/x.jpg", candidate.imageUrl)
         val written = cacheDao.rows["555"]!!
         assertEquals("Sprite", written.name)
-        assertEquals("https://world.openpetfoodfacts.org/", written.resolvingHost)
+        assertEquals(OffHost.PET_FOOD, written.resolvingHost)
         assertEquals(clock.current, written.fetchedAt)
     }
 
@@ -392,7 +393,7 @@ class ProductRepositoryImplJvmTest {
         name = name,
         brand = null,
         imageUrl = null,
-        resolvingHost = "https://world.openfoodfacts.org/",
+        resolvingHost = OffHost.FOOD,
         fetchedAt = fetchedAt,
     )
 
@@ -403,7 +404,7 @@ class ProductRepositoryImplJvmTest {
     private class FakeOffLookup : OffLookup {
         private val responses = mutableMapOf<String, OffLookupResult>()
         var lookupCallCount = 0
-        fun stub(code: String, product: OffProduct, host: String = "https://world.openfoodfacts.org/") {
+        fun stub(code: String, product: OffProduct, host: OffHost = OffHost.FOOD) {
             responses[code] = OffLookupResult(product, host)
         }
         override suspend fun lookup(barcode: String): OffLookupResult? {
