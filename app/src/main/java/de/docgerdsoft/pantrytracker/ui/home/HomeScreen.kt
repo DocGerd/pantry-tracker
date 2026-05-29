@@ -166,7 +166,7 @@ private fun ScanButtonsRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ProductRow(
+internal fun ProductRow(
     product: Product,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -180,13 +180,24 @@ private fun ProductRow(
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = product.name,
+        Column(
             modifier = Modifier
                 .weight(1f)
                 .alpha(if (product.quantity == 0) OUT_OF_STOCK_ROW_ALPHA else 1f),
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        ) {
+            Text(
+                text = product.name,
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            val brand = product.brand
+            if (!brand.isNullOrBlank()) {
+                Text(
+                    text = brand,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Text(
             text = "×${product.quantity}",
             style = MaterialTheme.typography.titleMedium,
