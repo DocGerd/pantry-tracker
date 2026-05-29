@@ -427,6 +427,11 @@ automated.
 
 ## v1.3 release-cut checklist
 
+> **v1.3 shipped as `v1.3.1`, not `v1.3.0`.** The `v1.3.0` tag was burned by an
+> immutable-releases tooling error (see Common gotchas). The steps below read
+> `v1.3.0`; substitute `v1.3.1` / `versionCode = 6`, and always create the
+> GitHub Release **one-shot** (APK attached at creation — never the two-step).
+
 v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
 `lowLimit` + `defaultBuyAmount` columns to `products`, #191). Cut on a
 `release/1.3.0` branch off `develop`, PR'd into **both** `main` and `develop`
@@ -478,4 +483,5 @@ v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
 | `GradleException: Incomplete release-signing config. Missing: …` on any Gradle command | Some keystore properties are set but not all four | Set the missing one(s), OR unset `PANTRY_TRACKER_RELEASE_STORE_FILE` to revert to the unsigned-release fallback |
 | `PANTRY_TRACKER_RELEASE_STORE_FILE points at <path> which does not exist` | Path typo, moved keystore, or used `~` (Gradle doesn't expand it) | Use an absolute path (`/home/you/...` not `~/...`) and confirm the file is at that path |
 | `assembleRelease` produces `app-release-unsigned.apk` even though all four `PANTRY_TRACKER_RELEASE_*` properties are set in `~/.gradle/gradle.properties` | `GRADLE_USER_HOME` is redirected to a non-default location (e.g. `/tmp/gradle-user-home` in the WSL sandbox), so Gradle reads `$GRADLE_USER_HOME/gradle.properties` instead of `~/.gradle/gradle.properties` | Bridge the props into the redirect target: `grep '^PANTRY_TRACKER_RELEASE_' ~/.gradle/gradle.properties > "$GRADLE_USER_HOME/gradle.properties"` before `assembleRelease`. Verify with `ls -lh app/build/outputs/apk/release/` — the filename suffix is AGP's only signal |
-| `gh release create <tag> <apk>` returns `HTTP 422: ReleaseAsset.name already exists` | Spurious 422 — the asset upload **did** succeed but `gh` reports failure | Verify with `gh release view <tag>` before retrying. Retrying creates a phantom release that gets rolled back. Workaround: use the two-step form — `gh release create <tag> --notes-file <file>` then `gh release upload <tag> <apk>` |
+| `gh release create <tag> <apk>` returns `HTTP 422: ReleaseAsset.name already exists` | Spurious 422 — the asset upload **did** succeed but `gh` reports failure | Verify with `gh release view <tag>`; the asset is usually already attached. Do **not** delete-and-recreate (see the immutable-releases row below). |
+| `Cannot upload assets to an immutable release` or `tag_name was used by an immutable release` | This repo has **immutable releases** (tag ruleset 16948700 "Release tag immutability (v*)"). Assets are frozen at publish, so the create-then-`gh release upload` two-step fails — and `gh release delete` to retry **burns the tag name** (it can never host a release again) | Attach the APK **at creation, one-shot**: `gh release create <tag> <apk> --title … --notes-file …`. If a tag is already burned, cut a new version tag. Bitten on v1.3.0 → re-cut as v1.3.1. |

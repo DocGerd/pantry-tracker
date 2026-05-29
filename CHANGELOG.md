@@ -12,6 +12,17 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-05-29
+
+### Changed
+
+- Re-cut of v1.3.0 with **no functional change** — everything listed under
+  1.3.0 below, re-released under a new version. The `v1.3.0` tag was consumed
+  by a release-tooling error under the repo's immutable-releases policy (assets
+  can't be added to a published release after the fact, and deleting it burns
+  the tag name), so v1.3 ships as v1.3.1. See
+  [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) "Common gotchas".
+
 ## [1.3.0] — 2026-05-29
 
 ### Added
