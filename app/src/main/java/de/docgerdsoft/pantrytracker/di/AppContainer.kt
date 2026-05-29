@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.local.MIGRATION_1_2
+import de.docgerdsoft.pantrytracker.data.local.MIGRATION_2_3
 import de.docgerdsoft.pantrytracker.data.remote.OffApiClient
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
@@ -35,7 +36,7 @@ class AppContainer(
                 AppDatabase::class.java,
                 AppDatabase.DB_NAME,
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
             val offLookup: OffLookup = OffApiClient()
             return AppContainer(

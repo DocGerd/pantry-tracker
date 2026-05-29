@@ -6,9 +6,11 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [Product::class, OffLookupCacheEntry::class],
-    // v2: adds off_lookup_cache (#48). Requires MIGRATION_1_2 wired at the
-    // Room.databaseBuilder site or the database fails to open on real devices.
-    version = 2,
+    // v2: adds off_lookup_cache (#48). v3: adds opt-in restock columns
+    // (`lowLimit`, `defaultBuyAmount`) to `products` (#191). Requires
+    // MIGRATION_1_2 + MIGRATION_2_3 wired at the Room.databaseBuilder site
+    // or the database fails to open on real devices.
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
