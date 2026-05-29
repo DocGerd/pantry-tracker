@@ -57,7 +57,20 @@ git switch -c release/X.Y.Z origin/develop
 - `app/build.gradle.kts`: bump `versionCode` (+1) and `versionName = "X.Y.Z"`.
 - `CHANGELOG.md`: promote `[Unreleased]` → `[X.Y.Z] — <date>` (terse-by-policy).
 
-### 3. Build + sign the release APK — bridge the signing props first
+Commit this **now**, so the dependency-lock commit (step 6) is the *last* commit
+before the PR — SHIPPING.md wants the lock commit "immediately before the tag":
+
+```bash
+git add app/build.gradle.kts CHANGELOG.md
+git commit -m "release: vX.Y.Z"
+```
+
+### 3. Build + sign a UAT APK — bridge the signing props first
+
+This is the **pre-merge UAT build**, used for the migration check in step 4 — NOT
+the artifact that ships. (GitFlow merges `release/X.Y.Z` into `main` as a
+non-fast-forward **merge commit**, so the tagged commit is not this one; the
+shippable APK is rebuilt from the tag in step 9.)
 
 If `GRADLE_USER_HOME` is redirected (e.g. `/tmp/gradle-user-home` in the WSL
 sandbox), Gradle reads `$GRADLE_USER_HOME/gradle.properties`, NOT
@@ -96,10 +109,12 @@ keystore). See `scripts/uat/README.md` for AVD prerequisites (incl. `libpulse0`)
 If no schema change: skip, but still walk the relevant
 [UAT checklist](../../../docs/uat/v1-uat-checklist.md) scenarios on a real device.
 
-### 5. Verify signature + R8 keep-rules
+### 5. Verify signature + R8 keep-rules (on the UAT build)
+
+`apksigner` is not on `$PATH` — invoke it from the build-tools dir (SHIPPING.md §B):
 
 ```bash
-apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+"$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 # expect: "Signer #1 certificate SHA-256 digest: ec9a4bb8…b3d9" (lifetime cert)
 
 scripts/uat/verify-r8-keep-rules.sh   # confirms @Serializable/@Entity/@Dao/@Database survived R8
@@ -125,14 +140,15 @@ else
 fi
 ```
 
-Do **not** `git rm --cached` the lockfile post-release (the untrack-on-develop
-pattern was a now-fixed dependabot workaround; see CLAUDE.md).
+This is the **last** commit on the branch before the PR. Do **not**
+`git rm --cached` the lockfile post-release (the untrack-on-develop pattern was a
+now-fixed dependabot workaround; see CLAUDE.md).
 
 ### 7. Open the release PR(s) — then HARD STOP for the human
 
-Commit the version bump + CHANGELOG, push the release branch, and open the PR
-into **both** `main` and `develop` (GitFlow). Link the milestone/issues. Run the
-`pr-review` skill as usual.
+The version bump (step 2) and lockfile (step 6) are already committed. Push the
+release branch and open the PR into **both** `main` and `develop` (GitFlow). Link
+the milestone/issues. Run the `pr-review` skill as usual.
 
 ```bash
 git push -u origin release/X.Y.Z
@@ -155,10 +171,30 @@ git push origin vX.Y.Z
 ```
 
 > **Immutable tags (ruleset 16948700).** A `v*` tag, once it hosts a release,
-> can never host another. If you burn a tag (see step 9 gotcha), cut the next
+> can never host another. If you burn a tag (see step 10 gotcha), cut the next
 > patch version — do not try to reuse it. (v1.3.0 was burned this way → v1.3.1.)
 
-### 9. Create the GitHub Release — ONE-SHOT, APK attached at creation
+### 9. Build the SHIPPABLE APK from the tagged commit
+
+The step-3 APK came from the pre-merge release branch; the tag points at `main`'s
+merge commit. Build the artifact you actually ship **from the tag**, so it
+provably corresponds to the release:
+
+```bash
+git switch --detach vX.Y.Z
+grep '^PANTRY_TRACKER_RELEASE_' ~/.gradle/gradle.properties \
+  > "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+./gradlew clean :app:assembleRelease
+ls -lh app/build/outputs/apk/release/   # MUST be app-release.apk (not -unsigned)
+"$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs \
+  app/build/outputs/apk/release/app-release.apk   # cert ec9a4bb8…b3d9
+```
+
+If anything landed on `main`/`develop` between branch-cut and merge (so the
+tagged tree differs from the UAT-tested tree), **re-run the step-4 migration UAT
+against this tag build** before publishing.
+
+### 10. Create the GitHub Release — ONE-SHOT, APK attached at creation
 
 Releases here are **immutable**: assets are frozen at publish, so the
 create-then-`gh release upload` two-step **fails**, and `gh release delete` to
@@ -176,11 +212,12 @@ gh release create vX.Y.Z \
   **spurious**; the upload usually *succeeded*. Verify with `gh release view
   vX.Y.Z` before assuming failure. Do NOT delete-and-recreate.
 
-### 10. Verify the published release
+### 11. Verify the published release
 
 ```bash
 sha256sum app/build/outputs/apk/release/app-release.apk      # record in notes
-gh attestation verify app/build/outputs/apk/release/app-release.apk -R DocGerd/pantry-tracker
+gh attestation verify app/build/outputs/apk/release/app-release.apk \
+  -R DocGerd/pantry-tracker   # needs gh >= 2.49
 ```
 
 GitHub auto-generates a Sigstore artifact attestation per asset on immutable
