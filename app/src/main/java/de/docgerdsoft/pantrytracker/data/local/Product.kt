@@ -24,11 +24,3 @@ data class Product(
     val createdAt: Instant,
     val updatedAt: Instant,
 )
-
-/**
- * #191 buying-list membership. Mirrors the SQL in [ProductDao.observeBuyingList]
- * exactly (`lowLimit != null && quantity <= lowLimit`). A null `lowLimit` means
- * the item is opt-out and never appears.
- */
-val Product.isOnBuyingList: Boolean
-    get() = lowLimit?.let { quantity <= it } ?: false
