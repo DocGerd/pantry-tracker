@@ -21,7 +21,7 @@ class OffApiClientDepthTest {
         try {
             OffApiClient.enforceMaxNestingDepth(deep.encodeToByteArray())
             fail("expected OverNestedResponseException to be thrown")
-        } catch (e: OffApiClient.Companion.OverNestedResponseException) {
+        } catch (@Suppress("SwallowedException") e: OffApiClient.Companion.OverNestedResponseException) {
             // expected — the guard must throw on a body nested beyond MAX_JSON_DEPTH
         }
     }

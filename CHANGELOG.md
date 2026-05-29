@@ -12,6 +12,11 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+### Security
+
+- Bound OFF response JSON nesting depth (#59) and type-encode the OFF
+  host invariant as an enum (#61).
+
 ## [1.2.0] — 2026-05-28
 
 ### Added

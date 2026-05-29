@@ -7,7 +7,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
-
 /**
  * Pure-JVM coverage for the OFF wire/transport DTOs ([OffProduct],
  * [OffApiEnvelope], [OffLookupResult]) — field defaults, the `@SerialName`
