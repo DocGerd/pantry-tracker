@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,7 +32,20 @@ class ProductRowTest {
     @Test
     fun `shows brand as a secondary line when present`() {
         composeRule.setContent {
-            ProductRow(product("Menu Paste", "Sheba"), onClick = {}, onLongPress = {})
+            PantryTrackerTheme {
+                ProductRow(product("Menu Paste", "Sheba"), onClick = {}, onLongPress = {})
+            }
+        }
+        composeRule.onNodeWithText("Menu Paste").assertIsDisplayed()
+        composeRule.onNodeWithText("Sheba").assertIsDisplayed()
+    }
+
+    @Test
+    fun `shows brand on a dimmed row when out of stock`() {
+        composeRule.setContent {
+            PantryTrackerTheme {
+                ProductRow(product("Menu Paste", "Sheba", quantity = 0), onClick = {}, onLongPress = {})
+            }
         }
         composeRule.onNodeWithText("Menu Paste").assertIsDisplayed()
         composeRule.onNodeWithText("Sheba").assertIsDisplayed()
@@ -40,17 +54,21 @@ class ProductRowTest {
     @Test
     fun `renders name only when brand is null - no stray separator`() {
         composeRule.setContent {
-            ProductRow(product("Salt", null), onClick = {}, onLongPress = {})
+            PantryTrackerTheme {
+                ProductRow(product("Salt", null), onClick = {}, onLongPress = {})
+            }
         }
         composeRule.onNodeWithText("Salt").assertIsDisplayed()
-        composeRule.onNodeWithText("·").assertDoesNotExist()
     }
 
     @Test
     fun `renders name only when brand is blank`() {
         composeRule.setContent {
-            ProductRow(product("Salt", "   "), onClick = {}, onLongPress = {})
+            PantryTrackerTheme {
+                ProductRow(product("Salt", "   "), onClick = {}, onLongPress = {})
+            }
         }
         composeRule.onNodeWithText("Salt").assertIsDisplayed()
+        composeRule.onNodeWithText("   ").assertDoesNotExist()
     }
 }
