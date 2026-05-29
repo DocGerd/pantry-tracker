@@ -10,6 +10,7 @@ import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ProductRepositoryImpl
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -102,6 +103,19 @@ class BuyListViewModelTest {
         vm.onBought(product(id = 1, defaultBuyAmount = 2))
         advanceUntilIdle()
         assertEquals("Couldn't restock: disk full", vm.uiState.value.error)
+    }
+
+    @Test
+    fun `onBought repo cancellation does not surface an error`() = runTest {
+        val cancelling = object : NoOpRepository() {
+            override suspend fun applyDelta(productId: Long, delta: Int): Unit =
+                throw CancellationException("scope torn down")
+        }
+        val vm = BuyListViewModel(cancelling)
+        vm.onBought(product(id = 1, defaultBuyAmount = 2))
+        advanceUntilIdle()
+        // CE takes the rethrow arm, so no "Couldn't …" message is stamped.
+        assertEquals(null, vm.uiState.value.error)
     }
 
     @Test
