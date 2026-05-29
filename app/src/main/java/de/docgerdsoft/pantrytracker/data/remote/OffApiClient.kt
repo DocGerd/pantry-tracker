@@ -144,6 +144,14 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             classifyResponse(httpClient.get(url), barcode, baseUrl)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: OverNestedResponseException) {
+            @Suppress("SwallowedException")
+            logger.log(
+                Level.WARNING,
+                "OFF lookup nesting-depth breach (${e.message}) for ${barcode.barcodeHint()} on $baseUrl",
+                e,
+            )
+            HostResult.Error
         } catch (e: OversizedResponseException) {
             @Suppress("SwallowedException")
             logger.log(
@@ -189,6 +197,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             return HostResult.Error
         }
         val bytes = readBoundedBody(response)
+        enforceMaxNestingDepth(bytes) // SR-59: fail closed before recursive parse
         val envelope = OFF_JSON.decodeFromString<OffApiEnvelope>(bytes.decodeToString())
         if (envelope.status != OFF_STATUS_FOUND) return HostResult.NotFound
         val product = envelope.product
@@ -278,6 +287,56 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         // IOException would silently pass against the supertype.
         internal class OversizedResponseException(size: Long) :
             IOException("OFF response body exceeds cap: $size bytes")
+
+        // SR-59: max structural nesting depth allowed in an OFF response body.
+        // Defence against algorithmic-complexity DoS: a body within MAX_BODY_BYTES can
+        // still be {"a":{"a":… 100k-deep, recursing the kotlinx parser far enough to
+        // risk StackOverflowError (an Error, which bypasses the Exception catch arms and
+        // crashes the coroutine). The real OFF envelope nests ~4 levels
+        // (root.product.<scalar>); 64 is a >10x headroom that no legitimate response
+        // approaches. `internal` so the depth tests reference the bound instead of
+        // duplicating the literal.
+        internal const val MAX_JSON_DEPTH = 64
+
+        // Mirrors OversizedResponseException (extends IOException so it composes with
+        // the existing IO-failure flow) but gets its own dedicated catch arm in
+        // lookupOnce for a distinct WARNING log line — separating "hostile over-nested
+        // response" from "user wifi dropped". `internal` so depth tests can assert this
+        // exact type, not the broader IOException supertype.
+        internal class OverNestedResponseException(depth: Int) :
+            IOException("OFF response nesting exceeds cap: depth $depth")
+
+        /**
+         * O(n) structural depth pre-scan run BEFORE the recursive-descent JSON parse.
+         * Counts `{`/`[` nesting while skipping bytes inside JSON string literals (so a
+         * `product_name` packed with braces can't trip the guard) and honouring `\`
+         * escapes inside strings. Throws [OverNestedResponseException] the moment depth
+         * exceeds [MAX_JSON_DEPTH]; bounds parser recursion regardless of body content.
+         */
+        internal fun enforceMaxNestingDepth(bytes: ByteArray) {
+            var depth = 0
+            var inString = false
+            var escaped = false
+            for (b in bytes) {
+                val c = b.toInt().toChar()
+                if (inString) {
+                    when {
+                        escaped -> escaped = false
+                        c == '\\' -> escaped = true
+                        c == '"' -> inString = false
+                    }
+                    continue
+                }
+                when (c) {
+                    '"' -> inString = true
+                    '{', '[' -> {
+                        depth++
+                        if (depth > MAX_JSON_DEPTH) throw OverNestedResponseException(depth)
+                    }
+                    '}', ']' -> if (depth > 0) depth--
+                }
+            }
+        }
 
         // #61: the host set is the enum's entry list. Was a List<String> whose
         // elements had to match OffHost.baseUrl by convention; now they ARE the hosts.
