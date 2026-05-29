@@ -27,6 +27,13 @@ interface ProductDao {
     )
     fun search(query: String): Flow<List<Product>>
 
+    @Query(
+        "SELECT * FROM products " +
+            "WHERE lowLimit IS NOT NULL AND quantity <= lowLimit " +
+            "ORDER BY quantity ASC, name COLLATE NOCASE"
+    )
+    fun observeBuyingList(): Flow<List<Product>>
+
     @Upsert
     suspend fun upsert(product: Product): Long
 

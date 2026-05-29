@@ -1,6 +1,10 @@
 # Pantry Tracker
 
 [![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/DocGerd/pantry-tracker/branch/main/graph/badge.svg)](https://codecov.io/gh/DocGerd/pantry-tracker)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DocGerd/pantry-tracker/badge)](https://scorecard.dev/viewer/?uri=github.com/DocGerd/pantry-tracker)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13017/badge)](https://www.bestpractices.dev/projects/13017)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A single-user Android app for tracking what's in your kitchen pantry. Point the
@@ -27,6 +31,8 @@ and [§3 System Scope and Context](docs/architecture/03-system-scope-and-context
 Non-goals include multi-user sync, shopping lists, recipe planning, and
 expiry-date tracking.
 
+See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
+
 ## Screenshots
 
 _Screenshots are a follow-up._ Capturing them requires an emulator (or device)
@@ -47,6 +53,8 @@ Download the `app-release.apk` asset from the latest release and install it
 manager). The full release-and-install procedure, including the signing-cert
 identity that all v1.0.x updates share, is in
 [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md).
+
+Verify a downloaded APK before installing — see [SHIPPING.md §Verifying a release APK signature](docs/release/SHIPPING.md).
 
 ## Build
 

@@ -30,7 +30,7 @@ audit-trail gate is the human's explicit click on "Merge pull request".
 ./gradlew :app:test                   # JVM unit tests (JUnit 4, Robolectric, Turbine)
 ./gradlew :app:detekt                 # static analysis; CI gates on this
 ./gradlew :app:lint                   # AGP Lint
-./gradlew :app:dependencies --write-locks   # regenerate gradle.lockfile (see .gitignore for day-to-day exclusion; SHIPPING.md for the release-tag exception)
+./gradlew :app:dependencies --write-locks   # regenerate app/gradle.lockfile (tracked on develop; see SHIPPING.md for the release-tag regen step)
 ```
 
 ## Working conventions
@@ -156,10 +156,14 @@ Full one-time setup: [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) §B.
 See [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md). The v1 path is
 section B (sideload of release APK). Two non-obvious bits:
 
-- **Dependency lockfile at release tags**: `app/gradle.lockfile` is gitignored
-  day-to-day but force-committed in a dedicated `chore(release): lock
-  dependencies` commit immediately before the tag, so post-hoc CVE forensics
-  has an immutable record of what shipped.
+- **Dependency lockfile**: `app/gradle.lockfile` is **tracked on `develop`**
+  per Gradle's "lockfiles should be checked in to source control" guidance;
+  Dependabot keeps it current alongside `gradle/libs.versions.toml`. At a
+  release tag, `--write-locks` runs once more and commits the diff (if any)
+  in a dedicated `chore(release): lock dependencies` commit for post-hoc
+  CVE forensics. See [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md)
+  §"Release-tag dependency-lock procedure" and the "Things that have bitten"
+  lesson on lockfile tracking below for the full reasoning.
 - **Gradle wrapper upgrades**: `./gradlew wrapper --gradle-version X.Y.Z`
   alone drops `distributionSha256Sum`. Use the atomic two-flag form documented
   in SHIPPING.md "Note: `distributionSha256Sum` must move atomically …".
@@ -312,13 +316,22 @@ restructured to make the lesson load-bearing on its own.*
   Compiling a detekt rule into the app test source set is silently inert; the
   rule never fires. The `ErrorToneRule` extraction in SR-78 (`:detekt-rules`
   module + a proof test) is the working pattern.
-- **Post-tag `gradle.lockfile` must be `git rm --cached`-d** on `develop` after
-  the release tag, or `activateDependencyLocking()` will pin develop to the
-  release's lockfile and defeat dependabot. The release tag itself needs the
-  lockfile committed for CVE forensics; `develop` does not. Source: PR #112
-  / issue #111. Evict once `docs/release/SHIPPING.md` documents the
-  post-tag `git rm --cached` step explicitly (today it only covers the
-  pre-tag force-commit).
+- **Keep `app/gradle.lockfile` tracked on `develop`.** Per
+  [Gradle's official docs](https://docs.gradle.org/current/userguide/dependency_locking.html):
+  "Lockfiles should be checked in to source control." Dependabot updates
+  `gradle.lockfile` alongside `gradle/libs.versions.toml` since GA in June
+  2025; the historical Version-Catalog interaction bug
+  ([dependabot-core #12557](https://github.com/dependabot/dependabot-core/issues/12557))
+  was fixed in [dependabot-core PR #12853](https://github.com/dependabot/dependabot-core/pull/12853),
+  merged 2026-02-03. The earlier untrack-on-develop pattern (PR #112)
+  was a workaround for that now-fixed bug; do **not** reintroduce
+  `git rm --cached app/gradle.lockfile` as a release-procedure step.
+  If a future dependabot PR ever updates only `libs.versions.toml`
+  without the lockfile, regenerate locally
+  (`./gradlew :app:dependencies --write-locks`) and amend the PR —
+  do not revert to untracking. The release-prep procedure still
+  re-runs `--write-locks` and commits any diff before the tag, but
+  the post-tag untrack is gone.
 - **On-device CI or a local emulator catches instrumented-test bugs that
   static analysis and multi-agent PR review cannot.** PR #118's
   `ActivityManager: Killing <pid>: permissions revoked` logcat was invisible
@@ -333,6 +346,104 @@ restructured to make the lesson load-bearing on its own.*
   default branch — feature PRs target develop and rely on the
   default-branch behaviour of `Closes #N` to auto-close issues on merge
   (GitHub only honours closing-keywords on merges to the default branch).
-  Keep `required_linear_history` *off* on ruleset 16948699 ("Protect main
-  and develop"): release-prep merges from `release/<version>` into `main`
-  are non-fast-forward by construction and would be blocked otherwise.
+  Branch protection is split across two Repository Rulesets since
+  2026-05-28 (#158): **16948699 "Protect main"** (strict up-to-date
+  *required*) and **16993554 "Protect develop"** (strict up-to-date
+  *not* required, to avoid integration-branch rebase churn). Keep
+  `required_linear_history` *off* on **both**: release-prep merges from
+  `release/<version>` into `main` are non-fast-forward by construction
+  and would be blocked otherwise.
+- **CodeQL Kotlin extraction needs three load-bearing build flags.**
+  [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) runs the
+  Gradle build under a CodeQL `LD_PRELOAD` tracer; for the tracer to
+  actually see Kotlin compilation on this 100% Kotlin Android project,
+  ALL THREE must hold simultaneously: (a) **Kotlin compiler in-process**
+  (`-Pkotlin.compiler.execution.strategy=in-process`) — the default
+  out-of-process Kotlin daemon JVM is outside the tracer scope;
+  (b) **build cache disabled** (`clean` + `--no-build-cache`) — a
+  `compileDebugKotlin FROM-CACHE` from a prior ci.yml run means no
+  compiler process runs for the tracer to capture; (c) **trace mode, NOT
+  `build-mode: none`** — for the `java-kotlin` combined language `none`
+  is a Java-only dependency-graph scanner that yields an empty source
+  archive on a Kotlin-only codebase (this repo has zero `.java` files).
+  Each failure mode produces the identical "no source code seen during
+  build" finalize error, so a passing Android Gradle build inside the
+  tracer is NOT sufficient evidence the DB is non-empty — watch the
+  actual `Analyze (java-kotlin)` check conclusion. Diagnosed across
+  PR #131 iterations 1-3; commit `a33a449` is the working config and
+  codeql.yml's build-step comment block documents the full chain.
+  Eviction criterion: codeql.yml is removed, or CodeQL ships native
+  source-only Kotlin extraction for `java-kotlin`.
+- **Scorecard check scoring is not always proportional.** Two checks
+  surprised us on 2026-05-28: **Branch-Protection** uses *tiered*
+  scoring (each tier must be fully satisfied to count any next-tier
+  work — solo maintainer can't reach Tier 2 because "require ≥1
+  reviewer" is structurally infeasible, so the score is capped at
+  Tier 1 = 3/10 regardless of how many Tier 5 toggles get flipped).
+  **Fuzzing** only recognizes a narrow whitelist (OSS-Fuzz,
+  ClusterFuzzLite, Go-native fuzz, Haskell QuickCheck/Hedgehog/
+  validity/SmallCheck, JS/TS fast-check, Erlang proper/quickcheck)
+  — **Jazzer is not on the list**, so PR #157 added real fuzz
+  coverage without moving the Scorecard score. When sizing Scorecard
+  tickets, read the per-check docs at
+  https://github.com/ossf/scorecard/blob/main/docs/checks.md before
+  predicting score movements. Bitten on #139 (predicted 3→6,
+  got 3→3) and #144 (predicted 0→10, got 0→0). Eviction criterion:
+  when Scorecard publishes per-check eligibility hints in the
+  workflow output (would make pre-prediction unnecessary).
+- **Scorecard Pinned-Dependencies cannot be satisfied for the SLSA
+  provenance generator — and you must NOT "fix" it by SHA-pinning.**
+  `release.yml`'s `provenance` job references the SLSA generator
+  reusable workflow (`slsa-framework/slsa-github-generator/.github/
+  workflows/generator_generic_slsa3.yml`) by a **semver tag
+  (`@vX.Y.Z`), never a commit SHA**. This is mandatory:
+  `slsa-verifier` (which downstream users run) resolves the
+  trusted-builder identity from the ref, so a SHA pin silently breaks
+  SLSA Build-L3 provenance verification for released APKs (upstream
+  `slsa-verifier#12`, unresolved; the constraint is restated inline at
+  `release.yml`'s `provenance` job, ~L104-110). Scorecard's
+  Pinned-Dependencies check does **not** exempt it, so it permanently
+  caps that check at 9/10 and keeps code-scanning alert #14 alive
+  across rescans (confirmed: re-fired after the 2026-05-29 rescan even
+  though the cosign-installer on the same file IS SHA-pinned). Correct
+  disposition: leave the tag pin and **dismiss the alert as
+  `won't fix`** — and note the literal code-scanning `dismissed_reason`
+  is `won't fix` (space + apostrophe), NOT `wont_fix` (which 422s);
+  comment ≤280 chars. Bitten 2026-05-29 (#14 dismissed; the
+  2026-05-28 security-alert-backlog plan doc's `wont_fix` value would
+  have failed). Eviction criterion: `slsa-verifier#12` ships hash-pin
+  support, or `release.yml` stops using the SLSA generator.
+- **`.kts` + `java.time.Duration` inside a Gradle DSL block needs
+  an explicit import.** Fully-qualified `java.time.Duration.ofMinutes(N)`
+  may fail with `Unresolved reference 'time'` inside task-config
+  blocks — the Gradle `java { }` extension shadows the `java`
+  package root in DSL context. Fix: `import java.time.Duration` at
+  file top, then use bare `Duration.ofMinutes(N)` in the body. Same
+  shadow likely applies to other `java.*` package-root references
+  Gradle reuses as extensions — when in doubt, import explicitly.
+  Bitten on PR #157's `:app:fuzzTest` task. Eviction criterion: when
+  Kotlin DSL resolution prefers package roots over Gradle extensions,
+  or when `build.gradle.kts` is replaced by an alternative build
+  system.
+- **Robolectric tests add 0% to the on-the-fly JaCoCo report.** The
+  Gradle `jacoco` plugin instruments classes at load time via its
+  on-the-fly agent, but Robolectric's sandbox classloader reloads app
+  classes from the original (un-instrumented) bytes, so the coverage
+  probes never fire. Symptom: a class heavily exercised *only* by a
+  `@RunWith(RobolectricTestRunner)` test (or the RNG screenshot tests)
+  shows 0% in `jacocoTestReport`. Verified empirically in #182 — a
+  passing Robolectric test calling `Converters` left the whole report
+  at 0 covered / 15360 missed. Consequence: only **plain-JVM**
+  (non-Robolectric) tests move the JVM-only number; the Compose UI
+  screens (~69% of all instructions) and anything needing
+  Robolectric/`Context` are unreachable for JVM-only coverage under the
+  current build config. The combined 86.85% that clears the OpenSSF
+  Silver `test_statement_coverage80` MUST comes from the **emulator
+  `androidTest` `.ec`**, not Robolectric JVM tests. Do NOT run
+  `:app:jacocoTestCoverageVerification` off-emulator — its 0.80 gate
+  fails on the JVM-only ~19–25% BY DESIGN. To credit Robolectric/
+  Compose-UI lines on the JVM you'd need JaCoCo **offline
+  instrumentation** in `app/build.gradle.kts` — a maintainer build
+  decision, deliberately not actioned in #182. Eviction criterion:
+  `app/build.gradle.kts` switches to JaCoCo offline instrumentation, or
+  the on-the-fly `jacoco` plugin is replaced.

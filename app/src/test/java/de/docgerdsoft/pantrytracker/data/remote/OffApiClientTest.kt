@@ -243,7 +243,7 @@ class OffApiClientTest {
         val result = sut.lookup("5449000000996")
 
         assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
-        assertEquals("https://world.openfoodfacts.org/", result?.resolvingHost)
+        assertEquals(OffHost.FOOD, result?.resolvingHost)
         assertEquals(1, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
     }
@@ -259,7 +259,7 @@ class OffApiClientTest {
         val result = sut.lookup("5449000000996")
 
         assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
-        assertEquals("https://world.openbeautyfacts.org/", result?.resolvingHost)
+        assertEquals(OffHost.BEAUTY, result?.resolvingHost)
         assertEquals(2, captured.size)
         assertEquals("world.openfoodfacts.org", captured[0].url.host)
         assertEquals("world.openbeautyfacts.org", captured[1].url.host)
@@ -276,7 +276,7 @@ class OffApiClientTest {
         val result = sut.lookup("5449000000996")
 
         assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
-        assertEquals("https://world.openpetfoodfacts.org/", result?.resolvingHost)
+        assertEquals(OffHost.PET_FOOD, result?.resolvingHost)
         assertEquals(3, captured.size)
         assertEquals(
             listOf(
@@ -303,7 +303,7 @@ class OffApiClientTest {
         val result = sut.lookup("5449000000996")
 
         assertEquals(true, result?.product?.productName?.isNotBlank() ?: false)
-        assertEquals("https://world.openproductsfacts.org/", result?.resolvingHost)
+        assertEquals(OffHost.PRODUCTS, result?.resolvingHost)
         assertEquals(
             listOf(
                 "world.openfoodfacts.org",

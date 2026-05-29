@@ -3,6 +3,12 @@
 Short-form ADRs. Each captures the choice, the alternatives considered, and
 what made the pick win.
 
+> Going forward, new ADRs live under [`docs/adr/`](../adr/) in canonical
+> Michael Nygard format. The short-form ADRs below pre-date that directory
+> and remain the source of truth for ADR-001 … ADR-010; ADRs 0001–0006 in
+> `docs/adr/` backfill the most load-bearing decisions in the longer
+> Nygard form.
+
 ## ADR-001 — Manual DI via `AppContainer`, not Hilt
 
 **Status:** accepted (M0)

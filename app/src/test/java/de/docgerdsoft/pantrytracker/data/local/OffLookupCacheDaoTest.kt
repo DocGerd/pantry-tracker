@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import de.docgerdsoft.pantrytracker.data.remote.OffHost
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -43,7 +44,7 @@ class OffLookupCacheDaoTest {
             name = "Name",
             brand = "Brand",
             imageUrl = null,
-            resolvingHost = "https://world.openfoodfacts.org/",
+            resolvingHost = OffHost.FOOD,
             fetchedAt = Instant.fromEpochMilliseconds(1L),
         )
         dao.upsert(entry)
@@ -58,7 +59,7 @@ class OffLookupCacheDaoTest {
                 name = "Old",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = Instant.fromEpochMilliseconds(1L),
             ),
         )
@@ -68,14 +69,14 @@ class OffLookupCacheDaoTest {
                 name = "New",
                 brand = "BrandNew",
                 imageUrl = null,
-                resolvingHost = "https://world.openbeautyfacts.org/",
+                resolvingHost = OffHost.BEAUTY,
                 fetchedAt = Instant.fromEpochMilliseconds(2L),
             ),
         )
         val got = dao.findByBarcode("0123")!!
         assertEquals("New", got.name)
         assertEquals("BrandNew", got.brand)
-        assertEquals("https://world.openbeautyfacts.org/", got.resolvingHost)
+        assertEquals(OffHost.BEAUTY, got.resolvingHost)
         assertEquals(Instant.fromEpochMilliseconds(2L), got.fetchedAt)
     }
 
@@ -87,7 +88,7 @@ class OffLookupCacheDaoTest {
                 name = "Name",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = Instant.fromEpochMilliseconds(1L),
             ),
         )
@@ -109,7 +110,7 @@ class OffLookupCacheDaoTest {
                 name = "Name",
                 brand = null,
                 imageUrl = null,
-                resolvingHost = "https://world.openfoodfacts.org/",
+                resolvingHost = OffHost.FOOD,
                 fetchedAt = Instant.fromEpochMilliseconds(1L),
             ),
         )

@@ -103,7 +103,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
     }
 
     /**
-     * Performs a single-host OFF v2 product lookup against [baseUrl]. Caller
+     * Performs a single-host OFF v2 product lookup against [host]. Caller
      * [lookup] dispatches one call to this helper per host in [OFF_HOSTS],
      * advancing on [HostResult.NotFound] and short-circuiting on
      * [HostResult.Error].
@@ -130,7 +130,10 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
      *   product, IOException, parse error, engine-runtime IAE — all logged,
      *   chain short-circuits). Throws only [CancellationException].
      */
-    private suspend fun lookupOnce(baseUrl: String, barcode: String): HostResult {
+    private suspend fun lookupOnce(host: OffHost, barcode: String): HostResult {
+        // Taking the OffHost (not a raw String) carries the compiler-enforced
+        // host invariant all the way to the request-building seam (#61 review).
+        val baseUrl = host.baseUrl
         // Component URL builder so each path segment is percent-encoded
         // explicitly (SR-2). Built outside the `try` so any IAE is a
         // programmer error (e.g. malformed baseUrl constant) and surfaces
@@ -144,6 +147,14 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             classifyResponse(httpClient.get(url), barcode, baseUrl)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: OverNestedResponseException) {
+            @Suppress("SwallowedException")
+            logger.log(
+                Level.WARNING,
+                "OFF lookup nesting-depth breach (${e.message}) for ${barcode.barcodeHint()} on $baseUrl",
+                e,
+            )
+            HostResult.Error
         } catch (e: OversizedResponseException) {
             @Suppress("SwallowedException")
             logger.log(
@@ -189,6 +200,7 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
             return HostResult.Error
         }
         val bytes = readBoundedBody(response)
+        enforceMaxNestingDepth(bytes) // SR-59: fail closed before recursive parse
         val envelope = OFF_JSON.decodeFromString<OffApiEnvelope>(bytes.decodeToString())
         if (envelope.status != OFF_STATUS_FOUND) return HostResult.NotFound
         val product = envelope.product
@@ -279,12 +291,59 @@ class OffApiClient internal constructor(private val httpClient: HttpClient) : Of
         internal class OversizedResponseException(size: Long) :
             IOException("OFF response body exceeds cap: $size bytes")
 
-        private val OFF_HOSTS: List<String> = listOf(
-            "https://world.openfoodfacts.org/",
-            "https://world.openbeautyfacts.org/",
-            "https://world.openpetfoodfacts.org/",
-            "https://world.openproductsfacts.org/",
-        )
+        // SR-59: max structural nesting depth allowed in an OFF response body.
+        // Defence against algorithmic-complexity DoS: a body within MAX_BODY_BYTES can
+        // still be {"a":{"a":… 100k-deep, recursing the kotlinx parser far enough to
+        // risk StackOverflowError (an Error, which bypasses the Exception catch arms and
+        // crashes the coroutine). The real OFF envelope nests ~4 levels
+        // (root.product.<scalar>); 64 is a >10x headroom that no legitimate response
+        // approaches. `internal` so the depth tests reference the bound instead of
+        // duplicating the literal.
+        internal const val MAX_JSON_DEPTH = 64
+
+        // Mirrors OversizedResponseException (extends IOException so it composes with
+        // the existing IO-failure flow) but gets its own dedicated catch arm in
+        // lookupOnce for a distinct WARNING log line — separating "hostile over-nested
+        // response" from "user wifi dropped". `internal` so depth tests can assert this
+        // exact type, not the broader IOException supertype.
+        internal class OverNestedResponseException(depth: Int) :
+            IOException("OFF response nesting exceeds cap: depth $depth")
+
+        /**
+         * O(n) structural depth pre-scan run BEFORE the recursive-descent JSON parse.
+         * Counts `{`/`[` nesting while skipping bytes inside JSON string literals (so a
+         * `product_name` packed with braces can't trip the guard) and honouring `\`
+         * escapes inside strings. Throws [OverNestedResponseException] the moment depth
+         * exceeds [MAX_JSON_DEPTH]; bounds parser recursion regardless of body content.
+         */
+        internal fun enforceMaxNestingDepth(bytes: ByteArray) {
+            var depth = 0
+            var inString = false
+            var escaped = false
+            for (b in bytes) {
+                val c = b.toInt().toChar()
+                if (inString) {
+                    when {
+                        escaped -> escaped = false
+                        c == '\\' -> escaped = true
+                        c == '"' -> inString = false
+                    }
+                    continue
+                }
+                when (c) {
+                    '"' -> inString = true
+                    '{', '[' -> {
+                        depth++
+                        if (depth > MAX_JSON_DEPTH) throw OverNestedResponseException(depth)
+                    }
+                    '}', ']' -> if (depth > 0) depth--
+                }
+            }
+        }
+
+        // #61: the host set is the enum's entry list. Was a List<String> whose
+        // elements had to match OffHost.baseUrl by convention; now they ARE the hosts.
+        private val OFF_HOSTS: List<OffHost> = OffHost.entries
         private const val OFF_FIELDS = "code,product_name,brands,image_url,status"
 
         // HTTP 404 is the only "not found" signal we distinguish from a generic

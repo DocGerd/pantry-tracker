@@ -68,7 +68,7 @@ gradle/libs.versions.toml   (modified — detekt version + library aliases)
 
 ### SECURITY.md
 
-- Standard template: contact (`claude@docgerdsoft.de`), 90-day disclosure timeline, scope = this repo only, supported versions = `main` branch.
+- Standard template: GitHub Security Advisory link as private contact channel, 90-day disclosure timeline, scope = this repo only, supported versions = `main` branch.
 
 ### Repo settings (one-off `gh api` calls, not a PR)
 

@@ -12,6 +12,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import de.docgerdsoft.pantrytracker.di.AppContainer
+import de.docgerdsoft.pantrytracker.ui.buylist.BuyListScreen
+import de.docgerdsoft.pantrytracker.ui.buylist.BuyListViewModel
 import de.docgerdsoft.pantrytracker.ui.detail.DetailScreen
 import de.docgerdsoft.pantrytracker.ui.detail.DetailViewModel
 import de.docgerdsoft.pantrytracker.ui.home.HomeScreen
@@ -25,6 +27,7 @@ object Routes {
     const val HOME = "home"
     const val SCAN_ADD = "scan/add"
     const val SCAN_REMOVE = "scan/remove"
+    const val BUY_LIST = "buylist"
     const val DETAIL_ARG_PRODUCT_ID = "productId"
     const val DETAIL = "detail/{$DETAIL_ARG_PRODUCT_ID}"
 
@@ -48,6 +51,19 @@ fun PantryTrackerNavGraph(container: AppContainer) {
                 onScanAddClick = { navController.navigate(Routes.SCAN_ADD) },
                 onScanRemoveClick = { navController.navigate(Routes.SCAN_REMOVE) },
                 onProductClick = { id -> navController.navigate(Routes.detail(id)) },
+                onBuyListClick = { navController.navigate(Routes.BUY_LIST) },
+            )
+        }
+        composable(Routes.BUY_LIST) {
+            val factory = remember(container) {
+                viewModelFactory {
+                    initializer { BuyListViewModel(container.productRepository) }
+                }
+            }
+            val vm: BuyListViewModel = viewModel(factory = factory)
+            BuyListScreen(
+                viewModel = vm,
+                onNavigateBack = { navController.popBackStack() },
             )
         }
         composable(Routes.SCAN_ADD) {

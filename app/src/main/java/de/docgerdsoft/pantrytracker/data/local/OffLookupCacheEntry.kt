@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import de.docgerdsoft.pantrytracker.data.remote.OffHost
 import kotlin.time.Instant
 
 /**
@@ -28,7 +29,7 @@ data class OffLookupCacheEntry(
     val name: String,
     val brand: String?,
     val imageUrl: String?,
-    val resolvingHost: String,
+    val resolvingHost: OffHost,
     val fetchedAt: Instant,
 ) {
     init {

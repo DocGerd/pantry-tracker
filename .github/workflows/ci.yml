@@ -25,6 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      # SR-138 wrapper-jar validation lives in its OWN workflow
+      # (.github/workflows/wrapper-validation.yml), NOT here. It was split out
+      # so OpenSSF Scorecard's Binary-Artifacts check reliably grants the
+      # gradle-wrapper.jar exemption: Scorecard records only the first workflow
+      # file its file-walk returns that runs the Gradle wrapper-validation
+      # action (in practice ci.yml sorts before wrapper-validation.yml, though
+      # that ordering is GitHub-tarball behavior, not a Scorecard guarantee), and
+      # requires a *successful* run of it on the branch-HEAD commit — which this
+      # heavy job (coupled to its ~10-min emulator androidTest) could not
+      # reliably provide, and whose `cancel-in-progress` cancelled HEAD's push
+      # run on rapid merges. The dedicated workflow runs on push + PR; a tampered
+      # wrapper jar is still surfaced as a red check before merge (and, once
+      # registered on the branch-protection rulesets, a merge-blocking required
+      # check). The SR-5 guard below is a SEPARATE concern (it validates the
+      # distribution pin in gradle-wrapper.properties, not the jar) and stays.
+
       # SR-5 guard: a bare-flag `./gradlew wrapper --gradle-version X.Y.Z`
       # silently drops `distributionSha256Sum` from gradle-wrapper.properties.
       # The wrapper refuses to start on the *next* invocation, but by then the
@@ -79,6 +95,13 @@ jobs:
         if: steps.gate.outputs.ready == 'true' && !cancelled()
         run: ./gradlew --no-daemon detekt
 
+      # SR-180: coverage reporting/verification deliberately does NOT live here.
+      # A JVM-only report in this job shows a misleading ~18.74% (it cannot see
+      # the instrumented emulator tests), so the real COMBINED measurement was
+      # moved to the `androidTest` emulator job below, where the connected
+      # coverage `.ec` exists. The `build` required check therefore stays purely
+      # build / unit-test / lint / detekt.
+
   androidTest:
     runs-on: ubuntu-latest
     needs: build
@@ -89,6 +112,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      # SR-180: explicit SDK setup so the post-emulator coverage gradle steps
+      # below (jacocoTestReport / jacocoTestCoverageVerification) don't rely on
+      # the runner image's preinstalled SDK + ANDROID_HOME env persisting after
+      # the emulator-runner action returns. Pinned to the same SHA as the `build`
+      # job's setup-android.
+      - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699  # v4.0.1
 
       - name: Enable KVM
         run: |
@@ -102,3 +132,49 @@ jobs:
           target: google_apis
           arch: x86_64
           script: ./gradlew :app:connectedDebugAndroidTest
+
+      # SR-180: the emulator-runner step above ran connectedDebugAndroidTest with
+      # enableAndroidTestCoverage=true, leaving the instrumented coverage `.ec`
+      # under app/build/outputs/code_coverage/. It also leaves the Android SDK on
+      # the runner and Java is already set up by the setup-java step above, so we
+      # can run Gradle directly here. jacocoTestReport only dependsOn
+      # testDebugUnitTest (it does NOT re-run the connected tests), so this
+      # produces the JVM unit `.exec` on this runner and merges it with the
+      # connected `.ec` into one COMBINED report.
+      - name: Merge coverage (unit + instrumented) and report
+        if: ${{ !cancelled() }}
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:jacocoTestReport
+
+      - name: Upload merged JaCoCo XML
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: jacoco-coverage-xml
+          path: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          if-no-files-found: error
+
+      # #198: publish the SAME merged (unit + instrumented) JaCoCo report to
+      # Codecov, which powers the README coverage badge and PR coverage
+      # annotations. `fail_ci_if_error: false` (also the action default, set
+      # explicitly here as a guard) keeps a not-yet-configured CODECOV_TOKEN or
+      # a transient Codecov outage from failing the build — until the maintainer
+      # registers the repo on codecov.io and adds the CODECOV_TOKEN secret, this
+      # step is a non-failing no-op and the badge reads "unknown". Token-based
+      # upload (no `id-token: write`), so Token-Permissions stays 10/10.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354  # v6.0.1
+        with:
+          files: app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      # INFORMATIONAL gate (SR-180). This `androidTest` job is NOT a required
+      # status check and NO ruleset was edited, so a coverage regression below
+      # 0.80 shows red here WITHOUT blocking merges — a deliberate maintainer
+      # decision to avoid coupling merges to emulator reliability. The OpenSSF
+      # Silver test_statement_coverage80 MUST is satisfied by the demonstrated
+      # combined 86.85% instruction coverage, not by a merge-blocking check.
+      - name: Verify coverage ≥ 80% (non-required signal)
+        if: ${{ !cancelled() }}
+        run: ./gradlew --no-daemon :app:jacocoTestCoverageVerification

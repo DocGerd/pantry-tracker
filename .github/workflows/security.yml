@@ -13,6 +13,12 @@ concurrency:
   group: security-${{ github.ref }}
   cancel-in-progress: true
 
+# Default to read-only at workflow level so any future job added below
+# inherits least-privilege by default. Each job below also declares its
+# own narrow scopes for grep-ability and explicit auditing (SR-137).
+permissions:
+  contents: read
+
 jobs:
   osv-scan:
     name: OSV-Scanner (Gradle deps)

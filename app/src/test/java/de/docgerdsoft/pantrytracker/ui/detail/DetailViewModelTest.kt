@@ -96,6 +96,33 @@ class DetailViewModelTest {
     }
 
     @Test
+    fun saveRestockSettings_persistsClampedValues() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product()) // id = 1
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = 2, defaultBuyAmount = 0) // 0 clamps to 1
+        advanceUntilIdle()
+        val saved = repo.findById(1L)!!
+        assertEquals(2, saved.lowLimit)
+        assertEquals(1, saved.defaultBuyAmount) // 0 clamped to 1
+        assertEquals(listOf(Triple(1L, 2, 0)), repo.restockCalls)
+    }
+
+    @Test
+    fun saveRestockSettings_withNullLowLimit_clearsTracking() = runTest {
+        val repo = FakeRepo()
+        repo.emit(product()) // id = 1
+        val vm = DetailViewModel(repo, productId = 1L)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = 3, defaultBuyAmount = 1)
+        advanceUntilIdle()
+        vm.saveRestockSettings(lowLimit = null, defaultBuyAmount = 1)
+        advanceUntilIdle()
+        assertEquals(null, repo.findById(1L)!!.lowLimit)
+    }
+
+    @Test
     fun stepperDelta_positive_callsApplyDeltaPositive() = runTest {
         val repo = FakeRepo()
         val vm = DetailViewModel(repo, productId = 7L)
@@ -238,6 +265,18 @@ class DetailViewModelTest {
 
         override fun observeProducts(): Flow<List<Product>> = MutableStateFlow(emptyList())
         override fun search(query: String): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+
+        val restockCalls = mutableListOf<Triple<Long, Int?, Int>>()
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) {
+            restockCalls += Triple(productId, lowLimit, defaultBuyAmount)
+            val current = flow.value ?: return
+            val safeLimit = lowLimit?.coerceAtLeast(0)
+            val safeBuy = defaultBuyAmount.coerceAtLeast(1)
+            if (current.lowLimit == safeLimit && current.defaultBuyAmount == safeBuy) return
+            flow.value = current.copy(lowLimit = safeLimit, defaultBuyAmount = safeBuy)
+        }
+
         override suspend fun findById(id: Long): Product? = flow.value
         override suspend fun findLocalByBarcode(code: String): Product? = null
         override suspend fun lookupForPreview(code: String): ScanCandidate? = null

@@ -132,6 +132,29 @@ open class FakeProductRepository : ProductRepository {
                 .sortedBy { row -> row.name.lowercase() }
         }
 
+    // Mirrors ProductDao.observeBuyingList: tracked items (non-null lowLimit)
+    // at or below their limit, most-urgent-first then alphabetical.
+    override fun observeBuyingList(): Flow<List<Product>> =
+        rows.map { snap ->
+            snap.values
+                .filter { it.lowLimit != null && it.quantity <= it.lowLimit }
+                .sortedWith(compareBy({ it.quantity }, { it.name.lowercase() }))
+        }
+
+    /** Every [setRestockSettings] invocation as `(productId, lowLimit, defaultBuyAmount)`. */
+    val restockSettingsCalls: MutableList<Triple<Long, Int?, Int>> = mutableListOf()
+
+    override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) {
+        restockSettingsCalls += Triple(productId, lowLimit, defaultBuyAmount)
+        val existing = rows.value[productId] ?: return
+        val safeLimit = lowLimit?.coerceAtLeast(0)
+        val safeBuy = defaultBuyAmount.coerceAtLeast(1)
+        if (existing.lowLimit == safeLimit && existing.defaultBuyAmount == safeBuy) return
+        rows.value = rows.value + (productId to existing.copy(
+            lowLimit = safeLimit, defaultBuyAmount = safeBuy, updatedAt = Clock.System.now(),
+        ))
+    }
+
     override suspend fun findById(id: Long): Product? = rows.value[id]
 
     // `distinctUntilChanged` matches production Room semantics: a per-row

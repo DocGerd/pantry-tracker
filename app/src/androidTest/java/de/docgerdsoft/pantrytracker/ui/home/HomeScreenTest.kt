@@ -33,7 +33,7 @@ class HomeScreenTest {
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
-            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}) } }
+            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}, onBuyListClick = {}) } }
         }
 
         composeRule.onNodeWithText("Coke 0.5L").assertIsDisplayed()
@@ -58,7 +58,7 @@ class HomeScreenTest {
         val vm = HomeViewModel(repo)
 
         composeRule.setContent {
-            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}) } }
+            PantryTrackerTheme { Surface { HomeScreen(viewModel = vm, onScanAddClick = {}, onScanRemoveClick = {}, onProductClick = {}, onBuyListClick = {}) } }
         }
 
         // Target the FAB explicitly via its contentDescription, not the
@@ -77,6 +77,8 @@ class HomeScreenTest {
         var lastAddName: String? = null
         override fun observeProducts(): Flow<List<Product>> = flow.asStateFlow()
         override fun search(query: String): Flow<List<Product>> = flow.asStateFlow()
+        override fun observeBuyingList(): Flow<List<Product>> = MutableStateFlow(emptyList())
+        override suspend fun setRestockSettings(productId: Long, lowLimit: Int?, defaultBuyAmount: Int) = Unit
         override suspend fun findById(id: Long): Product? = flow.value.firstOrNull { it.id == id }
         override fun observeById(id: Long): Flow<Product?> =
             MutableStateFlow(flow.value.firstOrNull { it.id == id }).asStateFlow()

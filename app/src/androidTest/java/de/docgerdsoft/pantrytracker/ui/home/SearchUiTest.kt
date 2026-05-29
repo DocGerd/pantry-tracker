@@ -83,6 +83,7 @@ class SearchUiTest {
                         onScanAddClick = {},
                         onScanRemoveClick = {},
                         onProductClick = {},
+                        onBuyListClick = {},
                     )
                 }
             }

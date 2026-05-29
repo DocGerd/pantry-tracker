@@ -17,11 +17,16 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Gradle lockfile is regenerated each Security CI run from the current resolved
-# graph — don't commit a developer-local snapshot or scans will report drift
-# nobody can explain. Removing this entry + committing the lockfile is a valid
-# alternative if reproducible builds become more important than always-current
-# scan results.
+# gradle.lockfile is tracked at app/gradle.lockfile per Gradle's
+# "lockfiles should be checked in to source control" guidance.
+# This entry only prevents accidental tracking of NEW module-level
+# lockfiles created by `--write-locks` in modules other than `:app`.
+# Today the only other module is `:detekt-rules`, which doesn't invoke
+# `--write-locks` — so this entry is a forward-looking guard. See
+# docs/release/SHIPPING.md §"Release-tag dependency-lock procedure" and
+# CLAUDE.md "Things that have bitten" lesson on lockfile tracking.
+# (The Security CI workflow still regenerates fresh each run before
+# OSV-Scanner — that's independent of how the file is tracked.)
 gradle.lockfile
 
 # Settings-level lockfile is a side-effect of `--write-locks` on Gradle 9.x —

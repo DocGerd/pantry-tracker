@@ -44,6 +44,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -125,6 +126,7 @@ fun DetailScreen(
                 padding = padding,
                 onRename = viewModel::rename,
                 onStepperDelta = viewModel::stepperDelta,
+                onSaveRestock = viewModel::saveRestockSettings,
             )
             if (state.showDeleteConfirm) {
                 DeleteConfirmDialog(
@@ -143,6 +145,7 @@ private fun ProductBody(
     padding: PaddingValues,
     onRename: (String) -> Unit,
     onStepperDelta: (Int) -> Unit,
+    onSaveRestock: (Int?, Int) -> Unit,
 ) {
     // remember(product.name) resets the local edit state when the row is
     // renamed externally (e.g. another scan, another window). Trade-off:
@@ -195,12 +198,81 @@ private fun ProductBody(
             Text(text = "Barcode: $barcode", style = MaterialTheme.typography.bodyMedium)
         }
         StepperRow(quantity = product.quantity, onDelta = onStepperDelta)
+        RestockSettings(product = product, onSave = onSaveRestock)
         Text(
             text = "Last updated ${RelativeTime.format(product.updatedAt, Clock.System.now())}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * Pure parse of the two restock fields into the `(lowLimit, defaultBuyAmount)`
+ * the repository expects. Blank or unparsable [lowLimitText] ⇒ `null` (clears
+ * tracking); [buyAmountText] parses via `toIntOrNull() ?: 1`. Whitespace is
+ * trimmed. Extracted as `internal` so the parse rules are unit-testable without
+ * driving the Compose tree. The repository still clamps lowLimit >= 0 and
+ * defaultBuyAmount >= 1 — this only collects intent.
+ */
+internal fun parseRestockInput(lowLimitText: String, buyAmountText: String): Pair<Int?, Int> {
+    val newLimit = lowLimitText.trim().toIntOrNull() // blank or unparsable ⇒ null ⇒ clears tracking
+    val newBuy = buyAmountText.trim().toIntOrNull() ?: 1
+    return newLimit to newBuy
+}
+
+/**
+ * #191: opt-in low-stock limit + default buy amount editing. Commits on
+ * focus-loss (mirroring the name field). Parsing is delegated to
+ * [parseRestockInput]; a commit only fires `onSave` when the parsed values
+ * differ from the persisted ones.
+ */
+@Composable
+internal fun RestockSettings(product: Product, onSave: (Int?, Int) -> Unit) {
+    // Seed from the row; reset when the persisted values change externally.
+    var lowLimitText by remember(product.lowLimit) {
+        mutableStateOf(product.lowLimit?.toString() ?: "")
+    }
+    var buyAmountText by remember(product.defaultBuyAmount) {
+        mutableStateOf(product.defaultBuyAmount.toString())
+    }
+
+    fun commit() {
+        val (newLimit, newBuy) = parseRestockInput(lowLimitText, buyAmountText)
+        if (newLimit != product.lowLimit || newBuy != product.defaultBuyAmount) {
+            onSave(newLimit, newBuy)
+        }
+    }
+
+    Text(text = "Restock", style = MaterialTheme.typography.titleMedium)
+    OutlinedTextField(
+        value = lowLimitText,
+        onValueChange = { lowLimitText = it },
+        label = { Text("Low limit") },
+        supportingText = { Text("Leave blank to stop tracking") },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { if (!it.isFocused) commit() },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Next,
+        ),
+    )
+    OutlinedTextField(
+        value = buyAmountText,
+        onValueChange = { buyAmountText = it },
+        label = { Text("Buy amount") },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { if (!it.isFocused) commit() },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Done,
+        ),
+        keyboardActions = KeyboardActions(onDone = { commit() }),
+    )
 }
 
 @Composable

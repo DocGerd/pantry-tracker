@@ -12,6 +12,21 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-05-29
+
+### Added
+
+- Per-item low-stock limits with an auto-generated buying list and one-tap restock (#191).
+
+### Changed
+
+- Home list rows now show the manufacturer beneath the product name (#190).
+
+### Security
+
+- Bound OFF response JSON nesting depth (#59) and type-encode the OFF
+  host invariant as an enum (#61).
+
 ## [1.2.0] — 2026-05-28
 
 ### Added

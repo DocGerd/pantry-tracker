@@ -207,6 +207,21 @@ first, which wipes their data).
 This is why R-5 in [arc42 §11](../architecture/11-risks-and-technical-debt.md)
 calls keystore loss a catastrophic risk.
 
+### Verifying a release APK signature
+
+Every release APK is signed with the project's lifetime signing certificate (SHA-256 `ec9a4bb8…b3d9`). Each GitHub Release also lists the APK's SHA-256. To verify a downloaded APK before sideloading:
+
+```bash
+# 1) integrity — compare against the SHA-256 on the Release page
+sha256sum app-release.apk
+
+# 2) authenticity — confirm the signing certificate
+apksigner verify --print-certs app-release.apk
+# expect: "Signer #1 certificate SHA-256 digest: ec9a4bb8…b3d9"
+```
+
+A mismatch on either check means the artifact is not an authentic release — do not install it. The signing identity is stable across all v1.x updates (see §B); a future change of key would be announced in the release notes for the affected version.
+
 ---
 
 ## C. Firebase App Distribution / Play Store
@@ -269,6 +284,16 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 10. [ ] Install the release APK on your daily-driver device.
 
+> **Cosign + SLSA signing happens automatically (v1.3.0 onward).**
+> When the GitHub Release is published, [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
+> runs on the `release: published` event and attaches three additional
+> artifacts: `app-release.apk.sig` (keyless cosign signature),
+> `app-release.apk.pem` (Fulcio certificate), and
+> `app-release.apk.intoto.jsonl` (SLSA Build L3 provenance). No manual
+> `cosign` step is needed from the releaser. The user-facing verification
+> command lives in [`SECURITY.md`](../../SECURITY.md). Releases v1.0.x /
+> v1.1.x / v1.2.x predate this workflow and are jarsigner-signed only.
+
 ---
 
 ## v1.2 release-cut checklist
@@ -305,12 +330,14 @@ table). The upgrade-install path must be verified before tagging.
 
 ### Release-tag dependency-lock procedure
 
-Day-to-day, `app/gradle.lockfile` is **gitignored** — it's regenerated each
-Security-CI run from the current resolved dependency graph (commenting a
-developer-local snapshot would cause OSV-Scanner to report drift no one can
-explain). At a release tag, the priority flips: the tag commit needs an
-**immutable record of exactly what shipped** so post-hoc CVE forensics has
-a concrete answer.
+`app/gradle.lockfile` is **tracked on `develop`** per
+[Gradle's official recommendation](https://docs.gradle.org/current/userguide/dependency_locking.html)
+("Lockfiles should be checked in to source control"). Dependabot keeps
+the lockfile in sync with `gradle/libs.versions.toml` on every weekly run.
+At a release tag, regenerate it once more to capture the exact dependency
+snapshot for post-hoc CVE forensics — even if dependabot has been keeping
+it current, the regen produces a no-op diff which proves "what shipped
+matches what's in develop."
 
 Run these commands as the commit immediately preceding the tag (between
 checklist steps 6 and 8 above):
@@ -319,17 +346,30 @@ checklist steps 6 and 8 above):
 # Regenerate the lockfile from the current resolved graph.
 ./gradlew :app:dependencies --write-locks
 
-# Force-add (it's gitignored) and commit on its own so the diff is
-# reviewable as "the dependency snapshot for v1.0.0", not buried in
-# unrelated work.
-git add -f app/gradle.lockfile
-git commit -m "chore(release): lock dependencies for v1.0.0"
+# Commit only if there's an actual diff. If dependabot has kept the
+# lockfile current, --write-locks may produce no changes — in which
+# case no commit is needed.
+if ! git diff --quiet app/gradle.lockfile; then
+  git add app/gradle.lockfile
+  git commit -m "chore(release): lock dependencies for v1.X.X"
+else
+  echo "Lockfile already current; no release-tag commit needed."
+fi
 ```
 
-Then proceed with step 8 (`git tag -a ...`). The tag commit will include
-the lockfile; the immediately-following commit on `main` will not (because
-day-to-day no-commit policy resumes, and the file's gitignored). That's
-intentional — the lockfile is a release artifact, not a maintained file.
+Then proceed with step 8 (`git tag -a ...`). The lockfile stays tracked
+on `develop` after the tag; do **not** `git rm --cached` it post-release.
+The earlier untrack-on-develop pattern (PR #112) was a workaround for a
+dependabot bug ([dependabot-core #12557](https://github.com/dependabot/dependabot-core/issues/12557))
+that has since been [fixed](https://github.com/dependabot/dependabot-core/pull/12853).
+See CLAUDE.md "Things that have bitten" lesson on `gradle.lockfile`
+tracking for the full reasoning.
+
+Note: `.gitignore` line 25 still contains `gradle.lockfile`. That's a
+historical artifact — gitignore only affects untracked files, and the
+lockfile is tracked, so the line is moot for `app/gradle.lockfile`
+itself. It still prevents accidental tracking of new module-level
+lockfiles. Leave it.
 
 ### Note: `distributionSha256Sum` must move atomically with `distributionUrl`
 
@@ -347,6 +387,80 @@ This is the **only** invocation form that updates both fields atomically.
 Running plain `./gradlew wrapper --gradle-version X.Y.Z` updates the URL
 but leaves the *old* SHA in place — the next wrapper run will then refuse
 to start because the new archive doesn't match the old hash.
+
+### Also pinned: the checked-in `gradle-wrapper.jar` itself
+
+`distributionSha256Sum` pins the **downloaded distribution archive**;
+it does not pin the **wrapper jar that lives in source control** at
+[`gradle/wrapper/gradle-wrapper.jar`](../../gradle/wrapper/gradle-wrapper.jar).
+That jar is what Scorecard's `Binary-Artifacts` check flags as a
+checked-in binary. We close the gap with a
+`gradle/actions/wrapper-validation` step in the `build` job of
+[`ci.yml`](../../.github/workflows/ci.yml), before any Gradle invocation
+runs; the `androidTest` job declares `needs: build`, so a failure there
+also gates emulator tests. The step verifies the jar's SHA-256 against
+the official Gradle wrapper-jar hash list, so a tampered wrapper jar
+(e.g. a malicious PR substituting the jar, or a compromised maintainer
+push) cannot execute in the build pipeline.
+See [SR-138](https://github.com/DocGerd/pantry-tracker/issues/138).
+
+The `osv-scan` job in
+[`security.yml`](../../.github/workflows/security.yml) invokes
+`./gradlew :app:dependencies --write-locks` without a preceding
+wrapper-validation step. That's a separate gap — file a follow-up if
+the lockfile-regeneration path needs to be jar-validated too.
+
+A Gradle wrapper upgrade does **not** regenerate `gradle-wrapper.jar`
+in a single invocation. Per the
+[Gradle Wrapper user guide](https://docs.gradle.org/current/userguide/gradle_wrapper.html),
+"running the wrapper task once will update `gradle-wrapper.properties`
+only, but leave the wrapper itself in `gradle-wrapper.jar` untouched".
+To bring the jar to the new version's bytes, run `./gradlew wrapper`
+a **second time** after the atomic-update form above — the second
+invocation regenerates the jar using the just-downloaded distribution.
+Commit both files together. The SR-138 guard validates whichever jar
+lands in the commit, so a stale jar from a single-invocation upgrade
+would still pass CI silently — the discipline is procedural, not
+automated.
+
+---
+
+## v1.3 release-cut checklist
+
+v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
+`lowLimit` + `defaultBuyAmount` columns to `products`, #191). Cut on a
+`release/1.3.0` branch off `develop`, PR'd into **both** `main` and `develop`
+(GitFlow).
+
+1. [ ] `release/1.3.0` off `develop`; `app/build.gradle.kts` bumped to
+       `versionCode = 5`, `versionName = "1.3.0"`; CHANGELOG `[Unreleased]`
+       promoted to `[1.3.0]`.
+2. [ ] Bridge signing properties if `GRADLE_USER_HOME` is redirected (see
+       Common gotchas).
+3. [ ] **Verify the v2 → v3 upgrade-install** on the emulator:
+       ```bash
+       scripts/uat/verify-migration-2-3.sh                  # emulator already running
+       BOOT_EMULATOR=1 scripts/uat/verify-migration-2-3.sh  # boot the AVD first
+       ```
+       Downloads the v1.2.0 release APK, seeds 2 rows, builds + installs v1.3
+       on top, and asserts the rows survive + the two new columns back-fill
+       (`lowLimit` NULL, `defaultBuyAmount` 1). Exits non-zero on any failure.
+       It also leaves a signed `app-release.apk` as a byproduct, so it doubles
+       as the build + signing-continuity check — `install -r` over v1.2.0 only
+       succeeds if both are signed with the lifetime keystore.
+4. [ ] Confirm the signature: `apksigner verify --print-certs
+       app/build/outputs/apk/release/app-release.apk` shows cert SHA-256
+       `ec9a4bb8…b3d9`. Run `scripts/uat/verify-r8-keep-rules.sh` (SR-80).
+5. [ ] A human merges the `release/1.3.0` PRs into `main` AND `develop`.
+6. [ ] **Lock dependencies for the tag** (see
+       [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure))
+       — one commit on `main` immediately before the tag.
+7. [ ] Tag: `git tag -a v1.3.0 -m "v1.3.0 release" && git push origin v1.3.0`
+8. [ ] Create the GitHub Release attaching `app-release.apk`:
+       `gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
+       — the **first** release to auto-trigger
+       [`release.yml`](../../.github/workflows/release.yml) (cosign + SLSA
+       provenance).
 
 ---
 
