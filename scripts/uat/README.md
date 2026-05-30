@@ -192,6 +192,61 @@ this PR merges first and #86 is still open at that point.)
 
 ---
 
+## Before-PR end-to-end checklist
+
+`bash -n`, `:app:detekt`, and an implementer's "BUILD SUCCESSFUL" self-report
+are **necessary but not sufficient**. The implementer's shell usually has
+`$ANDROID_HOME/emulator/` and `gh` on PATH; a non-interactive fresh shell (CI
+runner, a different agent, a colleague's box) usually does **not**. Before a PR
+that adds or changes a script here, or runs instrumented tests, complete this:
+
+### For adding or changing a bash script
+
+Run it **in a non-interactive shell on a fresh host** (not just the authoring
+shell) before declaring it ready. Three real bugs (SR-81's
+`verify-migration-1-2.sh`) passed every static gate and surfaced only on a
+fresh-shell re-run:
+
+1. **PATH-resolved binaries** — bare `emulator -avd …` assumes the SDK's
+   `emulator/` dir is on `$PATH`; if only `platform-tools` is, it silently
+   hangs on `adb wait-for-device`. Resolve binaries explicitly or check PATH up
+   front.
+2. **`gh` + `mktemp` download race** — `gh release download --output <file>`
+   refuses to overwrite the empty file `mktemp` just created; pass `--clobber`.
+3. **logcat regex false-positives** — `grep -iE 'AndroidRuntime'` matches benign
+   D/I-level Zygote-start and VM-exit lines on every clean boot, so the script
+   would `FAIL` on every *successful* migration. Anchor patterns to FATAL crash
+   lines, not substring matches.
+
+Rule of thumb: any script with PATH-resolved binaries, `gh`-CLI invocations, or
+logcat regex scanning needs an actual fresh-shell run before merge.
+
+### For filtering a single instrumented test locally
+
+Two footguns, both surfaced only on a real emulator run (#191's `MIGRATION_2_3`),
+never in the JVM gate or a self-report:
+
+1. **`:app:connectedDebugAndroidTest` rejects `--tests`** ("Unknown command-line
+   option '--tests'") — that flag is JVM-`Test`-task-only (e.g.
+   `:app:testDebugUnitTest`). Filter instrumented tests with
+   `-Pandroid.testInstrumentationRunnerArguments.class=<fully.qualified.Class>`.
+2. **`INSTALL_FAILED_UPDATE_INCOMPATIBLE: … signatures do not match`** — a
+   leftover *release*-signed install blocks the *debug*-keystore-signed test APK;
+   the tell-tale is `Starting 0 tests / Finished 0 tests` with a fast
+   `BUILD FAILED`, so nothing actually ran. Uninstall **both** packages first:
+
+   ```bash
+   adb uninstall de.docgerdsoft.pantrytracker
+   adb uninstall de.docgerdsoft.pantrytracker.test
+   ./gradlew :app:connectedDebugAndroidTest \
+     -Pandroid.testInstrumentationRunnerArguments.class=de.docgerdsoft.pantrytracker.SomeTest
+   ```
+
+Both present as a code/test failure but are CLI-flag / device-state issues, so a
+verbatim retry just fails again.
+
+---
+
 ## Notes
 
 - All scripts run from the **repo root** (not from `scripts/uat/`).

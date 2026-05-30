@@ -3,8 +3,9 @@
 Standalone Android Kotlin/Compose app for whole-number kitchen inventory.
 Two Gradle modules: `:app` (the Android app) and `:detekt-rules` (a pure-JVM
 module holding the custom detekt rule set — see the ErrorTone note below).
-v1.0.0 shipped 2026-05-18; v1.1.0 (Fallbacks & undo) shipped 2026-05-19, both
-as signed sideload APKs on GitHub Releases.
+Latest release: v1.3.1 (2026-05-29). All releases ship as signed sideload
+APKs on GitHub Releases — note v* releases are immutable (asset must be
+attached at creation; see SHIPPING.md). CHANGELOG.md holds per-version history.
 
 This file is loaded into every Claude Code session in this repo. Keep it
 high-signal — pointers, not duplication of the source-of-truth docs.
@@ -185,11 +186,14 @@ app/                            # the Android :app module
     util/                       # small cross-cutting helpers
     MainActivity.kt, PantryTrackerApp.kt, PantryTrackerNavGraph.kt
 docs/
+  adr/                          # Architecture Decision Records (backfill track)
   architecture/                 # arc42 — load-bearing for design-decision context
   release/SHIPPING.md           # release procedure + gotchas
   security/                     # dated security review notes (e.g. 2026-05-17)
   superpowers/specs/            # design specs incl. v1 kitchen-inventory-design.md
+  superpowers/plans/            # dated implementation plans
   uat/                          # UAT checklist used for v1 sign-off
+scripts/uat/                    # Claude-runnable emulator UAT automation (+ README)
 CHANGELOG.md                    # release notes, terse-by-policy
 SECURITY.md                     # disclosure policy — see below
 ```
@@ -274,26 +278,16 @@ restructured to make the lesson load-bearing on its own.*
   finding counts (fire on violations, silent on conforming + success copy) — run
   it whenever you touch the rule. Eviction criterion: when `ErrorToneRuleTest`
   is deleted or the `pantry.ErrorTone` entry leaves `detekt-config.yml`.
-- **UAT scripts and bash automation: fresh-host end-to-end execution
-  is non-negotiable before declaring ready.** `bash -n` + `:app:detekt`
-  + the implementer subagent's "BUILD SUCCESSFUL" self-report are
-  necessary but not sufficient — the implementer's shell typically
-  has `$ANDROID_HOME/emulator/` and `gh` on PATH; a non-interactive
-  fresh shell (CI runner, a different agent, a colleague's dev box)
-  typically does NOT. SR-81's `scripts/uat/verify-migration-1-2.sh`
-  shipped with three bugs that none of those gates caught, surfacing
-  only on a re-run in a fresh shell: (1) bare `emulator -avd …` assumed
-  `$PATH` contained the SDK's `emulator/` directory — silent hang on
-  `adb wait-for-device` when only `platform-tools` was on PATH;
-  (2) `mktemp` + `gh release download --output` race — gh refuses to
-  overwrite the empty file `mktemp` created, needs `--clobber`;
-  (3) `grep -iE 'AndroidRuntime'` matched benign D/I-level Zygote-start
-  and VM-exit lines on every clean boot — script would have reported
-  `FAIL` on every successful migration. Pattern: any script with
-  PATH-resolved binaries, gh-CLI invocations, or logcat regex scanning
-  needs an actual run in a non-interactive shell on a fresh host
-  before merge. Evict once a "before-PR end-to-end" checklist for new
-  scripts lands in `scripts/uat/README.md`.
+- **Before-PR checklist for UAT scripts & instrumented tests lives in
+  [`scripts/uat/README.md`](scripts/uat/README.md) §"Before-PR end-to-end
+  checklist".** Consult it when adding/changing a UAT script or filtering one
+  instrumented test: static gates + "BUILD SUCCESSFUL" do NOT catch the
+  fresh-shell PATH/`gh`/logcat footguns or the `connectedDebugAndroidTest`
+  flag + stale-install footguns — a non-interactive fresh-shell run is
+  required before merge. (Full detail + copy-paste commands live in that
+  README section; kept there, not here, to stay out of every-session context.)
+  Eviction criterion: when that README section is deleted or the `scripts/uat/`
+  automation track is retired.
 - **Revoking a HELD runtime permission kills the shared `androidTest` process.**
   Signature: the in-flight test reports as FAILED, then the run aborts with no
   logcat for the crashed pid (`ActivityManager: Killing <pid>: permissions
@@ -342,24 +336,6 @@ restructured to make the lesson load-bearing on its own.*
   `:app:connectedDebugAndroidTest` on a local emulator (or push and let the
   CI emulator job at `.github/workflows/ci.yml` run
   `reactivecircus/android-emulator-runner` before declaring ready).
-- **Filtering a single instrumented test locally has two footguns** — both
-  surfaced only on a real emulator run during #191's `MIGRATION_2_3`
-  verification, never in the JVM gate or an implementer self-report. (1)
-  **`:app:connectedDebugAndroidTest` rejects Gradle's `--tests` flag**
-  ("Unknown command-line option '--tests'") — that flag is only for JVM
-  `Test` tasks like `:app:testDebugUnitTest`. Filter instrumented tests with
-  `-Pandroid.testInstrumentationRunnerArguments.class=<fully.qualified.Class>`.
-  (2) **`INSTALL_FAILED_UPDATE_INCOMPATIBLE: … signatures do not match`** — a
-  leftover install of `de.docgerdsoft.pantrytracker` from a prior session
-  (e.g. the *release*-signed sideload APK) blocks the *debug*-keystore-signed
-  test APK; the tell-tale is `Starting 0 tests / Finished 0 tests` with a fast
-  `BUILD FAILED`, so nothing actually ran. Fix: `adb uninstall
-  de.docgerdsoft.pantrytracker` **and** `adb uninstall
-  de.docgerdsoft.pantrytracker.test` before `connectedDebugAndroidTest`. Both
-  present as a code/test failure but are CLI-flag / device-state issues, so a
-  verbatim retry just fails again. Eviction criterion: a "before-PR
-  end-to-end" checklist in `scripts/uat/README.md` encodes the uninstall +
-  class-filter steps.
 - **GitFlow ruleset constraints for this repo.** Keep `develop` as the
   default branch — feature PRs target develop and rely on the
   default-branch behaviour of `Closes #N` to auto-close issues on merge
@@ -409,28 +385,6 @@ restructured to make the lesson load-bearing on its own.*
   got 3→3) and #144 (predicted 0→10, got 0→0). Eviction criterion:
   when Scorecard publishes per-check eligibility hints in the
   workflow output (would make pre-prediction unnecessary).
-- **Scorecard Pinned-Dependencies cannot be satisfied for the SLSA
-  provenance generator — and you must NOT "fix" it by SHA-pinning.**
-  `release.yml`'s `provenance` job references the SLSA generator
-  reusable workflow (`slsa-framework/slsa-github-generator/.github/
-  workflows/generator_generic_slsa3.yml`) by a **semver tag
-  (`@vX.Y.Z`), never a commit SHA**. This is mandatory:
-  `slsa-verifier` (which downstream users run) resolves the
-  trusted-builder identity from the ref, so a SHA pin silently breaks
-  SLSA Build-L3 provenance verification for released APKs (upstream
-  `slsa-verifier#12`, unresolved; the constraint is restated inline at
-  `release.yml`'s `provenance` job, ~L104-110). Scorecard's
-  Pinned-Dependencies check does **not** exempt it, so it permanently
-  caps that check at 9/10 and keeps code-scanning alert #14 alive
-  across rescans (confirmed: re-fired after the 2026-05-29 rescan even
-  though the cosign-installer on the same file IS SHA-pinned). Correct
-  disposition: leave the tag pin and **dismiss the alert as
-  `won't fix`** — and note the literal code-scanning `dismissed_reason`
-  is `won't fix` (space + apostrophe), NOT `wont_fix` (which 422s);
-  comment ≤280 chars. Bitten 2026-05-29 (#14 dismissed; the
-  2026-05-28 security-alert-backlog plan doc's `wont_fix` value would
-  have failed). Eviction criterion: `slsa-verifier#12` ships hash-pin
-  support, or `release.yml` stops using the SLSA generator.
 - **`.kts` + `java.time.Duration` inside a Gradle DSL block needs
   an explicit import.** Fully-qualified `java.time.Duration.ofMinutes(N)`
   may fail with `Unresolved reference 'time'` inside task-config
