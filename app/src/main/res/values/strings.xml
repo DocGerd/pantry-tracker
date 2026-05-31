@@ -1,5 +1,7 @@
 <resources>
-    <string name="app_name">Pantry Tracker</string>
+    <!-- Brand/product name — intentionally not localized; translatable="false"
+         stops lint's MissingTranslation from requiring a values-de/ entry. -->
+    <string name="app_name" translatable="false">Pantry Tracker</string>
 
     <!-- Shared actions / labels -->
     <string name="action_add">Add</string>
