@@ -33,9 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.ui.common.sanitizeQuantityInput
 import de.docgerdsoft.pantrytracker.ui.scan.ScanMode
@@ -53,8 +55,11 @@ fun LoadingSheet(barcode: String, onCancel: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             CircularProgressIndicator()
-            Text("Looking up $barcode…", style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            Text(
+                stringResource(R.string.scan_looking_up, barcode),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
         }
     }
 }
@@ -82,7 +87,7 @@ fun ScanPreviewSheet(
             candidate.imageUrl?.let { url ->
                 AsyncImage(
                     model = url,
-                    contentDescription = "Product photo",
+                    contentDescription = stringResource(R.string.cd_product_photo),
                     modifier = Modifier.size(120.dp).align(Alignment.CenterHorizontally),
                     contentScale = ContentScale.Fit,
                 )
@@ -95,7 +100,10 @@ fun ScanPreviewSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { onQuantityChange(pendingQuantity - 1) }) {
-                    Icon(Icons.Filled.Remove, contentDescription = "Decrement quantity")
+                    Icon(
+                        Icons.Filled.Remove,
+                        contentDescription = stringResource(R.string.cd_decrement_quantity),
+                    )
                 }
                 Text(
                     text = pendingQuantity.toString(),
@@ -103,14 +111,17 @@ fun ScanPreviewSheet(
                     modifier = Modifier.padding(horizontal = 24.dp),
                 )
                 IconButton(onClick = { onQuantityChange(pendingQuantity + 1) }) {
-                    Icon(Icons.Filled.Add, contentDescription = "Increment quantity")
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.cd_increment_quantity),
+                    )
                 }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 Button(
                     onClick = onConfirm,
@@ -118,7 +129,13 @@ fun ScanPreviewSheet(
                         containerColor = if (mode == ScanMode.Add) AddGreen else RemoveRed,
                     ),
                 ) {
-                    Text(if (mode == ScanMode.Add) "Confirm Add" else "Confirm Remove")
+                    Text(
+                        if (mode == ScanMode.Add) {
+                            stringResource(R.string.scan_confirm_add)
+                        } else {
+                            stringResource(R.string.scan_confirm_remove)
+                        },
+                    )
                 }
             }
         }
@@ -145,15 +162,18 @@ fun ManualEntrySheet(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Not on Open Food Facts", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Barcode: $barcode\n\nGive it a name to add it to your inventory.",
+                stringResource(R.string.scan_manual_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                stringResource(R.string.scan_manual_body, barcode),
                 style = MaterialTheme.typography.bodyMedium,
             )
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.field_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -164,7 +184,7 @@ fun ManualEntrySheet(
                     quantityText = sanitized
                     sanitized.toIntOrNull()?.let(onQuantityChange)
                 },
-                label = { Text("Initial quantity") },
+                label = { Text(stringResource(R.string.field_initial_quantity)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -173,14 +193,14 @@ fun ManualEntrySheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Button(
                     onClick = {
                         val q = quantityText.toIntOrNull() ?: 1
                         onSubmit(name, q)
                     },
                     enabled = name.isNotBlank() && (quantityText.toIntOrNull() ?: 0) > 0,
-                ) { Text("Add to inventory") }
+                ) { Text(stringResource(R.string.scan_add_to_inventory)) }
             }
         }
     }
@@ -199,12 +219,12 @@ fun NotInInventorySheet(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Text(
-                "Not in your inventory yet",
+                stringResource(R.string.scan_not_in_inventory_title),
                 style = MaterialTheme.typography.titleLarge,
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Barcode $barcode isn't tracked yet. Add it instead?",
+                stringResource(R.string.scan_not_in_inventory_body, barcode),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(Modifier.height(16.dp))
@@ -215,10 +235,10 @@ fun NotInInventorySheet(
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Switch to Add")
+                Text(stringResource(R.string.scan_switch_to_add))
             }
             TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("Cancel")
+                Text(stringResource(R.string.action_cancel))
             }
         }
     }
@@ -239,13 +259,16 @@ fun ErrorSheet(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Something went wrong", style = MaterialTheme.typography.titleLarge)
+            Text(
+                stringResource(R.string.scan_error_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
             Text(message, style = MaterialTheme.typography.bodyMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
             }
         }
     }

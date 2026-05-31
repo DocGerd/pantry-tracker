@@ -42,12 +42,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.common.RelativeTime
 import kotlin.time.Clock
@@ -86,10 +89,13 @@ fun DetailScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Product details") },
+                title = { Text(stringResource(R.string.detail_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back),
+                        )
                     }
                 },
                 actions = {
@@ -104,7 +110,10 @@ fun DetailScreen(
                         },
                         enabled = state.product != null,
                     ) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete product")
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = stringResource(R.string.cd_delete_product),
+                        )
                     }
                 },
             )
@@ -152,6 +161,7 @@ private fun ProductBody(
     // an in-flight uncommitted edit is discarded in that case — acceptable
     // because external renames are rare and the data-correctness win is
     // worth more than preserving a half-typed string.
+    val context = LocalContext.current
     var localName by remember(product.name) { mutableStateOf(product.name) }
 
     fun commitName() {
@@ -171,7 +181,7 @@ private fun ProductBody(
         product.imageUrl?.let { url ->
             AsyncImage(
                 model = url,
-                contentDescription = "Product photo",
+                contentDescription = stringResource(R.string.cd_product_photo),
                 modifier = Modifier
                     .size(160.dp)
                     .align(Alignment.CenterHorizontally),
@@ -181,7 +191,7 @@ private fun ProductBody(
         OutlinedTextField(
             value = localName,
             onValueChange = { localName = it },
-            label = { Text("Name") },
+            label = { Text(stringResource(R.string.field_name)) },
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -192,15 +202,24 @@ private fun ProductBody(
             keyboardActions = KeyboardActions(onDone = { commitName() }),
         )
         product.brand?.let { brand ->
-            Text(text = "Brand: $brand", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = stringResource(R.string.detail_brand, brand),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         product.barcode?.let { barcode ->
-            Text(text = "Barcode: $barcode", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = stringResource(R.string.detail_barcode, barcode),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
         StepperRow(quantity = product.quantity, onDelta = onStepperDelta)
         RestockSettings(product = product, onSave = onSaveRestock)
         Text(
-            text = "Last updated ${RelativeTime.format(product.updatedAt, Clock.System.now())}",
+            text = stringResource(
+                R.string.detail_last_updated,
+                RelativeTime.format(context, product.updatedAt, Clock.System.now()),
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -244,12 +263,12 @@ internal fun RestockSettings(product: Product, onSave: (Int?, Int) -> Unit) {
         }
     }
 
-    Text(text = "Restock", style = MaterialTheme.typography.titleMedium)
+    Text(text = stringResource(R.string.detail_restock), style = MaterialTheme.typography.titleMedium)
     OutlinedTextField(
         value = lowLimitText,
         onValueChange = { lowLimitText = it },
-        label = { Text("Low limit") },
-        supportingText = { Text("Leave blank to stop tracking") },
+        label = { Text(stringResource(R.string.detail_low_limit)) },
+        supportingText = { Text(stringResource(R.string.detail_low_limit_hint)) },
         singleLine = true,
         modifier = Modifier
             .fillMaxWidth()
@@ -262,7 +281,7 @@ internal fun RestockSettings(product: Product, onSave: (Int?, Int) -> Unit) {
     OutlinedTextField(
         value = buyAmountText,
         onValueChange = { buyAmountText = it },
-        label = { Text("Buy amount") },
+        label = { Text(stringResource(R.string.detail_buy_amount)) },
         singleLine = true,
         modifier = Modifier
             .fillMaxWidth()
@@ -283,7 +302,10 @@ private fun StepperRow(quantity: Int, onDelta: (Int) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = { onDelta(-1) }, enabled = quantity > 0) {
-            Icon(Icons.Filled.Remove, contentDescription = "Decrease quantity")
+            Icon(
+                Icons.Filled.Remove,
+                contentDescription = stringResource(R.string.cd_decrease_quantity),
+            )
         }
         Text(
             text = quantity.toString(),
@@ -291,7 +313,10 @@ private fun StepperRow(quantity: Int, onDelta: (Int) -> Unit) {
             modifier = Modifier.padding(horizontal = 24.dp),
         )
         IconButton(onClick = { onDelta(1) }) {
-            Icon(Icons.Filled.Add, contentDescription = "Increase quantity")
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = stringResource(R.string.cd_increase_quantity),
+            )
         }
     }
 }
@@ -304,9 +329,9 @@ private fun DeleteConfirmDialog(
 ) {
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Delete this product?") },
+        title = { Text(stringResource(R.string.detail_delete_title)) },
         text = {
-            Text("\"$productName\" will be removed from your inventory. This can't be undone.")
+            Text(stringResource(R.string.detail_delete_body, productName))
         },
         confirmButton = {
             TextButton(
@@ -315,11 +340,11 @@ private fun DeleteConfirmDialog(
                     contentColor = MaterialTheme.colorScheme.error,
                 ),
             ) {
-                Text("Delete")
+                Text(stringResource(R.string.action_delete))
             }
         },
         dismissButton = {
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }

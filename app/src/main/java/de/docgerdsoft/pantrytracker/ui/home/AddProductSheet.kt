@@ -23,8 +23,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.ui.common.sanitizeQuantityInput
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,11 +52,14 @@ fun AddProductSheet(
                 .padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Add product manually", style = MaterialTheme.typography.titleLarge)
+            Text(
+                stringResource(R.string.add_sheet_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.field_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -63,7 +68,7 @@ fun AddProductSheet(
                 onValueChange = { input ->
                     quantityText = sanitizeQuantityInput(input)
                 },
-                label = { Text("Initial quantity") },
+                label = { Text(stringResource(R.string.field_initial_quantity)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -73,13 +78,13 @@ fun AddProductSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 Button(
                     enabled = canSubmit,
                     onClick = { onConfirm(name, quantity) },
                 ) {
-                    Text("Add")
+                    Text(stringResource(R.string.action_add))
                 }
             }
         }

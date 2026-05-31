@@ -155,6 +155,18 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
+    // #168 (OpenSSF Silver internationalization): fail the build on hardcoded
+    // user-facing text so a future XML layout or data-binding string can't
+    // regress the i18n sweep. HardcodedText is an XML/data-binding check (it
+    // does not inspect Compose `Text("literal")` calls); it is enabled here as
+    // the regression guard the issue asks for, defending the resource-only
+    // convention as the app grows.
+    lint {
+        warningsAsErrors = false
+        enable += "HardcodedText"
+        error += "HardcodedText"
+    }
+
     // SR-17: ship the exported Room schema JSON into the androidTest APK so
     // MigrationTestHelper can resolve them as assets at runtime. The helper
     // reads "<dbClass>/<version>.json" from the test APK's assets — not from

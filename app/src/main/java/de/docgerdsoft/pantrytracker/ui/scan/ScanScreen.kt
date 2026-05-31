@@ -19,7 +19,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
 import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.LoadingSheet
@@ -43,7 +45,11 @@ fun ScanScreen(
     BindTestCameraSource(cameraSource, viewModel)
 
     val topBarColor = if (state.mode == ScanMode.Add) AddGreen else RemoveRed
-    val topBarTitle = if (state.mode == ScanMode.Add) "Scan to Add" else "Scan to Remove"
+    val topBarTitle = if (state.mode == ScanMode.Add) {
+        stringResource(R.string.scan_to_add)
+    } else {
+        stringResource(R.string.scan_to_remove)
+    }
 
     // Haptic on transition into Preview/ManualEntry (i.e. each successful decode).
     // CONFIRM was added in API 30 (Android 11); fall back to KEYBOARD_TAP on
@@ -68,7 +74,10 @@ fun ScanScreen(
                 title = { Text(topBarTitle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = topBarColor),
