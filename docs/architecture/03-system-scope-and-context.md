@@ -2,33 +2,17 @@
 
 ## 3.1 Business context
 
-```
-                              ┌─────────────────────────────┐
-                              │                             │
-                              │   Open Food Facts (OFF)     │
-                              │   world.openfoodfacts.org   │
-                              │                             │
-                              └──────────────▲──────────────┘
-                                             │
-                                             │  HTTPS GET /api/v2/product/<barcode>.json
-                                             │  (anonymous, User-Agent identifies app)
-                                             │
-                              ┌──────────────┴──────────────┐
-       scan barcode           │                             │
-       view inventory ───────▶│      Pantry Tracker         │
-       rename / delete        │      (Android app, single   │
-                              │       user, on-device DB)   │
-                              │                             │
-                              └──────────────┬──────────────┘
-                                             │
-                                             │  Camera frames + permission
-                                             │  (Android system)
-                                             ▼
-                              ┌─────────────────────────────┐
-                              │   Android OS (CameraX,      │
-                              │   ML Kit Barcode Scanner,   │
-                              │   Room/SQLite, Settings)    │
-                              └─────────────────────────────┘
+```mermaid
+flowchart TD
+    User([User])
+    App["Pantry Tracker<br/>Android app · single user · on-device DB"]
+    OFF["Open Food Facts<br/>4-host chain · anonymous HTTPS GET"]
+    OS["Android OS<br/>CameraX · ML Kit · Room/SQLite · Settings"]
+    FS[("On-device storage")]
+    User -->|scan · view · rename · delete| App
+    App -->|"GET /api/v2/product/{barcode}.json"| OFF
+    App -->|camera frames + permission| OS
+    App -->|Room / SQLite| FS
 ```
 
 *OFF here is the project family: a lookup walks `world.openfoodfacts.org`

@@ -1,7 +1,7 @@
 # 6. Runtime View
 
-Three scenarios cover most of the app's behaviour. The rest follow the same
-patterns.
+Four scenarios cover most of the app's behaviour; the rest follow the same
+patterns. §6.5 distils the scan-phase state machine those scenarios traverse.
 
 ## 6.1 Scenario — Scan to add a product, OFF hit
 
@@ -151,3 +151,28 @@ User           DetailScreen        DetailViewModel       ProductRepository
 
 `surfaceError` in `DetailViewModel:89-93` is the canonical template that
 the M6 audit normalized other catch sites against.
+
+## 6.5 Scan phase state machine
+
+`ScanViewModel` exposes a `ScanUiState` whose `phase` is a `ScanUiState.Phase`
+sealed interface (six members). The transitions across the scenarios above:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Loading: barcode decoded (ML Kit)
+    Loading --> Preview: Add mode, name resolved (OFF / cache hit)
+    Loading --> ManualEntry: Add mode, no name resolved
+    Loading --> NotInInventory: Remove mode, not in pantry (init-guarded)
+    Loading --> Error: repository / IO failure
+    Preview --> Idle: Confirm to addNew / applyDelta
+    ManualEntry --> Idle: Confirm to repository write
+    NotInInventory --> Loading: "Switch to Add" to onSwitchToAdd()
+    Error --> Idle: dismiss / retry
+    Idle --> [*]
+```
+
+`Phase.Error` carries a `UiText` message (i18n, #218); `Phase.NotInInventory` is
+**Remove-mode only**, enforced by an `init { require(...) }` block in
+`ScanUiState`. A local hit at `quantity == 0` also routes to `NotInInventory`
+(nothing to decrement).

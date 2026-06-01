@@ -67,6 +67,24 @@ directly to either** — every change lands through a short-lived branch and a
 reviewed pull request. See [`GOVERNANCE.md`](GOVERNANCE.md) for why only the
 human maintainer merges.
 
+```mermaid
+gitGraph
+    commit id: "main"
+    branch develop
+    commit
+    branch feature/xyz
+    commit
+    commit
+    checkout develop
+    merge feature/xyz
+    branch release/1.4.0
+    commit id: "version bump"
+    checkout main
+    merge release/1.4.0 tag: "v1.4.0"
+    checkout develop
+    merge release/1.4.0
+```
+
 The standard loop for a feature, fix, or chore:
 
 ```bash

@@ -118,6 +118,38 @@ on a hit; otherwise consults the OFF cache and returns
 `ScanCandidate.FromOff` on a hit (and writes through to the cache),
 `null` on miss/failure (per [solution strategy](04-solution-strategy.md#41-local-first-inventory-network-optional-enrichment)).
 
+### Data model (Room — `data.local`)
+
+```mermaid
+erDiagram
+    products {
+        BIGINT id PK "autoGenerate"
+        TEXT barcode UK "nullable; unique index"
+        TEXT name
+        TEXT brand "nullable"
+        TEXT imageUrl "nullable"
+        INT quantity
+        INT lowLimit "nullable; null = untracked"
+        INT defaultBuyAmount "default 1"
+        INTEGER createdAt "Instant epoch-ms"
+        INTEGER updatedAt "Instant epoch-ms"
+    }
+    off_lookup_cache {
+        TEXT barcode PK
+        TEXT name "non-blank invariant"
+        TEXT brand "nullable"
+        TEXT imageUrl "nullable"
+        TEXT resolvingHost "OffHost enum via Converters"
+        INTEGER fetchedAt "Instant epoch-ms; 30-day TTL"
+    }
+```
+
+`off_lookup_cache.barcode` softly corresponds to `products.barcode` but there is
+**no foreign key** — the cache deliberately holds lookups for barcodes that are
+*not* in the pantry (the re-scan short-circuit). The two tables are independent;
+on confirm, `addNew(...)` evicts the matching cache row so a barcode lives in
+`products` only.
+
 ## 5.4 Level 2 — `ui.scan` package
 
 The most complex screen. Four orthogonal building blocks:
