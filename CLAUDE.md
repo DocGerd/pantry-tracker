@@ -432,14 +432,17 @@ restructured to make the lesson load-bearing on its own.*
   template, arg)` per-event inside the coroutine**. Use the explicit-`Locale`
   `String.format` form — the bare Kotlin `.format()` extension trips detekt's
   default-active `ImplicitDefaultLocale`. Note the asymmetry that makes this
-  confusing: `RelativeTime.format(context, …)` runs the *same* `context.getString`
-  but is NOT flagged, because its `context` is a plain function **parameter**, not
+  confusing: `RelativeTime.format(context, …)` resolves resources off a `Context`
+  the same way (`context.getString` / `context.resources.getQuantityString`) but is
+  NOT flagged, because its `context` is a plain function **parameter**, not
   `LocalContext.current` — the lint only tracks values originating from
   `LocalContext.current`, so threading a `Context` param is the other valid
   escape. This is the fix recipe for the VM-layer strings in #218 and the
-  snackbar test in #219. Eviction criterion: #218 lands the VM-layer strings
-  using this pattern (establishing it in-code), or the lint check is
-  downgraded/removed.
+  snackbar test in #219. Eviction criterion: the `LocalContextGetResourceValueCall`
+  lint check is downgraded/removed, or the Compose BOM stops flagging it at error
+  severity. (Not when #218 lands — the lint is permanent, so the recipe stays
+  load-bearing for any future `LaunchedEffect`/coroutine that needs a localized
+  string.)
 - **A stale local Gradle cache can fail at an *earlier* task than CI, masking
   the real failure.** Reproducing #217's red CI locally, the first run failed at
   `:app:kspDebugUnitTestKotlin` with `java.io.EOFException` (a corrupted
