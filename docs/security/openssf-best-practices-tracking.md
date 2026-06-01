@@ -108,7 +108,7 @@
 | `roles_responsibilities` | Roles documented | `Met` | See [GOVERNANCE.md](https://github.com/DocGerd/pantry-tracker/blob/develop/GOVERNANCE.md) §Roles. |
 | `access_continuity` | Access-continuity plan | `Unmet` | Single-maintainer; succession plan TBD — track via separate ticket. |
 | `bus_factor` | Bus factor ≥ 2 | `Unmet` | Currently 1 — structural; same accept-risk as Scorecard Contributors check. |
-| `documentation_roadmap` | Roadmap documented | `Unmet` | No `ROADMAP.md` yet — track via separate ticket (link to v1.3 milestone planned). |
+| `documentation_roadmap` | Roadmap documented | `Unmet` | [`ROADMAP.md`](https://github.com/DocGerd/pantry-tracker/blob/develop/ROADMAP.md) exists at repo root; criterion is satisfiable — pending the bestpractices.dev form link (a form edit, not a docs task). |
 | `documentation_architecture` | Architecture documented | `Met` | See [docs/architecture/](https://github.com/DocGerd/pantry-tracker/tree/develop/docs/architecture) (arc42). |
 | `documentation_security` | Security architecture documented | `Met` | See [docs/security-posture.md](https://github.com/DocGerd/pantry-tracker/blob/develop/docs/security-posture.md) + [docs/security/](https://github.com/DocGerd/pantry-tracker/tree/develop/docs/security). |
 | `documentation_quick_start` | Quick-start guide | `Met` | See [README.md §Install](https://github.com/DocGerd/pantry-tracker/blob/develop/README.md). |

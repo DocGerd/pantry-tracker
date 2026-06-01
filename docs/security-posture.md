@@ -1,7 +1,7 @@
 # Security posture
 
 > **Status:** Living document.
-> **Last reviewed:** 2026-05-28.
+> **Last reviewed:** 2026-06-01.
 > **Cadence:** reviewed on every major release (next: v2.0) and whenever a
 > structural item below changes (e.g. new CI workflow, signing-cert rotation,
 > distribution-channel change).
@@ -669,7 +669,8 @@ This document is reviewed:
 - **On any update to [`SECURITY.md`](../SECURITY.md)** — the scope
   definitions must agree.
 
-Last reviewed: **2026-05-28** (initial version, OSS-11).
+Last reviewed: **2026-06-01** (content confirmed current for #223; provenance
+section already reflects the v1.3.1 cosign/SLSA retirement, #210/#211).
 
 ## Assurance case
 
