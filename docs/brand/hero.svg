@@ -47,9 +47,7 @@
 
   <g fill="#FFFFFF"
      font-family="Geist, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-    <g color="#FFFFFF">
-      <use href="#dgsMark" x="312" y="171" width="18" height="18"/>
-    </g>
+    <use href="#dgsMark" x="312" y="171" width="18" height="18"/>
     <text x="340" y="185" font-family="'Geist Mono', ui-monospace, Menlo, monospace"
           font-size="13" letter-spacing="1.8" fill="#FFFFFF" fill-opacity="0.82"
           style="text-transform:uppercase">DOCGERDSOFT · OPEN TOOLS</text>

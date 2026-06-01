@@ -86,19 +86,18 @@ jobs:
           ./gradlew --no-daemon assembleDebug testDebugUnitTest :detekt-rules:test lintDebug assembleDebugAndroidTest
 
       - name: Upload screenshot goldens on test failure
-        # When a screenshot golden is missing or mismatched, ScreenshotTestBase
-        # writes the freshly-rendered PNG to app/src/test/snapshots/ and then
-        # fail()s. This step captures those CI-rendered (ubuntu-latest, JDK 21)
-        # bytes so they can be downloaded and committed as the canonical goldens
-        # — the only host whose bytes the suite will accept. Permanent
-        # golden-maintenance aid; diagnostic only, never a required check.
+        # ScreenshotTestBase fail()s on a stale golden: on a MISSING golden it
+        # writes <name>.png (commit it directly); on a MISMATCH it writes
+        # <name>_actual.png (rename to <name>.png to adopt). CI-rendered bytes
+        # (ubuntu-latest, JDK 21) are the only ones the byte-exact suite accepts,
+        # so this uploads the whole snapshots dir (the *.png glob also matches
+        # *_actual.png) for download. Permanent golden-maintenance aid;
+        # diagnostic only, never a required check.
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: screenshot-goldens-actual
-          path: |
-            app/src/test/snapshots/*.png
-            app/src/test/snapshots/*_actual.png
+          path: app/src/test/snapshots/*.png
           if-no-files-found: warn
 
       - name: Detekt (Kotlin static analysis)
