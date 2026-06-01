@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,10 +46,11 @@ fun BuyListScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // Surface restock / load failures as a Snackbar — mirrors DetailScreen.
     LaunchedEffect(state.error) {
-        val message = state.error
+        val message = state.error?.resolve(context)
         if (message != null) {
             snackbarHostState.showSnackbar(message)
             viewModel.dismissError()

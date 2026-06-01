@@ -3,6 +3,7 @@ package de.docgerdsoft.pantrytracker.ui.buylist
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.AppDatabase
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.data.remote.OffLookup
@@ -10,6 +11,7 @@ import de.docgerdsoft.pantrytracker.data.remote.OffLookupResult
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ProductRepositoryImpl
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -102,7 +104,10 @@ class BuyListViewModelTest {
         val vm = BuyListViewModel(failing)
         vm.onBought(product(id = 1, defaultBuyAmount = 2))
         advanceUntilIdle()
-        assertEquals("Couldn't restock: disk full", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.buylist_error_restock, listOf(UiText.Raw("disk full"))),
+            vm.uiState.value.error,
+        )
     }
 
     @Test
@@ -125,7 +130,10 @@ class BuyListViewModelTest {
         }
         val vm = BuyListViewModel(failing)
         advanceUntilIdle()
-        assertEquals("Couldn't load the buying list: locked", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.buylist_error_load, listOf(UiText.Raw("locked"))),
+            vm.uiState.value.error,
+        )
     }
 
     @Test
