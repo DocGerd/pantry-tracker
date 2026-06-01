@@ -8,8 +8,7 @@ coverage:
   status:
     project:
       default:
-        target: 80%
-        threshold: 0.5%   # absorb rounding jitter around the 80% line
+        target: 80%   # hard floor — the OpenSSF MUST is literally >=80% line coverage
     patch:
       default:
         informational: true

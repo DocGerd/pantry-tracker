@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
  * HomeSnackbarEventTest.)
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "en-rUS") // EN tests pinned; DE methods override to "de"
 class StringFormatTemplateTest {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
@@ -75,6 +75,15 @@ class StringFormatTemplateTest {
     @Config(qualifiers = "de")
     fun de_homeErrorDelete() {
         assertEquals("Coke konnte nicht gelöscht werden", context.getString(R.string.home_error_delete, "Coke"))
+    }
+
+    @Test
+    @Config(qualifiers = "de")
+    fun de_homeErrorRestore() {
+        assertEquals(
+            "Coke konnte nicht wiederhergestellt werden",
+            context.getString(R.string.home_error_restore, "Coke"),
+        )
     }
 
     @Test

@@ -220,12 +220,14 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-      # INFORMATIONAL gate (SR-180). This `androidTest` job is NOT a required
-      # status check and NO ruleset was edited, so a coverage regression below
-      # 0.80 shows red here WITHOUT blocking merges — a deliberate maintainer
-      # decision to avoid coupling merges to emulator reliability. The OpenSSF
-      # Silver test_statement_coverage80 MUST is satisfied by the demonstrated
-      # combined 86.85% instruction coverage, not by a merge-blocking check.
-      - name: Verify coverage ≥ 80% (non-required signal)
+      # Local mirror of the coverage gate (#219). Runs the LINE (statement)
+      # jacocoTestCoverageVerification on the merged unit + instrumented report as
+      # a fast in-job signal; the merged baseline is ~85.93% line. The enforced,
+      # merge-blocking gate is the `codecov/project` >=80% line-coverage status
+      # check (codecov.yml), added as a required check on the develop + main
+      # rulesets once it first reports green. This `androidTest` job's own check is
+      # not itself required, to avoid coupling merges to emulator-job reliability
+      # beyond the codecov status.
+      - name: Verify coverage ≥ 80% (local mirror of the codecov/project gate)
         if: ${{ !cancelled() }}
         run: ./gradlew --no-daemon :app:jacocoTestCoverageVerification
