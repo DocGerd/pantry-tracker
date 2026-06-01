@@ -419,6 +419,27 @@ restructured to make the lesson load-bearing on its own.*
   decision, deliberately not actioned in #182. Eviction criterion:
   `app/build.gradle.kts` switches to JaCoCo offline instrumentation, or
   the on-the-fly `jacoco` plugin is replaced.
+- **Regenerating Robolectric screenshot goldens runs through CI, and CI
+  only fires on PRs.** The 11 goldens (`app/src/test/snapshots/*.png`) are
+  `@GraphicsMode(NATIVE)`/Skia byte-exact and **host-non-portable** — a local
+  (WSL) render produces different bytes than `ubuntu-latest` even for unchanged
+  content, so NEVER commit dev-box-rendered goldens. `ScreenshotTestBase`'s
+  `compareOrWrite` has no record flag: deleting a stale golden makes the test
+  write a fresh one and `fail()` once. To capture the canonical CI bytes,
+  `ci.yml`'s `build` job has an `if: failure()` `actions/upload-artifact` step
+  (`screenshot-goldens-actual`) that uploads `app/src/test/snapshots/*.png`
+  whenever the unit-test step fails (added in PR #239). Procedure: delete the
+  affected goldens → **open/push the PR** (`ci.yml` triggers on `push` to
+  main/develop + `pull_request` ONLY — a feature-branch push runs NOTHING, so
+  the PR must exist for CI to emit goldens) → the `build` job fails →
+  `gh run download <id> -n screenshot-goldens-actual` → visually review each
+  PNG (the Read tool renders images) → commit → push → green. NOTE a full
+  theme/colour-scheme change stales **all 11** goldens, not just the obvious
+  icon/theme two — every screenshot renders through `PantryTrackerTheme`, so a
+  re-mapped role moves every themed screen's pixels; #238 was reverted for
+  `@Ignore`-ing the rest instead of regenerating (#236/PR #239 did it
+  correctly). Eviction criterion: the `upload-artifact` golden-emit step leaves
+  `ci.yml`, or the screenshot suite is removed.
 - **Reading string resources inside a Compose coroutine trips the
   `LocalContextGetResourceValueCall` lint check.** This AGP/Compose-UI lint
   (error severity on the repo's Compose BOM) fires when a `@Composable` reads
