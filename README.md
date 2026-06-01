@@ -35,9 +35,15 @@ See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
 
 ## Screenshots
 
-_Screenshots are tracked in [#225](https://github.com/DocGerd/pantry-tracker/issues/225)._
-Capturing them requires an emulator (or device) run; this README will gain a
-screenshots section once that capture lands.
+> Captured on a Pixel 6 emulator (API 34), light theme.
+
+| Home | Scan | Detail |
+|:---:|:---:|:---:|
+| ![Home screen — inventory list with search; out-of-stock items greyed out](docs/images/home.png) | ![Scan screen — resolved-product preview with a quantity stepper](docs/images/scan.png) | ![Detail screen — product image, quantity stepper, and restock limits](docs/images/detail.png) |
+
+- **Home** — your pantry at a glance: search, browse, and tap an item to edit it. Scan-to-add (green) / scan-to-remove (red) up top, a buying-list cart, and out-of-stock items greyed out.
+- **Scan** — point the camera at a barcode; Pantry Tracker resolves it (from your pantry or via Open Food Facts) and a confirm tap adds or removes it.
+- **Detail** — adjust the quantity, set an optional low-stock limit + buy amount for the buying list, view the product image, or delete the item.
 
 ## Install
 
