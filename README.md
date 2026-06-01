@@ -33,6 +33,23 @@ expiry-date tracking.
 
 See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
 
+## Documentation
+
+Full documentation lives under [`docs/`](docs/) and renders on GitHub — start at the
+**[documentation index](docs/README.md)** for a map and reading order. Highlights:
+
+- **[Architecture (arc42)](docs/architecture/01-introduction-and-goals.md)** — goals,
+  context, building blocks, runtime views, crosscutting concepts, and decisions
+  (with GitHub-rendered Mermaid diagrams).
+- **[Architecture Decision Records](docs/adr/)** — the numbered ADRs behind the design.
+- **[Security posture](docs/security-posture.md)** — plus the disclosure policy in
+  [`SECURITY.md`](SECURITY.md).
+- **[Release runbook](docs/release/SHIPPING.md)** — how a version is built, signed, and shipped.
+- **[Contributing](CONTRIBUTING.md)** and **[Governance](GOVERNANCE.md)**.
+
+Docs are kept as markdown-in-repo by
+[ADR-0007](docs/adr/0007-keep-documentation-markdown-in-repo.md) — no separate docs site.
+
 ## Screenshots
 
 _Screenshots are tracked in [#225](https://github.com/DocGerd/pantry-tracker/issues/225)._
