@@ -16,6 +16,13 @@ all of it stored in a local Room/SQLite database that works fully offline. The
 only network call the app ever makes is the anonymous barcode lookup; there are
 no accounts, no analytics, and no crash reporter.
 
+<!--
+  Hero banner (vector stopgap). The crisp 2560x1120 PNG export (render this SVG
+  or the brand-doc `.readme-hero` at 2x) is DEFERRED to the maintainer; swap the
+  src below to docs/brand/hero.png once it exists for a sharp social-preview card.
+-->
+<img src="docs/brand/hero.svg" alt="Pantry Tracker — scan a grocery barcode, confirm, and it's in your pantry. Fully offline, single-user, on-device." width="100%">
+
 ## Scope / Status
 
 - **v1.0.0** (2026-05-18) through **v1.3.1** (2026-05-29) have shipped as **signed
@@ -35,13 +42,13 @@ See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
 
 ## Screenshots
 
-> Captured on a Pixel 6 emulator (API 34), light theme.
+> Captured on a Pixel 6 emulator (API 34) in the DocGerdSoft Material 3 scheme — light and dark.
 
-| Home | Scan | Detail |
-|:---:|:---:|:---:|
-| ![Home screen — inventory list with search; out-of-stock items greyed out](docs/images/home.png) | ![Scan screen — resolved-product preview with a quantity stepper](docs/images/scan.png) | ![Detail screen — product image, quantity stepper, and restock limits](docs/images/detail.png) |
+| Home | Scan | Detail | Home (dark) |
+|:---:|:---:|:---:|:---:|
+| ![Home screen — inventory list with search; out-of-stock items greyed out](docs/images/home.png) | ![Scan screen — resolved-product preview with a quantity stepper](docs/images/scan.png) | ![Detail screen — quantity stepper and restock limits](docs/images/detail.png) | ![Home screen rendered in the Material 3 dark theme](docs/images/home_dark.png) |
 
-- **Home** — your pantry at a glance: search, browse, and tap an item to edit it. Scan-to-add (green) / scan-to-remove (red) up top, a buying-list cart, and out-of-stock items greyed out.
+- **Home** — your pantry at a glance: search, browse, and tap an item to edit it. Scan-to-add (green) / scan-to-remove (red) up top, a buying-list cart, and out-of-stock items greyed out. Shown in both the light and dark Material 3 schemes.
 - **Scan** — point the camera at a barcode; Pantry Tracker resolves it (from your pantry or via Open Food Facts) and a confirm tap adds or removes it.
 - **Detail** — adjust the quantity, set an optional low-stock limit + buy amount for the buying list, view the product image, or delete the item.
 

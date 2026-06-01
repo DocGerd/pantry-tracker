@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 560" width="1280" height="560" role="img"
+     aria-label="Pantry Tracker — scan a grocery barcode, confirm, and it's in your pantry. Fully offline, single-user, on-device.">
+  <defs>
+    <radialGradient id="fern" cx="0.18" cy="0.16" r="1.05" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#5C8A4D"/>
+      <stop offset="0.46" stop-color="#4F7942"/>
+      <stop offset="1" stop-color="#39592F"/>
+    </radialGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0 H0 V44" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="gridfade" cx="0.88" cy="0.78" r="0.62" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#000000"/>
+    </radialGradient>
+    <mask id="gridmask"><rect width="1280" height="560" fill="url(#gridfade)"/></mask>
+    <clipPath id="tile"><rect x="64" y="188" width="184" height="184" rx="46" ry="46"/></clipPath>
+    <filter id="tileshadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#141E0C" flood-opacity="0.45"/>
+    </filter>
+    <symbol id="ptFg" viewBox="0 0 108 108">
+      <g fill="currentColor">
+        <rect x="29" y="49" width="14" height="20" rx="3.2"/>
+        <rect x="31" y="44.4" width="10" height="3.6" rx="1.5"/>
+        <rect x="47" y="40" width="14" height="29" rx="3.2"/>
+        <rect x="49" y="35.4" width="10" height="3.6" rx="1.5"/>
+        <rect x="65" y="45" width="14" height="24" rx="3.2"/>
+        <rect x="67" y="40.4" width="10" height="3.6" rx="1.5"/>
+      </g>
+      <line x1="28" y1="72" x2="80" y2="72" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="dgsMark" viewBox="0 0 100 100">
+      <path d="M50 17.09 L69.87 51.5 L30.13 51.5 Z"/>
+      <path d="M26.96 57 L73.04 57 L88 82.91 L12 82.91 Z"/>
+    </symbol>
+  </defs>
+
+  <rect width="1280" height="560" fill="url(#fern)"/>
+  <rect width="1280" height="560" fill="url(#grid)" opacity="0.16" mask="url(#gridmask)"/>
+
+  <g filter="url(#tileshadow)">
+    <rect x="64" y="188" width="184" height="184" rx="46" ry="46" fill="#FBFBFC"/>
+  </g>
+  <g clip-path="url(#tile)" color="#4F7942">
+    <use href="#ptFg" x="64" y="188" width="184" height="184"/>
+  </g>
+
+  <g fill="#FFFFFF"
+     font-family="Geist, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <use href="#dgsMark" x="312" y="171" width="18" height="18"/>
+    <text x="340" y="185" font-family="'Geist Mono', ui-monospace, Menlo, monospace"
+          font-size="13" letter-spacing="1.8" fill="#FFFFFF" fill-opacity="0.82"
+          style="text-transform:uppercase">DOCGERDSOFT · OPEN TOOLS</text>
+    <text x="312" y="262" font-size="68" font-weight="600" letter-spacing="-2">Pantry Tracker</text>
+    <text x="312" y="312" font-size="21" fill="#FFFFFF" fill-opacity="0.9">Scan a grocery barcode, confirm, and it's in your pantry. Fully</text>
+    <text x="312" y="342" font-size="21" fill="#FFFFFF" fill-opacity="0.9">offline, single-user, on-device. No accounts, no analytics.</text>
+    <g font-family="'Geist Mono', ui-monospace, Menlo, monospace" font-size="12.5" letter-spacing="0.4">
+      <g transform="translate(312,400)">
+        <rect width="116" height="30" rx="15" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="13" y="19" fill="#FFFFFF">Android 8.0+</text>
+      </g>
+      <g transform="translate(438,400)">
+        <rect width="246" height="30" rx="15" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="13" y="19" fill="#FFFFFF">Jetpack Compose · Material 3</text>
+      </g>
+      <g transform="translate(694,400)">
+        <rect width="128" height="30" rx="15" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="13" y="19" fill="#FFFFFF">Room · offline</text>
+      </g>
+      <g transform="translate(832,400)">
+        <rect width="104" height="30" rx="15" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="13" y="19" fill="#FFFFFF">Apache-2.0</text>
+      </g>
+    </g>
+  </g>
+</svg>

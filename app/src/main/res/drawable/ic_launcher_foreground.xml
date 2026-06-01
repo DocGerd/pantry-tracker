@@ -5,25 +5,47 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Shelf line: y=66, spans x=26..82 (safe-zone aware). -->
+    <!--
+      Refined adaptive-icon foreground: three rounded pantry canisters in three
+      heights (pantry rhythm) with recessed screw-top lids, sitting on the
+      DocGerdSoft datum-stroke shelf. All shapes white (#FFFFFF) on the Fern
+      background. Android VectorDrawable has no rect rx, so each canister body
+      (rx 3.2) and lid (rx 1.5) is expressed as a rounded-rect arc path. All
+      geometry sits inside the O66dp safe circle centered at 54,54, so it
+      survives every launcher mask (circle / squircle / rounded / square).
+    -->
+
+    <!-- Left canister (short): body x29 y49 w14 h20 r3.2 -->
     <path
-        android:pathData="M26,66 L82,66"
+        android:pathData="M32.2,49 L39.8,49 A3.2,3.2 0 0 1 43,52.2 L43,65.8 A3.2,3.2 0 0 1 39.8,69 L32.2,69 A3.2,3.2 0 0 1 29,65.8 L29,52.2 A3.2,3.2 0 0 1 32.2,49 Z"
+        android:fillColor="#FFFFFF"/>
+    <!-- Left lid (recessed): x31 y44.4 w10 h3.6 r1.5 -->
+    <path
+        android:pathData="M32.5,44.4 L39.5,44.4 A1.5,1.5 0 0 1 41,45.9 L41,46.5 A1.5,1.5 0 0 1 39.5,48 L32.5,48 A1.5,1.5 0 0 1 31,46.5 L31,45.9 A1.5,1.5 0 0 1 32.5,44.4 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Center canister (tall): body x47 y40 w14 h29 r3.2 -->
+    <path
+        android:pathData="M50.2,40 L57.8,40 A3.2,3.2 0 0 1 61,43.2 L61,65.8 A3.2,3.2 0 0 1 57.8,69 L50.2,69 A3.2,3.2 0 0 1 47,65.8 L47,43.2 A3.2,3.2 0 0 1 50.2,40 Z"
+        android:fillColor="#FFFFFF"/>
+    <!-- Center lid (recessed): x49 y35.4 w10 h3.6 r1.5 -->
+    <path
+        android:pathData="M50.5,35.4 L57.5,35.4 A1.5,1.5 0 0 1 59,36.9 L59,37.5 A1.5,1.5 0 0 1 57.5,39 L50.5,39 A1.5,1.5 0 0 1 49,37.5 L49,36.9 A1.5,1.5 0 0 1 50.5,35.4 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Right canister (medium): body x65 y45 w14 h24 r3.2 -->
+    <path
+        android:pathData="M68.2,45 L75.8,45 A3.2,3.2 0 0 1 79,48.2 L79,65.8 A3.2,3.2 0 0 1 75.8,69 L68.2,69 A3.2,3.2 0 0 1 65,65.8 L65,48.2 A3.2,3.2 0 0 1 68.2,45 Z"
+        android:fillColor="#FFFFFF"/>
+    <!-- Right lid (recessed): x67 y40.4 w10 h3.6 r1.5 -->
+    <path
+        android:pathData="M68.5,40.4 L75.5,40.4 A1.5,1.5 0 0 1 77,41.9 L77,42.5 A1.5,1.5 0 0 1 75.5,44 L68.5,44 A1.5,1.5 0 0 1 67,42.5 L67,41.9 A1.5,1.5 0 0 1 68.5,40.4 Z"
+        android:fillColor="#FFFFFF"/>
+
+    <!-- Shelf = DocGerdSoft datum stroke: from (28,72) to (80,72), round cap. -->
+    <path
+        android:pathData="M28,72 L80,72"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
+        android:strokeWidth="4"
         android:strokeLineCap="round"/>
-
-    <!-- Jar 1 (left): body 30..42 x 46..64, cap 32..40 x 42..46 -->
-    <path
-        android:pathData="M30,46 L30,64 L42,64 L42,46 Z M32,42 L40,42 L40,46 L32,46 Z"
-        android:fillColor="#FFFFFF"/>
-
-    <!-- Jar 2 (center): body 48..60 x 46..64, cap 50..58 x 42..46 -->
-    <path
-        android:pathData="M48,46 L48,64 L60,64 L60,46 Z M50,42 L58,42 L58,46 L50,46 Z"
-        android:fillColor="#FFFFFF"/>
-
-    <!-- Jar 3 (right): body 66..78 x 46..64, cap 68..76 x 42..46 -->
-    <path
-        android:pathData="M66,46 L66,64 L78,64 L78,46 Z M68,42 L76,42 L76,46 L68,46 Z"
-        android:fillColor="#FFFFFF"/>
 </vector>
