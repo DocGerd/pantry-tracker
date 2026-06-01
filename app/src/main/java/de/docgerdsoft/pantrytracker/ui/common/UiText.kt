@@ -30,8 +30,9 @@ sealed interface UiText {
     data class Raw(val value: String) : UiText
 
     /** A string resource plus format args (themselves `UiText`, resolved first).
-     *  Args resolve to strings, so the [id] template must use `%s` placeholders and
-     *  `args.size` must equal the template's placeholder count. */
+     *  Args resolve to strings, so the [id] template must use positional `%1$s`
+     *  (… `%N$s`) placeholders, and `args.size` must equal the template's
+     *  placeholder count. */
     data class Res(
         @param:StringRes val id: Int,
         val args: List<UiText> = emptyList(),
