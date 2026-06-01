@@ -22,6 +22,13 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
   `UiText` resolvable-text type, completing the internationalization sweep
   (#218, #168).
 
+### Changed
+
+- Enforced the ≥80% statement-coverage gate as a required CI status check
+  (`codecov/project`, merged baseline ~85.93% line) and closed the delete/undo
+  snackbar render path + an EN/DE format-template drift guard, satisfying
+  OpenSSF Silver `test_statement_coverage80`. (#219)
+
 ## [1.3.1] — 2026-05-29
 
 ### Changed
