@@ -13,12 +13,15 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-// Robolectric (JVM, default en-US locale) so the <plurals> resources resolve —
-// RelativeTime.format now interpolates counts through the platform plural
-// selector (#168 i18n) and therefore needs a Context. The asserted English
-// strings are byte-identical to the pre-i18n hardcoded output.
+// Robolectric so the <plurals> resources resolve — RelativeTime.format now
+// interpolates counts through the platform plural selector (#168 i18n) and
+// therefore needs a Context. The locale is pinned to en-US via qualifiers so
+// the byte-exact English assertions below are an enforced contract, not a
+// dependency on the host JVM / Robolectric default locale: a future
+// robolectric.properties or a stray qualifier could otherwise flip them to
+// values-de/ and break this test silently.
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "en-rUS")
 class RelativeTimeTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private val now = Instant.fromEpochSeconds(1_000_000)

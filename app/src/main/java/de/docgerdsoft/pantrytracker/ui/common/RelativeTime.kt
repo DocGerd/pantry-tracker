@@ -42,9 +42,10 @@ object RelativeTime {
                 val n = delta.inWholeDays.toInt()
                 res.getQuantityString(R.plurals.relative_days, n, n)
             }
-            // 28-day boundary: integer-divides to 0 weeks; falls into months
-            // bucket which then renders "0 months ago" (28/30 == 0). Acceptable
-            // v1 trade-off — pinned by months_from28dOnward in the test.
+            // 28-day boundary: `delta < 28.days` is false at exactly 28d, so it
+            // skips this weeks branch and lands in the months `else`, where
+            // 28/30 integer-divides to 0 -> "0 months ago". Acceptable v1
+            // trade-off — pinned by months_from28dOnward in the test.
             delta < 28.days -> {
                 val n = (delta.inWholeDays / DAYS_PER_WEEK).toInt()
                 res.getQuantityString(R.plurals.relative_weeks, n, n)

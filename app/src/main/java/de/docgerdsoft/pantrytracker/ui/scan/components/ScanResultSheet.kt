@@ -129,13 +129,7 @@ fun ScanPreviewSheet(
                         containerColor = if (mode == ScanMode.Add) AddGreen else RemoveRed,
                     ),
                 ) {
-                    Text(
-                        if (mode == ScanMode.Add) {
-                            stringResource(R.string.scan_confirm_add)
-                        } else {
-                            stringResource(R.string.scan_confirm_remove)
-                        },
-                    )
+                    Text(stringResource(if (mode == ScanMode.Add) R.string.scan_confirm_add else R.string.scan_confirm_remove))
                 }
             }
         }
