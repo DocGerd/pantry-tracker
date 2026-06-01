@@ -103,10 +103,11 @@ flowchart TD
     B -->|all four| C[assembleRelease to app-release.apk]
     C --> D{Room schema changed?}
     D -->|yes| E[Run migration UAT script]
-    D -->|no| F[Pre-tag: --write-locks, commit any diff]
-    E --> F
-    F --> G[[Human merges release into main + develop]]
-    G --> H[Tag vX.Y.Z on main]
+    D -->|no| G
+    E --> G
+    G[[Human merges release into main + develop]]
+    G --> F[On main, before tag: --write-locks, commit any diff]
+    F --> H[Tag vX.Y.Z on main]
     H --> I[gh release create one-shot, immutable, asset at creation]
     I --> J{SHA-256 + cert + attestation verify?}
     J -->|ok| K[Published]

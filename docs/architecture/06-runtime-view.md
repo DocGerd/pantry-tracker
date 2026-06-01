@@ -13,17 +13,17 @@ sequenceDiagram
     participant Repo as ProductRepository
     participant OFF
     User->>CP: grant camera permission
-    CP->>VM: barcode decoded (ML Kit)
-    VM->>VM: phase = Loading(barcode)
-    VM->>Repo: lookupForPreview(barcode)
+    CP->>VM: barcode decoded via ML Kit
+    VM->>VM: phase = Loading
+    VM->>Repo: lookupForPreview barcode
     Repo->>Repo: findByBarcode returns null
     Note over Repo,OFF: 30-day cache hit elides the OFF call
-    Repo->>OFF: GET /api/v2/product/{barcode}.json
+    Repo->>OFF: GET /api/v2/product/BARCODE.json
     OFF-->>Repo: 200 OK
-    Repo-->>VM: ScanCandidate.FromOff(name)
-    VM->>VM: phase = Preview(candidate)
+    Repo-->>VM: ScanCandidate.FromOff with name
+    VM->>VM: phase = Preview
     User->>VM: Confirm
-    VM->>Repo: addNew(...)
+    VM->>Repo: addNew
     VM->>VM: phase = Idle
 ```
 
@@ -70,14 +70,14 @@ sequenceDiagram
     actor User
     participant VM as ScanViewModel
     participant Repo as ProductRepository
-    Note over VM: mode = Remove (never calls OFF)
-    VM->>VM: phase = Loading(barcode)
-    VM->>Repo: findLocalByBarcode(barcode)
-    Repo-->>VM: null (or quantity == 0)
-    VM->>VM: phase = NotInInventory(barcode)
-    User->>VM: "Switch to Add"
-    VM->>VM: onSwitchToAdd() sets mode = Add, phase = Loading
-    VM->>Repo: resolveBarcode(...)
+    Note over VM: mode = Remove, never calls OFF
+    VM->>VM: phase = Loading
+    VM->>Repo: findLocalByBarcode
+    Repo-->>VM: null or quantity 0
+    VM->>VM: phase = NotInInventory
+    User->>VM: Switch to Add
+    VM->>VM: onSwitchToAdd sets mode = Add, phase = Loading
+    VM->>Repo: resolveBarcode
 ```
 
 Note: Remove mode does NOT call OFF. A local miss is unambiguously "nothing
@@ -98,11 +98,11 @@ sequenceDiagram
     participant Gate as CameraPermissionGate
     participant Settings as Android Settings
     Gate->>Gate: phase = HardDenied
-    User->>Gate: tap "Open settings"
-    Gate->>Settings: startActivity(APP_DETAILS intent)
+    User->>Gate: tap Open settings
+    Gate->>Settings: startActivity with APP_DETAILS intent
     User->>Settings: grant Camera permission
     Settings-->>Gate: ON_RESUME
-    Gate->>Gate: DisposableEffect observer re-reads, phase = Granted
+    Gate->>Gate: observer re-reads, phase = Granted
     Gate->>Gate: CameraPreview renders
 ```
 
@@ -119,20 +119,22 @@ sequenceDiagram
     participant DS as DetailScreen
     participant VM as DetailViewModel
     participant Repo as ProductRepository
-    User->>DS: navigate detail/{id}
-    DS->>VM: observeById(id)
-    User->>VM: rename(newName)
-    VM->>Repo: rename(id, newName)
+    User->>DS: navigate to detail screen
+    DS->>VM: observeById
+    User->>VM: rename newName
+    VM->>Repo: rename id, newName
     Repo--xVM: throws SQLException
-    VM->>VM: surfaceError("rename", e), error = "Couldn't rename: {msg}"
+    VM->>VM: surfaceError with R.string.detail_error_rename
+    VM->>VM: error = UiText rendering Couldn't rename ...
     VM-->>DS: error state
     DS->>User: snackbar
     User->>DS: dismiss
-    DS->>VM: dismissError()
+    DS->>VM: dismissError
 ```
 
-`surfaceError` in `DetailViewModel:89-93` is the canonical template that
-the M6 audit normalized other catch sites against.
+`surfaceError` in `DetailViewModel` is the canonical template that the M6
+audit normalized other catch sites against (post-#218 it takes a `@StringRes`
+id, so the error is a localized `UiText` rather than an inline string).
 
 ## 6.5 Scan phase state machine
 
@@ -142,15 +144,15 @@ sealed interface (six members). The transitions across the scenarios above:
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Loading: barcode decoded (ML Kit)
-    Loading --> Preview: Add mode, name resolved (OFF / cache hit)
+    Idle --> Loading: barcode decoded via ML Kit
+    Loading --> Preview: Add mode, name resolved
     Loading --> ManualEntry: Add mode, no name resolved
-    Loading --> NotInInventory: Remove mode, not in pantry (init-guarded)
-    Loading --> Error: repository / IO failure
-    Preview --> Idle: Confirm to addNew / applyDelta
-    ManualEntry --> Idle: Confirm to repository write
-    NotInInventory --> Loading: "Switch to Add" to onSwitchToAdd()
-    Error --> Idle: dismiss / retry
+    Loading --> NotInInventory: Remove mode, not in pantry
+    Loading --> Error: repository or IO failure
+    Preview --> Idle: Confirm, addNew or applyDelta
+    ManualEntry --> Idle: Confirm, repository write
+    NotInInventory --> Loading: Switch to Add
+    Error --> Idle: dismiss or retry
     Idle --> [*]
 ```
 

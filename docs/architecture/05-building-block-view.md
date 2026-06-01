@@ -6,40 +6,17 @@ The whole app lives in one Gradle module (`:app`) with the package root
 `de.docgerdsoft.pantrytracker`. Inside the module the code splits into
 four conventional layers:
 
-```
-                      ┌──────────────────────────────────────┐
-                      │   ui.{home, scan, detail, theme,     │
-                      │       common}                        │
-                      │   — Compose screens + ViewModels +   │
-                      │     typed UiState                    │
-                      └────────────────┬─────────────────────┘
-                                       │ depends on
-                                       ▼
-                      ┌──────────────────────────────────────┐
-                      │   repository                         │
-                      │   — ProductRepository interface +    │
-                      │     ProductRepositoryImpl            │
-                      │   — ScanCandidate sealed type        │
-                      └────────────────┬─────────────────────┘
-                                       │ depends on
-                              ┌────────┴────────┐
-                              ▼                 ▼
-              ┌─────────────────────┐ ┌─────────────────────┐
-              │   data.local        │ │   data.remote       │
-              │   — Room database   │ │   — Ktor + OFF      │
-              │   — Product entity  │ │     JSON envelope   │
-              │   — ProductDao      │ │   — OffLookup port  │
-              │   — OffLookupCache- │ │                     │
-              │     Entry + Dao     │ │                     │
-              │   — Converters      │ │                     │
-              └─────────────────────┘ └─────────────────────┘
-
-                      ┌──────────────────────────────────────┐
-                      │   di — AppContainer                  │◀─┐
-                      │   (constructs Room db, OffApiClient, │  │ constructs at app start
-                      │    ProductRepositoryImpl; passes the │  │ from PantryTrackerApp.onCreate
-                      │    repository to PantryTrackerNavGraph) │
-                      └──────────────────────────────────────┘
+```mermaid
+flowchart TD
+    ui["ui — home, scan, detail, theme, common<br/>Compose screens + ViewModels + typed UiState"]
+    repo["repository<br/>ProductRepository interface + Impl · ScanCandidate sealed type"]
+    local["data.local<br/>Room: AppDatabase · Product · ProductDao · OffLookupCacheEntry + Dao · Converters"]
+    remote["data.remote<br/>Ktor + OFF JSON envelope · OffLookup port / OffApiClient"]
+    di["di — AppContainer<br/>constructs Room db, OffApiClient, ProductRepositoryImpl"]
+    ui -->|depends on| repo
+    repo -->|depends on| local
+    repo -->|depends on| remote
+    di -.->|constructs at app start, from PantryTrackerApp.onCreate| repo
 ```
 
 Dependency direction is strictly downward: `ui → repository → data.*`.
@@ -123,14 +100,14 @@ on a hit; otherwise consults the OFF cache and returns
 ```mermaid
 erDiagram
     products {
-        BIGINT id PK "autoGenerate"
+        INTEGER id PK "autoGenerate"
         TEXT barcode UK "nullable; unique index"
         TEXT name
         TEXT brand "nullable"
         TEXT imageUrl "nullable"
-        INT quantity
-        INT lowLimit "nullable; null = untracked"
-        INT defaultBuyAmount "default 1"
+        INTEGER quantity
+        INTEGER lowLimit "nullable; null = untracked"
+        INTEGER defaultBuyAmount "Kotlin default 1; no SQL DEFAULT"
         INTEGER createdAt "Instant epoch-ms"
         INTEGER updatedAt "Instant epoch-ms"
     }
@@ -149,6 +126,11 @@ erDiagram
 *not* in the pantry (the re-scan short-circuit). The two tables are independent;
 on confirm, `addNew(...)` evicts the matching cache row so a barcode lives in
 `products` only.
+
+Types above are SQLite column affinities (every `Long`/`Int` column is
+`INTEGER`; `Instant` persists as epoch-millis `INTEGER` via `Converters`).
+`defaultBuyAmount`'s "default 1" is a Kotlin constructor default applied on
+insert (and back-filled by `MIGRATION_2_3`), **not** a SQL `DEFAULT` clause.
 
 ## 5.4 Level 2 — `ui.scan` package
 

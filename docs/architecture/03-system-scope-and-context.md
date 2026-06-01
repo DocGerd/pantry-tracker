@@ -10,7 +10,7 @@ flowchart TD
     OS["Android OS<br/>CameraX · ML Kit · Room/SQLite · Settings"]
     FS[("On-device storage")]
     User -->|scan · view · rename · delete| App
-    App -->|"GET /api/v2/product/{barcode}.json"| OFF
+    App -->|"GET /api/v2/product/BARCODE.json"| OFF
     App -->|camera frames + permission| OS
     App -->|Room / SQLite| FS
 ```
@@ -43,7 +43,7 @@ rules.*
 | OFF API | HTTPS GET, JSON response | 8 s timeout (connect/read/write), Ktor + OkHttp engine, `User-Agent: PantryTracker/<ver> (<repo URL>)`. Only the path `/api/v2/product/<barcode>.json` is used, against up to four hosts (`world.openfoodfacts.org` → `world.openbeautyfacts.org` → `world.openpetfoodfacts.org` → `world.openproductsfacts.org`) as a `404`-only fallback chain. |
 | Camera | CameraX preview + ImageAnalysis on a dedicated `Executors.newSingleThreadExecutor()` | Back camera only (`CameraSelector.DEFAULT_BACK_CAMERA`); single-frame KEEP_ONLY_LATEST backpressure. |
 | Barcode decoding | ML Kit on-device | Formats restricted to EAN-13/EAN-8/UPC-A/UPC-E. |
-| Local persistence | Room over SQLite | Single database file `pantry-tracker.db`. One table (`products`) with a unique index on `barcode`. |
+| Local persistence | Room over SQLite | Single database file `pantry-tracker.db`. Two tables — `products` (unique index on `barcode`) and `off_lookup_cache` (30-day cache of OFF lookups for non-pantry barcodes, #48). |
 | Image cache | Coil 3, OkHttp fetcher | OFF product photos cached on disk by URL. |
 | App settings deep-link | `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` intent | Used only by the HardDenied camera-permission recovery path. |
 
