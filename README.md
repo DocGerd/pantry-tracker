@@ -1,7 +1,7 @@
 # Pantry Tracker
 
-[![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
+[![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/DocGerd/pantry-tracker/branch/develop/graph/badge.svg)](https://codecov.io/gh/DocGerd/pantry-tracker)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DocGerd/pantry-tracker/badge)](https://scorecard.dev/viewer/?uri=github.com/DocGerd/pantry-tracker)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13017/badge)](https://www.bestpractices.dev/projects/13017)
