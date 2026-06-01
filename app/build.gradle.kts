@@ -479,6 +479,14 @@ dependencies {
     // the per-task `useJUnitPlatform()` vs default JUnit 4 split keeps
     // the two from interfering.
     testImplementation(libs.jazzer.junit)
+    // SR-144 / #230: the concrete JUnit Jupiter TestEngine. jazzer-junit pulls
+    // only the Jupiter *API* + platform launcher, so without the engine on the
+    // test runtime classpath the JUnit Platform launcher finds zero engines and
+    // :app:fuzzTest fails at launch ("Cannot create Launcher without at least
+    // one TestEngine"). testRuntimeOnly: available to fuzzTest's
+    // useJUnitPlatform() run but never compiled against, and inert for the
+    // JUnit-4 :app:test task (which does not call useJUnitPlatform()).
+    testRuntimeOnly(libs.junit.jupiter.engine)
     // Compose UI test APIs (createComposeRule, captureToImage, onRoot) used by
     // RNG screenshot tests under src/test. The androidTestImplementation line
     // below is kept for instrumentation tests; this line enables the same APIs
@@ -551,10 +559,20 @@ tasks.register<Test>("fuzzTest") {
     // Belt-and-braces hard ceiling — see the comment block above.
     timeout.set(Duration.ofMinutes(6))
 
-    // Switch Jazzer from regression-only mode into actual fuzzing.
-    // The @FuzzTest(maxDuration = "5m") annotation on the fuzz method is
-    // Jazzer's own hard ceiling per fuzz run.
-    environment("JAZZER_FUZZ", "1")
+    // Mode toggle (#230). Default: actual fuzzing (JAZZER_FUZZ=1), so the
+    // weekly schedule and a bare local `./gradlew :app:fuzzTest` still fuzz —
+    // the @FuzzTest(maxDuration = "5m") annotation is Jazzer's per-run ceiling.
+    // Passing `-PfuzzRegression` leaves JAZZER_FUZZ unset, so Jazzer only
+    // *replays* the committed seed corpus: it finishes in seconds and writes
+    // nothing (no generated inputs, no crash files). The fuzz.yml pull_request
+    // job runs that fast regression mode as a guard that the fuzz harness still
+    // wires up — the #230 break went unnoticed because the workflow never ran
+    // on PRs. Presence-based (any `-PfuzzRegression`, with or without a value,
+    // means regression) and uses the lazy provider API.
+    val fuzzRegression = providers.gradleProperty("fuzzRegression").isPresent
+    if (!fuzzRegression) {
+        environment("JAZZER_FUZZ", "1")
+    }
 
     // Surface any crashing input that Jazzer discovers — Gradle's default
     // is to swallow stdout/stderr unless the test fails, which makes the

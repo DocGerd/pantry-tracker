@@ -24,10 +24,21 @@ ktor = "3.5.0"
 kotlinxSerialization = "1.11.0"
 coil = "3.4.0"
 # Jazzer JVM fuzzing — JUnit 5 driver. Pulls in jazzer-api, the native
-# jazzer agent jar, and JUnit Jupiter 5.9.0 as transitive runtime deps.
-# Used only by :app:fuzzTest (see app/build.gradle.kts) — not on any
-# runtime classpath. Verified latest on Maven Central 2026-05-28.
+# jazzer agent jar, and the JUnit Jupiter *API* (junit-jupiter-api 5.9.0)
+# + the platform launcher transitively — but NOT junit-jupiter-engine, the
+# concrete Jupiter TestEngine that actually executes @FuzzTest (a Jupiter
+# @TestTemplate). That engine must be on the test runtime classpath
+# explicitly (see junitJupiter below + the testRuntimeOnly in
+# app/build.gradle.kts), or :app:fuzzTest dies at launch with "Cannot create
+# Launcher without at least one TestEngine" (#230). Used only by
+# :app:fuzzTest — never on any production runtime classpath. Verified latest
+# on Maven Central 2026-05-28.
 jazzer = "0.24.0"
+# JUnit Jupiter engine version for the :app:fuzzTest task. MUST track the
+# junit-jupiter-api version that `jazzer` pins transitively (currently
+# junit-bom 5.9.0) — a jupiter-api/jupiter-engine version skew can fail at
+# runtime — so bump this together with `jazzer`. (#230)
+junitJupiter = "5.9.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -91,6 +102,11 @@ detekt-test = { group = "io.gitlab.arturbosch.detekt", name = "detekt-test", ver
 # runtime classpath — the fuzz harness lives under src/test/java and the
 # production code never sees Jazzer.
 jazzer-junit = { group = "com.code-intelligence", name = "jazzer-junit", version.ref = "jazzer" }
+# Concrete JUnit Jupiter TestEngine for :app:fuzzTest. jazzer-junit brings only
+# the Jupiter API, so without this on the test runtime classpath the JUnit
+# Platform launcher discovers zero engines and the task can't start (#230).
+# Added testRuntimeOnly in app/build.gradle.kts; inert for the JUnit-4 :app:test.
+junit-jupiter-engine = { group = "org.junit.jupiter", name = "junit-jupiter-engine", version.ref = "junitJupiter" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
