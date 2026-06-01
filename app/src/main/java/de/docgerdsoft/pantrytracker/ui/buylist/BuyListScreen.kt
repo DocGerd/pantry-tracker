@@ -28,11 +28,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,10 +59,13 @@ fun BuyListScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Buying list") },
+                title = { Text(stringResource(R.string.buylist_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back),
+                        )
                     }
                 },
             )
@@ -101,6 +106,7 @@ internal fun BuyListContent(
 
 @Composable
 private fun BuyListRow(product: Product, onBought: () -> Unit) {
+    val boughtCd = stringResource(R.string.cd_bought, product.name)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -110,7 +116,7 @@ private fun BuyListRow(product: Product, onBought: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = product.name, style = MaterialTheme.typography.bodyLarge)
             Text(
-                text = "×${product.quantity}",
+                text = stringResource(R.string.quantity_count, product.quantity),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 // Out-of-stock rows get an urgent error-colour count.
@@ -123,9 +129,9 @@ private fun BuyListRow(product: Product, onBought: () -> Unit) {
         }
         Button(
             onClick = onBought,
-            modifier = Modifier.semantics { contentDescription = "Bought ${product.name}" },
+            modifier = Modifier.semantics { contentDescription = boughtCd },
         ) {
-            Text("Bought")
+            Text(stringResource(R.string.action_bought))
         }
     }
 }
@@ -142,13 +148,16 @@ private fun EmptyState(padding: PaddingValues, onBack: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Nothing to buy", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Every tracked item is above its low limit.",
+                stringResource(R.string.buylist_empty_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                stringResource(R.string.buylist_empty_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(onClick = onBack) { Text("Back to pantry") }
+            Button(onClick = onBack) { Text(stringResource(R.string.buylist_back_to_pantry)) }
         }
     }
 }

@@ -1,0 +1,109 @@
+<resources>
+    <!-- app_name intentionally not translated: it is the product/brand name. -->
+
+    <!-- Shared actions / labels -->
+    <string name="action_add">Hinzufügen</string>
+    <string name="action_cancel">Abbrechen</string>
+    <string name="action_delete">Löschen</string>
+    <string name="action_undo">RÜCKGÄNGIG</string>
+    <string name="action_close">Schließen</string>
+    <string name="action_continue">Weiter</string>
+    <string name="action_go_back">Zurück</string>
+    <string name="action_bought">Gekauft</string>
+    <string name="field_name">Name</string>
+    <string name="field_initial_quantity">Anfangsmenge</string>
+
+    <!-- Shared content descriptions -->
+    <string name="cd_back">Zurück</string>
+    <string name="cd_product_photo">Produktfoto</string>
+    <string name="cd_add_manually">Manuell hinzufügen</string>
+    <string name="cd_buying_list">Einkaufsliste</string>
+    <string name="cd_delete_product">Produkt löschen</string>
+    <string name="cd_decrease_quantity">Menge verringern</string>
+    <string name="cd_increase_quantity">Menge erhöhen</string>
+    <string name="cd_decrement_quantity">Menge verringern</string>
+    <string name="cd_increment_quantity">Menge erhöhen</string>
+    <string name="cd_bought">%1$s gekauft</string>
+
+    <string name="quantity_count">×%1$d</string>
+
+    <!-- Home screen -->
+    <string name="scan_to_add">Scannen zum Hinzufügen</string>
+    <string name="scan_to_remove">Scannen zum Entfernen</string>
+    <string name="add_manually">Manuell hinzufügen</string>
+    <string name="home_search_hint">Suchen</string>
+    <string name="home_empty_title">Deine Vorratskammer ist leer</string>
+    <string name="home_empty_subtitle">Tippe auf Scannen zum Hinzufügen oder + zum Loslegen</string>
+    <string name="home_no_matches">Keine Treffer für \"%1$s\"</string>
+    <string name="home_delete_title">%1$s löschen?</string>
+    <string name="home_delete_body">%1$s aus deiner Vorratskammer löschen?</string>
+    <string name="home_deleted">%1$s gelöscht</string>
+    <string name="home_error_delete">%1$s konnte nicht gelöscht werden</string>
+    <string name="home_error_restore">%1$s konnte nicht wiederhergestellt werden</string>
+
+    <!-- Add-product sheet -->
+    <string name="add_sheet_title">Produkt manuell hinzufügen</string>
+
+    <!-- Buying list -->
+    <string name="buylist_title">Einkaufsliste</string>
+    <string name="buylist_empty_title">Nichts einzukaufen</string>
+    <string name="buylist_empty_subtitle">Jeder beobachtete Artikel ist über seinem Mindestbestand.</string>
+    <string name="buylist_back_to_pantry">Zurück zur Vorratskammer</string>
+
+    <!-- Detail screen -->
+    <string name="detail_title">Produktdetails</string>
+    <string name="detail_brand">Marke: %1$s</string>
+    <string name="detail_barcode">Barcode: %1$s</string>
+    <string name="detail_last_updated">Zuletzt aktualisiert %1$s</string>
+    <string name="detail_restock">Nachkaufen</string>
+    <string name="detail_low_limit">Mindestbestand</string>
+    <string name="detail_low_limit_hint">Leer lassen, um nicht mehr zu beobachten</string>
+    <string name="detail_buy_amount">Kaufmenge</string>
+    <string name="detail_delete_title">Dieses Produkt löschen?</string>
+    <string name="detail_delete_body">\"%1$s\" wird aus deinem Bestand entfernt. Das kann nicht rückgängig gemacht werden.</string>
+
+    <!-- Scan screen + result sheets -->
+    <string name="scan_looking_up">%1$s wird gesucht…</string>
+    <string name="scan_confirm_add">Hinzufügen bestätigen</string>
+    <string name="scan_confirm_remove">Entfernen bestätigen</string>
+    <string name="scan_manual_title">Nicht bei Open Food Facts</string>
+    <string name="scan_manual_body">Barcode: %1$s\n\nGib einen Namen ein, um es zum Bestand hinzuzufügen.</string>
+    <string name="scan_add_to_inventory">Zum Bestand hinzufügen</string>
+    <string name="scan_not_in_inventory_title">Noch nicht in deinem Bestand</string>
+    <string name="scan_not_in_inventory_body">Barcode %1$s wird noch nicht beobachtet. Stattdessen hinzufügen?</string>
+    <string name="scan_switch_to_add">Zu Hinzufügen wechseln</string>
+    <string name="scan_error_title">Etwas ist schiefgelaufen</string>
+
+    <!-- Camera-permission gate -->
+    <string name="cam_needed_title">Kamerazugriff erforderlich</string>
+    <string name="cam_needed_body">Pantry Tracker nutzt die Kamera, um Barcodes zu scannen. Nichts verlässt dein Gerät.</string>
+    <string name="cam_try_again">Erneut versuchen</string>
+    <string name="cam_blocked_title">Kamerazugriff blockiert</string>
+    <string name="cam_blocked_body">Öffne die Einstellungen und erlaube den Kamerazugriff für Pantry Tracker, dann komm zurück.</string>
+    <string name="cam_open_settings">Einstellungen öffnen</string>
+    <string name="cam_rationale_title">Kamerazugriff</string>
+    <string name="cam_rationale_body">Wir scannen Barcodes, um Produkte zu finden. Nichts verlässt dein Gerät.</string>
+
+    <!-- Relative time (DetailScreen "Last updated …") -->
+    <string name="relative_just_now">gerade eben</string>
+    <plurals name="relative_minutes">
+        <item quantity="one">vor 1 Minute</item>
+        <item quantity="other">vor %1$d Minuten</item>
+    </plurals>
+    <plurals name="relative_hours">
+        <item quantity="one">vor 1 Stunde</item>
+        <item quantity="other">vor %1$d Stunden</item>
+    </plurals>
+    <plurals name="relative_days">
+        <item quantity="one">vor 1 Tag</item>
+        <item quantity="other">vor %1$d Tagen</item>
+    </plurals>
+    <plurals name="relative_weeks">
+        <item quantity="one">vor 1 Woche</item>
+        <item quantity="other">vor %1$d Wochen</item>
+    </plurals>
+    <plurals name="relative_months">
+        <item quantity="one">vor 1 Monat</item>
+        <item quantity="other">vor %1$d Monaten</item>
+    </plurals>
+</resources>
