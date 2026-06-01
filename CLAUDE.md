@@ -453,23 +453,25 @@ restructured to make the lesson load-bearing on its own.*
   clean-build before trusting the failure point — don't chase the phantom.
   Eviction criterion: incremental KSP stops emitting cache EOFExceptions
   (toolchain fix), or the repo pins `--no-build-cache` for local repro.
-- **Codecov `project`/`patch` checks post only on PRs, and `codecov/project`
-  first materialises only on the *first PR after* `codecov.yml`'s baseline merges
-  to the default branch.** A direct push *ingests* the baseline but posts no
-  check; the bootstrapping PR that adds `codecov.yml` shows only `codecov/patch`
-  (which the repo marks `informational`). Consequence: never promote
-  `codecov/project` to a **required** ruleset check until you have *observed* it
-  post green on a real PR — a required check that never posts deadlocks every
-  merge. And a ruleset is **per-branch**: `codecov/project` can only be required
-  on `main` once `codecov.yml` + a baseline exist on `main` (i.e. after a release
-  carries it there) **and** it is observed green on a main-targeting PR — adding
-  it before then risks deadlocking the next `release/* → main` PR. So the develop
-  ruleset (`16993554`) and the main ruleset (`16948699`) are promoted on
-  *different* events, not together. Bitten on #219/#222 (develop) 2026-06-01; the
-  main promotion is deliberately deferred to the next release. CI has zero path
-  filters, so even a docs-only PR runs the full emulator+coverage upload — the
-  observation vehicle can be any PR. Eviction criterion: `codecov.yml` is removed,
-  or both rulesets already require `codecov/project`.
+- **`codecov/project` never posts on this repo — the coverage gate is the
+  emulator `androidTest` job, not Codecov.** The plan in #219 was to promote
+  `codecov/project` (>=80% LINE, configured in `codecov.yml`) to a required
+  ruleset check, but it *never materialises* as a status check — an
+  account-level Codecov problem (cross-repo-confirmed against the sibling
+  hangarfit repo, so not per-repo/default-branch config), tracked in **#228**.
+  So on 2026-06-01 the **`androidTest`** job (which runs
+  `:app:jacocoTestCoverageVerification` at the 0.80 LINE gate on the merged
+  unit + instrumented JaCoCo report) was promoted instead and is the **active
+  required coverage check on the develop ruleset `16993554`** (now requires
+  `build` + `androidTest`). The main ruleset `16948699` stays **build-only**;
+  its coverage promotion is deferred to a future release. General lesson that
+  still holds: never promote a check to **required** until you have *observed*
+  it post green on a real PR — a required check that never posts deadlocks
+  every merge (exactly the trap `codecov/project` would have been). CI has zero
+  path filters, so even a docs-only PR runs the full emulator+coverage upload —
+  any PR is a valid observation vehicle. Bitten on #219/#222 (develop)
+  2026-06-01. Eviction criterion: `codecov.yml` is removed, or `codecov/project`
+  starts posting and is itself promoted to required (resolving #228).
 - **A Mermaid `sequenceDiagram` participant id must not be a reserved keyword —
   and `off`/`on` are reserved (case-insensitively).** This repo's project-wide
   shorthand "OFF" (Open Food Facts) as `participant OFF` produced, on GitHub's

@@ -511,16 +511,21 @@ Repository Rulesets, split since 2026-05-28 (see #158):
 
 - **Ruleset 16948699 "Protect main"** — covers `refs/heads/main` only.
   `strict_required_status_checks_policy: true` (PR head must be
-  up to date with `main` before merge).
+  up to date with `main` before merge). Required status check: `build`
+  only — the coverage gate's promotion to main is deferred (see #219, #228).
 - **Ruleset 16993554 "Protect develop"** — covers `refs/heads/develop`
   only. `strict_required_status_checks_policy: false` to avoid
   integration-branch rebase churn (feature PRs land on develop
   frequently; requiring up-to-date would force a rebase after every
-  intervening merge).
+  intervening merge). Required status checks: `build` + `androidTest` —
+  the latter runs `:app:jacocoTestCoverageVerification` at the 0.80 LINE
+  gate and is the active, merge-blocking coverage check (promoted
+  2026-06-01 per #219). A `codecov/project` check is configured in
+  `codecov.yml` but does not currently post (account-level Codecov
+  issue — #228), so it is not required.
 
 Both rulesets share the same other rules: PR-only merges (no direct
-push), the `build` job from `ci.yml` as the only required status
-check, no deletion, no non-fast-forward push, and
+push), no deletion, no non-fast-forward push, and
 `dismiss_stale_reviews_on_push: true` (a PR approval is voided when
 new commits land, so the approval reflects the current head).
 `required_linear_history` is **off** on both by design: release-prep

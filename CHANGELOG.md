@@ -24,11 +24,15 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ### Changed
 
-- Backed the ≥80% statement-coverage gate with a `codecov/project` ≥80%
-  line-coverage CI check (merged baseline ~85.93% line; added as a required
-  ruleset check once it first reports green) and closed the delete/undo snackbar
-  render path + an EN/DE format-template drift guard, satisfying OpenSSF Silver
-  `test_statement_coverage80`. (#219)
+- Backed the ≥80% statement-coverage gate by promoting the emulator-backed
+  `androidTest` CI job (which runs `:app:jacocoTestCoverageVerification` at 0.80
+  LINE on the merged unit + instrumented JaCoCo report; baseline ~85.93% line)
+  to a required check on the develop ruleset, and closed the delete/undo
+  snackbar render path + an EN/DE format-template drift guard, satisfying
+  OpenSSF Silver `test_statement_coverage80`. A `codecov/project` ≥80%
+  line-coverage check is configured in `codecov.yml` but does not currently
+  post (account-level Codecov issue, deferred — #228), so it is not yet the
+  required check. (#219)
 
 ## [1.3.1] — 2026-05-29
 
