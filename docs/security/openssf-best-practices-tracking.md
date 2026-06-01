@@ -136,7 +136,7 @@
 | `interfaces_current` | Public interfaces current | `N/A` | No public programmatic interfaces (Android app). |
 | `automated_integration_testing` | CI runs integration tests | `Met` | Robolectric + emulator-backed `connectedDebugAndroidTest` — see [`.github/workflows/ci.yml`](https://github.com/DocGerd/pantry-tracker/blob/develop/.github/workflows/ci.yml). |
 | `regression_tests_added50` | Regression tests for ≥ 50% bug fixes | `Met` | PR template enforces; see closed bugfix PRs (e.g. #117, #53). |
-| `test_statement_coverage80` | ≥ 80% statement coverage | `Unmet` | No coverage threshold gate currently — track via separate ticket. |
+| `test_statement_coverage80` | ≥ 80% statement coverage | `Met` | Merged JaCoCo **line** (statement) coverage is ~85.93% (≥ 80%), measured against the combined JVM-unit + emulator-instrumented report. Enforcement: a `codecov/project` ≥ 80% line-coverage status check (configured in [`codecov.yml`](https://github.com/DocGerd/pantry-tracker/blob/develop/codecov.yml)) is added as a required check on the develop + main rulesets once it first reports green (#219); the local `:app:jacocoTestCoverageVerification` LINE gate mirrors it. See [`.github/workflows/ci.yml`](https://github.com/DocGerd/pantry-tracker/blob/develop/.github/workflows/ci.yml). (#219) |
 | `test_policy_mandated` | Test addition mandatory | `Met` | PR template + multi-agent review enforce this. |
 | `tests_documented_added` | Test-addition policy documented (silver) | `Met` | See [CONTRIBUTING.md](https://github.com/DocGerd/pantry-tracker/blob/develop/CONTRIBUTING.md). |
 | `warnings_strict` | Strictest warnings (silver level) | `Met` | Detekt full ruleset + Lint baseline=0 + CodeQL `security-and-quality`. |
@@ -156,7 +156,7 @@
 | `static_analysis_common_vulnerabilities` | SA common vulns (silver) | `Met` | CodeQL `security-and-quality` covers CWE Top 25. |
 | `dynamic_analysis_unsafe` | Dyn-analysis on unsafe code (silver) | `N/A` | 100% Kotlin (memory-safe). |
 
-`Unmet` rows at silver level: `dco`, `access_continuity`, `bus_factor`, `documentation_roadmap`, `test_statement_coverage80`, `signed_releases`, `version_tags_signed`, `assurance_case` — file follow-up tickets for the ones you want to close before claiming silver. Three of them (`signed_releases`, `bus_factor` ≈ Contributors, structural-zero accept-risk) overlap with sibling Scorecard tickets.
+`Unmet` rows at silver level: `dco`, `access_continuity`, `bus_factor`, `documentation_roadmap`, `signed_releases`, `version_tags_signed`, `assurance_case` — file follow-up tickets for the ones you want to close before claiming silver. Three of them (`signed_releases`, `bus_factor` ≈ Contributors, structural-zero accept-risk) overlap with sibling Scorecard tickets.
 
 ## Maintenance
 
