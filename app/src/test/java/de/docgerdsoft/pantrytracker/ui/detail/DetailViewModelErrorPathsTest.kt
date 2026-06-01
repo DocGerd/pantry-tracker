@@ -1,8 +1,10 @@
 package de.docgerdsoft.pantrytracker.ui.detail
 
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -93,7 +95,10 @@ class DetailViewModelErrorPathsTest {
         val vm = DetailViewModel(repo, productId = 1L)
         advanceUntilIdle()
         // findById succeeded (product seeded), then the observe stream threw.
-        assertEquals("Couldn't read inventory: cursor died", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.error_read_inventory, listOf(UiText.Raw("cursor died"))),
+            vm.uiState.value.error,
+        )
         assertEquals("Coke", vm.uiState.value.product?.name)
     }
 
@@ -144,7 +149,10 @@ class DetailViewModelErrorPathsTest {
         advanceUntilIdle()
         vm.saveRestockSettings(lowLimit = 2, defaultBuyAmount = 3)
         advanceUntilIdle()
-        assertEquals("Couldn't save restock settings: disk full", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.detail_error_save_restock, listOf(UiText.Raw("disk full"))),
+            vm.uiState.value.error,
+        )
     }
 
     @Test

@@ -1,6 +1,8 @@
 package de.docgerdsoft.pantrytracker.ui.detail
 
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -62,7 +64,7 @@ class DetailUiStateTest {
 
     @Test
     fun errorMessage_isCarriedThrough() {
-        val state = DetailUiState(product = product(), error = "Couldn't rename: boom")
-        assertEquals("Couldn't rename: boom", state.error)
+        val state = DetailUiState(product = product(), error = UiText.Raw("Couldn't rename: boom"))
+        assertEquals(UiText.Raw("Couldn't rename: boom"), state.error)
     }
 }
