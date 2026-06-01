@@ -12,6 +12,12 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+### Added
+
+- German (`de`) translation of the Compose UI layer, with the user-facing
+  strings externalized to resources and relative-time labels using
+  locale-correct plurals (#168).
+
 ## [1.3.1] — 2026-05-29
 
 ### Changed

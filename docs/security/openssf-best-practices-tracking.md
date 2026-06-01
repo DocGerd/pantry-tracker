@@ -115,7 +115,7 @@
 | `documentation_current` | Docs kept current | `Met` | CHANGELOG and arc42 reviewed per release. |
 | `documentation_achievements` | Achievements documented | `Met` | [CHANGELOG.md](https://github.com/DocGerd/pantry-tracker/blob/develop/CHANGELOG.md). |
 | `accessibility_best_practices` | Accessibility considered | `Met` | Compose semantics + content-description audit — see [`docs/uat/v1-uat-checklist.md`](https://github.com/DocGerd/pantry-tracker/blob/develop/docs/uat/v1-uat-checklist.md). |
-| `internationalization` | I18n considered | `Unmet` | Currently English-only; no i18n framework adopted yet. |
+| `internationalization` | I18n considered | `Met` | String-resource framework adopted with a full German (`values-de/`) translation of the Compose UI layer + locale-correct relative-time plurals (#168); AGP Lint `HardcodedText` gated to error as a regression guard. Residual ViewModel-layer error strings tracked in #218. |
 | `sites_password_security` | Project sites enforce password security | `N/A` | Project has no auth-bearing sites. |
 | `maintenance_or_update` | Project is maintained or updated | `Met` | Three releases in 10 days; weekly security scans active. |
 | `report_tracker` | Report tracker (silver level) | `Met` | [GitHub Issues](https://github.com/DocGerd/pantry-tracker/issues) with labels and milestones. |
@@ -156,7 +156,7 @@
 | `static_analysis_common_vulnerabilities` | SA common vulns (silver) | `Met` | CodeQL `security-and-quality` covers CWE Top 25. |
 | `dynamic_analysis_unsafe` | Dyn-analysis on unsafe code (silver) | `N/A` | 100% Kotlin (memory-safe). |
 
-`Unmet` rows at silver level: `dco`, `access_continuity`, `bus_factor`, `documentation_roadmap`, `internationalization`, `test_statement_coverage80`, `signed_releases`, `version_tags_signed`, `assurance_case` — file follow-up tickets for the ones you want to close before claiming silver. Three of them (`signed_releases`, `bus_factor` ≈ Contributors, structural-zero accept-risk) overlap with sibling Scorecard tickets.
+`Unmet` rows at silver level: `dco`, `access_continuity`, `bus_factor`, `documentation_roadmap`, `test_statement_coverage80`, `signed_releases`, `version_tags_signed`, `assurance_case` — file follow-up tickets for the ones you want to close before claiming silver. Three of them (`signed_releases`, `bus_factor` ≈ Contributors, structural-zero accept-risk) overlap with sibling Scorecard tickets.
 
 ## Maintenance
 
