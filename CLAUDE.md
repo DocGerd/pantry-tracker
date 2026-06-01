@@ -454,17 +454,17 @@ restructured to make the lesson load-bearing on its own.*
   Eviction criterion: incremental KSP stops emitting cache EOFExceptions
   (toolchain fix), or the repo pins `--no-build-cache` for local repro.
 - **`codecov/project` never posts on this repo — the coverage gate is the
-  emulator `androidTest` job, not Codecov. #228 CLOSED won't-fix (2026-06-01).**
+  emulator `androidTest` job, not Codecov.**
   The plan in #219 was to promote `codecov/project` (>=80% LINE, configured in
   `codecov.yml`) to a required ruleset check, but it *never materialises* as a
-  status check — an **account/installation-level** Codecov fault, conclusively
+  status check — an **account/installation-level** Codecov fault,
   isolated 2026-06-01 by a clean race-free re-test (PR #234): Codecov computed
   the comparison (base/head totals, `ci_passed`) and posted `codecov/patch` but
   dropped `codecov/project` from both the commit-status and check-runs APIs,
   even with the project-enabling `codecov.yml` on both the head commit and the
   (corrected) default branch. That rules out plan, default-branch, yaml-source,
-  config, and the GitHub-App `statuses:write` permission (patch posts through
-  the same path). **NOT plan-gated — do not re-investigate the Pro-plan
+  config, and a GitHub-App write-permission gap (patch posts via the same
+  check-runs path Codecov would use for project). **NOT plan-gated — do not re-investigate the Pro-plan
   hypothesis:** for PUBLIC repos `codecov/project` is FREE; the only documented
   restriction is *private* repos on the free/Team plan (Codecov FAQ; the
   pricing page's "Project Coverage: not included" Developer/Team cell is
@@ -474,7 +474,8 @@ restructured to make the lesson load-bearing on its own.*
   So the **`androidTest`** job (`:app:jacocoTestCoverageVerification` at the
   0.80 LINE gate on the merged unit + instrumented JaCoCo report) is the
   **PERMANENT required coverage check on the develop ruleset `16993554`**
-  (requires `build` + `androidTest`). The main ruleset `16948699` stays
+  (requires `build` + `androidTest` + `Fuzz regression (seed corpus)`). The
+  main ruleset `16948699` stays
   **build-only**; coverage promotion deferred to a future release. **General
   lesson that still holds:** never promote a check to **required** until you
   have *observed* it post green on a real PR — a required check that never
