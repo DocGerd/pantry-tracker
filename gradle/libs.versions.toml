@@ -35,8 +35,8 @@ coil = "3.4.0"
 # on Maven Central 2026-05-28.
 jazzer = "0.24.0"
 # JUnit Jupiter engine version for the :app:fuzzTest task. MUST track the
-# junit-jupiter-api version that `jazzer` pins transitively (currently
-# junit-bom 5.9.0) — a jupiter-api/jupiter-engine version skew can fail at
+# junit-jupiter-api version that jazzer-junit pins directly in its POM
+# (5.9.0 today) — a jupiter-api/jupiter-engine version skew can fail at
 # runtime — so bump this together with `jazzer`. (#230)
 junitJupiter = "5.9.0"
 

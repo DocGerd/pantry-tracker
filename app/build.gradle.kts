@@ -516,8 +516,9 @@ dependencies {
 // + mutate). Without it, the driver runs in *regression* mode and only
 // replays the static seed corpus under src/test/resources/.../OffApiClientFuzzTestInputs/
 // — which finishes in milliseconds and is useful for CI smoke-tests but is
-// not actually fuzzing. The :app:fuzzTest task sets JAZZER_FUZZ=1 so a local
-// `./gradlew :app:fuzzTest` invocation actually fuzzes.
+// not actually fuzzing. The :app:fuzzTest task sets JAZZER_FUZZ=1 *by default*
+// so a bare local `./gradlew :app:fuzzTest` invocation actually fuzzes; pass
+// `-PfuzzRegression` for the fast replay-only mode (see the toggle below, #230).
 //
 // Time-cap: the @FuzzTest(maxDuration = "5m") annotation on the single fuzz
 // method is Jazzer's own hard ceiling on a fuzzing run. We *also* apply
@@ -554,7 +555,19 @@ tasks.register<Test>("fuzzTest") {
         // NOT match this pattern, so the regular JUnit 4 tests don't get
         // re-discovered as JUnit 5 zero-test classes here.
         includeTestsMatching("*FuzzTest")
+        // #230 hardening: the PR regression guard's whole value is that it
+        // CANNOT report green with zero tests run. This defaults to true on
+        // Gradle 9, but pin it explicitly so a future project-wide
+        // `tasks.withType<Test>` override can't silently turn a renamed/removed
+        // fuzz class into a vacuous pass — the exact rot this guard prevents.
+        isFailOnNoMatchingTests = true
     }
+
+    // Companion to the filter's isFailOnNoMatchingTests (#230): fail if the
+    // JUnit Platform discovers no tests at all — e.g. an engine that loads but
+    // registers nothing (the #230 class of bug). Also a Gradle-9 default,
+    // pinned here so the no-vacuous-pass invariant doesn't rely on it implicitly.
+    failOnNoDiscoveredTests = true
 
     // Belt-and-braces hard ceiling — see the comment block above.
     timeout.set(Duration.ofMinutes(6))
