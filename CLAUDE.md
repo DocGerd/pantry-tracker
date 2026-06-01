@@ -433,13 +433,17 @@ restructured to make the lesson load-bearing on its own.*
   main/develop + `pull_request` ONLY — a feature-branch push runs NOTHING, so
   the PR must exist for CI to emit goldens) → the `build` job fails →
   `gh run download <id> -n screenshot-goldens-actual` → visually review each
-  PNG (the Read tool renders images) → commit → push → green. NOTE a full
-  theme/colour-scheme change stales **all 11** goldens, not just the obvious
-  icon/theme two — every screenshot renders through `PantryTrackerTheme`, so a
-  re-mapped role moves every themed screen's pixels; #238 was reverted for
-  `@Ignore`-ing the rest instead of regenerating (#236/PR #239 did it
-  correctly). Eviction criterion: the `upload-artifact` golden-emit step leaves
-  `ci.yml`, or the screenshot suite is removed.
+  PNG (the Read tool renders images) → commit → push → green. NOTE the blast
+  radius is easy to under-scope: the #236 brand change (full M3 scheme AND a new
+  icon drawable) staled **all 11** goldens — the 8 themed ones
+  (`Theme`/`GreyedRow`/`CoilImage`/`FontScale`) because every themed screen
+  renders through `PantryTrackerTheme`, so a re-mapped role moves its pixels (not
+  just the 2 in `ThemeScreenshotTest`), plus the 3 `icon_*` goldens because
+  `AppIconScreenshotTest` paints the launcher drawable on a hardcoded `#4F7942`
+  background (theme-independent — they stale only on an icon-asset change). #238
+  was reverted for `@Ignore`-ing the rest instead of regenerating (#236/PR #239
+  did it correctly). Eviction criterion: the `upload-artifact` golden-emit step
+  leaves `ci.yml`, or the screenshot suite is removed.
 - **Reading string resources inside a Compose coroutine trips the
   `LocalContextGetResourceValueCall` lint check.** This AGP/Compose-UI lint
   (error severity on the repo's Compose BOM) fires when a `@Composable` reads
