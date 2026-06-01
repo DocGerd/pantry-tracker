@@ -1,9 +1,12 @@
 package de.docgerdsoft.pantrytracker.ui.buylist
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +35,7 @@ class BuyListViewModel(private val repository: ProductRepository) : ViewModel() 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                surfaceError("load the buying list", e)
+                surfaceError(R.string.buylist_error_load, "load the buying list", e)
             }
         }
     }
@@ -48,7 +51,7 @@ class BuyListViewModel(private val repository: ProductRepository) : ViewModel() 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                surfaceError("restock", e)
+                surfaceError(R.string.buylist_error_restock, "restock", e)
             }
         }
     }
@@ -56,9 +59,11 @@ class BuyListViewModel(private val repository: ProductRepository) : ViewModel() 
     /** Called by the screen's Snackbar after the user has seen the error. */
     fun dismissError() = _uiState.update { it.copy(error = null) }
 
-    private fun surfaceError(operation: String, e: Exception) {
+    private fun surfaceError(@StringRes messageId: Int, logTag: String, e: Exception) {
         @Suppress("SwallowedException")
-        logger.log(Level.WARNING, "$operation failed", e)
-        _uiState.update { it.copy(error = "Couldn't $operation: ${e.message ?: "unknown error"}") }
+        logger.log(Level.WARNING, "$logTag failed", e)
+        _uiState.update {
+            it.copy(error = UiText.causedError(messageId, R.string.error_unknown_reason, e))
+        }
     }
 }

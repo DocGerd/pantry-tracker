@@ -112,4 +112,22 @@
         <item quantity="one">1 month ago</item>
         <item quantity="other">%1$d months ago</item>
     </plurals>
+
+    <!-- ViewModel-layer error strings (#218). Keep the "Couldn't <verb>: %1$s"
+         error-tone convention (SR-78). %1$s is the underlying cause (exception
+         message, or error_unknown_reason when null). error_read_inventory is
+         shared by the Scan and Detail screens. -->
+    <string name="error_unknown_reason">unknown error</string>
+    <string name="error_read_inventory">Couldn\'t read inventory: %1$s</string>
+    <string name="scan_error_save">Couldn\'t save: %1$s</string>
+    <string name="scan_error_open_camera">Couldn\'t open camera: %1$s</string>
+    <string name="scan_error_camera_unavailable">camera unavailable</string>
+    <string name="scan_error_camera_source">camera source error</string>
+    <string name="detail_error_rename">Couldn\'t rename: %1$s</string>
+    <string name="detail_error_update_quantity">Couldn\'t update quantity: %1$s</string>
+    <string name="detail_error_save_restock">Couldn\'t save restock settings: %1$s</string>
+    <string name="detail_error_delete">Couldn\'t delete: %1$s</string>
+    <string name="buylist_error_load">Couldn\'t load the buying list: %1$s</string>
+    <string name="buylist_error_restock">Couldn\'t restock: %1$s</string>
+    <string name="cam_error_settings_unavailable">Couldn\'t open settings on this device</string>
 </resources>

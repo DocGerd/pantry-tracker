@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.ui.scan
 
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,10 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.docgerdsoft.pantrytracker.R
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
 import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.LoadingSheet
@@ -89,7 +92,9 @@ fun ScanScreen(
                 CameraPreview(
                     onBarcode = viewModel::onBarcodeDecoded,
                     onCameraError = { e ->
-                        viewModel.onCameraError(e.message ?: "camera unavailable")
+                        viewModel.onCameraError(
+                            cameraErrorReason(e, R.string.scan_error_camera_unavailable),
+                        )
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -122,7 +127,7 @@ fun ScanScreen(
                     onDismiss = viewModel::dismissPreview,
                 )
                 is ScanUiState.Phase.Error -> ErrorSheet(
-                    message = phase.message,
+                    message = phase.message.resolve(LocalContext.current),
                     onDismiss = viewModel::dismissPreview,
                 )
             }
@@ -164,7 +169,16 @@ private fun BindTestCameraSource(
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            viewModel.onCameraError(e.message ?: "camera source error")
+            viewModel.onCameraError(cameraErrorReason(e, R.string.scan_error_camera_source))
         }
     }
 }
+
+/**
+ * Maps a camera/scanner [Throwable] to the user-facing reason shown in the Scan
+ * error sheet: the exception message when present, otherwise the localized
+ * [fallback] resource. Extracted from [ScanScreen] so the elvis/safe-call stays
+ * out of that composable's CyclomaticComplexMethod budget.
+ */
+private fun cameraErrorReason(throwable: Throwable, @StringRes fallback: Int): UiText =
+    throwable.message?.let { UiText.Raw(it) } ?: UiText.Res(fallback)

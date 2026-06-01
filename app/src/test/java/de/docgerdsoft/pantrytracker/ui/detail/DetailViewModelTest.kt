@@ -1,8 +1,10 @@
 package de.docgerdsoft.pantrytracker.ui.detail
 
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -188,7 +190,10 @@ class DetailViewModelTest {
 
         vm.rename("New Name")
         advanceUntilIdle()
-        assertEquals("Couldn't rename: disk full", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.detail_error_rename, listOf(UiText.Raw("disk full"))),
+            vm.uiState.value.error,
+        )
     }
 
     @Test
@@ -201,7 +206,10 @@ class DetailViewModelTest {
 
         vm.stepperDelta(+1)
         advanceUntilIdle()
-        assertEquals("Couldn't update quantity: constraint", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.detail_error_update_quantity, listOf(UiText.Raw("constraint"))),
+            vm.uiState.value.error,
+        )
     }
 
     @Test
@@ -216,7 +224,10 @@ class DetailViewModelTest {
         vm.confirmDelete()
         advanceUntilIdle()
         assertFalse(vm.uiState.value.showDeleteConfirm) // dialog closes regardless
-        assertEquals("Couldn't delete: locked", vm.uiState.value.error)
+        assertEquals(
+            UiText.Res(R.string.detail_error_delete, listOf(UiText.Raw("locked"))),
+            vm.uiState.value.error,
+        )
         assertFalse(vm.uiState.value.shouldNavigateBack) // delete failed → stay
     }
 

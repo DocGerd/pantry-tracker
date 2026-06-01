@@ -64,6 +64,7 @@ fun DetailScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // Auto-pop when the product is deleted or the nav arg is stale.
     // Order matters: pop FIRST so an intervening recomposition can't observe
@@ -78,7 +79,7 @@ fun DetailScreen(
     // Surface repository-operation failures (rename / stepperDelta / delete /
     // observe) as a Snackbar — matches ScanViewModel's Phase.Error UX per spec §7.
     LaunchedEffect(state.error) {
-        val message = state.error
+        val message = state.error?.resolve(context)
         if (message != null) {
             snackbarHostState.showSnackbar(message)
             viewModel.dismissError()

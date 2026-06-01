@@ -270,13 +270,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-// Copy for the OEM-fallback Toast. `internal const` so the instrumented test
-// (SR-77) can pin the exact string at the seam instead of relying on an
-// Espresso Toast root matcher — Android 12+ Toasts are not inspectable via
-// `isPlatformPopup()`. Starts with "Couldn't" per the project error-tone
-// convention (see ErrorToneSemanticsTest, SR-78).
-internal const val SETTINGS_UNAVAILABLE_MESSAGE = "Couldn't open settings on this device"
-
 // `internal` (not private) so the instrumented test (SR-77) can reach it
 // directly for the ActivityNotFoundException → Toast path. The
 // [IntentLauncher] parameter is the injection seam — production passes
@@ -299,7 +292,7 @@ internal fun openAppSettings(context: Context, launcher: IntentLauncher) {
         logger.log(Level.WARNING, "Couldn't open settings: no Settings activity on device", e)
         Toast.makeText(
             context,
-            SETTINGS_UNAVAILABLE_MESSAGE,
+            context.getString(R.string.cam_error_settings_unavailable),
             Toast.LENGTH_LONG,
         ).show()
     }
