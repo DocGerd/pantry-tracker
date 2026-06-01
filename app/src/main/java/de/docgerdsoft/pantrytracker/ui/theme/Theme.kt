@@ -7,11 +7,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Full Material 3 light/dark schemes seeded from Fern (#4F7942). Roles map
-// verbatim to the DocGerdSoft brand handoff's role->hex table; surface-tint
-// tonal variants not enumerated there (surfaceContainerLow/High/Highest,
-// surfaceBright/Dim, scrim, surfaceTint) are left to M3 to derive. The
-// AddGreen/RemoveRed verb accents stay outside this scheme (see Color.kt).
+// Material 3 light/dark schemes seeded from Fern (#4F7942). The primary,
+// secondary, tertiary, error, surface, outline and inverse roles map verbatim
+// to the DocGerdSoft brand handoff's role->hex table. The surface-tint tonal
+// variants NOT set here (surfaceContainerLowest/Low/High/Highest, surfaceBright,
+// surfaceDim, scrim, surfaceTint) fall back to the M3 Baseline neutral palette,
+// not to Fern-derived tones — a documented gap (visible as a faint off-brand
+// tint on ModalBottomSheets, which use surfaceContainerLow); seeding them from
+// Fern via material-color-utilities is a follow-up. The AddGreen/RemoveRed verb
+// accents stay outside this scheme (see Color.kt).
 private val LightColors = lightColorScheme(
     primary = Fern,
     onPrimary = Color(0xFFFFFFFF),
