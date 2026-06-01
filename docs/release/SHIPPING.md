@@ -93,6 +93,27 @@ installs it.
 The catch: a release APK must be **signed with your own keystore**. The
 keystore is irreplaceable — if you lose it, you can never sign an update.
 
+The end-to-end release flow, with its decision points:
+
+```mermaid
+flowchart TD
+    A[Start release/X.Y.Z off develop] --> B{All 4 keystore props set?}
+    B -->|none| Bu[app-release-unsigned.apk — NOT installable]
+    B -->|some| Be[GradleException at config time]
+    B -->|all four| C[assembleRelease to app-release.apk]
+    C --> D{Room schema changed?}
+    D -->|yes| E[Run migration UAT script]
+    D -->|no| G
+    E --> G
+    G[[Human merges release into main + develop]]
+    G --> F[On main, before tag: --write-locks, commit any diff]
+    F --> H[Tag vX.Y.Z on main]
+    H --> I[gh release create one-shot, immutable, asset at creation]
+    I --> J{SHA-256 + cert + attestation verify?}
+    J -->|ok| K[Published]
+    J -->|mismatch| L[Stop — do not publish]
+```
+
 ### One-time keystore setup
 
 ```bash

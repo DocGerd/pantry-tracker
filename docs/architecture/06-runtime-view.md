@@ -1,39 +1,30 @@
 # 6. Runtime View
 
-Three scenarios cover most of the app's behaviour. The rest follow the same
-patterns.
+Four scenarios cover most of the app's behaviour; the rest follow the same
+patterns. §6.5 distils the scan-phase state machine those scenarios traverse.
 
 ## 6.1 Scenario — Scan to add a product, OFF hit
 
-```
-User           CameraPreview      ScanViewModel       ProductRepository      OFF
- │                  │                  │                     │                │
- │ tap "Scan to Add"│                  │                     │                │
- │ ──────────────▶  │ (rationale dialog if Unknown phase)    │                │
- │ tap "Continue"   │                  │                     │                │
- │ ──────────────▶  │ system permission prompt               │                │
- │ grant            │                  │                     │                │
- │ ──────────────▶  │ Gate flips to Granted, CameraPreview renders            │
- │                  │                  │                     │                │
- │ point at barcode │                  │                     │                │
- │  ─ frame ─▶ ML Kit decode "5449000000996"                 │                │
- │                  │ onBarcode ──────▶│                     │                │
- │                  │                  │ phase=Loading       │                │
- │                  │                  │ lookupForPreview() ▶│                │
- │                  │                  │                     │ findByBarcode  │
- │                  │                  │                     │   → null       │
- │                  │                  │                     │ OFF.lookup ───▶│
- │                  │                  │                     │   GET .../product/5449…
- │                  │                  │                     │                │ 200 OK + name
- │                  │                  │                     │ ◀──────────────│
- │                  │                  │ ◀── FromOff(name=…) │                │
- │                  │                  │ phase=Preview(...)  │                │
- │ ScanResultSheet renders, shows name + quantity stepper    │                │
- │                  │                  │                     │                │
- │ tap "Confirm"    │                  │                     │                │
- │ ──────────────▶  │ confirm() ──────▶│ addNew(...) ───────▶│ INSERT INTO products
- │                  │                  │ phase=Idle          │                │
- │ Sheet dismisses; back to live camera preview              │                │
+```mermaid
+sequenceDiagram
+    actor User
+    participant CP as CameraPreview
+    participant VM as ScanViewModel
+    participant Repo as ProductRepository
+    participant OFFApi as Open Food Facts
+    User->>CP: grant camera permission
+    CP->>VM: barcode decoded (ML Kit)
+    VM->>VM: phase = Loading(barcode)
+    VM->>Repo: lookupForPreview(barcode)
+    Repo->>Repo: findByBarcode → null
+    Note over Repo,OFFApi: 30-day cache hit elides the Open Food Facts call
+    Repo->>OFFApi: GET /api/v2/product/BARCODE.json
+    OFFApi-->>Repo: 200 OK
+    Repo-->>VM: ScanCandidate.FromOff(name)
+    VM->>VM: phase = Preview(candidate)
+    User->>VM: Confirm
+    VM->>Repo: addNew(...)
+    VM->>VM: phase = Idle
 ```
 
 Key invariants:
@@ -74,21 +65,19 @@ only.
 
 ## 6.2 Scenario — Scan to remove, item not in inventory
 
-```
-User           ScanViewModel       ProductRepository
- │                  │                     │
- │ scan barcode "X" │                     │
- │ ──────────────▶  │ phase=Loading       │
- │                  │ findLocalByBarcode ▶│
- │                  │   → null            │
- │                  │ phase=NotInInventory("X")
- │                  │                     │
- │ Sheet shows: "Not in inventory" + "Switch to Add"
- │                  │                     │
- │ tap "Switch to Add"
- │ ──────────────▶  │ onSwitchToAdd():    │
- │                  │   mode=Add, phase=Loading("X")
- │                  │ resolveBarcode("X") ▶ (OFF lookup as in 6.1)
+```mermaid
+sequenceDiagram
+    actor User
+    participant VM as ScanViewModel
+    participant Repo as ProductRepository
+    Note over VM: mode = Remove (never calls Open Food Facts)
+    VM->>VM: phase = Loading(barcode)
+    VM->>Repo: findLocalByBarcode(barcode)
+    Repo-->>VM: null (or quantity 0)
+    VM->>VM: phase = NotInInventory(barcode)
+    User->>VM: Switch to Add
+    VM->>VM: onSwitchToAdd() → mode = Add, phase = Loading
+    VM->>Repo: resolveBarcode(barcode)
 ```
 
 Note: Remove mode does NOT call OFF. A local miss is unambiguously "nothing
@@ -103,21 +92,18 @@ the same: "Switch to Add" → goes through the add flow.
 This scenario exists because the M6 PR review caught a regression in an
 earlier version of the gate, where this flow ended in a deadlock.
 
-```
-User             CameraPermissionGate         Android Settings
- │                       │                          │
- │ tap "Scan to Add"     │                          │
- │ (already hard-denied) │ phase=HardDenied         │
- │                       │ renders "Open settings"  │
- │ tap "Open settings"   │                          │
- │ ────────────────────▶ │ startActivity(intent) ──▶│ Settings app opens
- │                       │                          │ user taps Camera ▶ Allow
- │                       │                          │
- │ press back / app switch back to Pantry Tracker   │
- │                       │ ON_RESUME observer fires │
- │                       │ re-reads permission ─── now GRANTED
- │                       │ phase=Granted            │
- │ CameraPreview renders, scan loop resumes
+```mermaid
+sequenceDiagram
+    actor User
+    participant Gate as CameraPermissionGate
+    participant Settings as Android Settings
+    Gate->>Gate: phase = HardDenied
+    User->>Gate: tap "Open settings"
+    Gate->>Settings: startActivity(APP_DETAILS intent)
+    User->>Settings: grant Camera permission
+    Settings-->>Gate: ON_RESUME
+    Gate->>Gate: DisposableEffect observer re-reads → phase = Granted
+    Gate->>Gate: CameraPreview renders
 ```
 
 The DisposableEffect that wires the `Lifecycle.Event.ON_RESUME` observer
@@ -127,27 +113,50 @@ after the user grants permission in Settings, leaving them stuck on the
 
 ## 6.4 Scenario — Detail screen rename, repository throws
 
-```
-User           DetailScreen        DetailViewModel       ProductRepository
- │                  │                  │                     │
- │ tap row in Home  │                  │                     │
- │ ──────────────▶ navigate "detail/<id>"                    │
- │                  │                  │ findById(id) ──────▶│  (spec D2 precheck)
- │                  │                  │ ◀── Product? null?  │
- │                  │                  │   if null → shouldNavigateBack=true,
- │                  │                  │   screen auto-pops; otherwise:
- │                  │                  │ observeById ───────▶│
- │                  │                  │ ◀── Flow<Product?>  │
- │                  │ DetailUiState collected, shows row     │
- │ edit name, tap "Save"               │                     │
- │ ──────────────▶  │ rename(newName) ▶│ rename(...) ───────▶│ throws SQLException
- │                  │                  │ ◀──────────────────│
- │                  │                  │ surfaceError("rename", e)
- │                  │                  │   - logs WARN with stack trace
- │                  │                  │   - sets error = "Couldn't rename: <msg>"
- │ Snackbar shows "Couldn't rename: …" │                     │
- │ tap dismiss      │ dismissError() ─▶│ error = null        │
+```mermaid
+sequenceDiagram
+    actor User
+    participant DS as DetailScreen
+    participant VM as DetailViewModel
+    participant Repo as ProductRepository
+    User->>DS: navigate to detail screen
+    DS->>VM: observeById(id)
+    User->>VM: rename(newName)
+    VM->>Repo: rename(id, newName)
+    Repo--xVM: throws SQLException
+    VM->>VM: surfaceError(R.string.detail_error_rename, "rename", e)
+    VM->>VM: error = UiText rendering "Couldn't rename: …"
+    VM-->>DS: error state
+    DS->>User: snackbar
+    User->>DS: dismiss
+    DS->>VM: dismissError()
 ```
 
-`surfaceError` in `DetailViewModel:89-93` is the canonical template that
-the M6 audit normalized other catch sites against.
+`surfaceError` in `DetailViewModel` is the canonical template that the M6
+audit normalized other catch sites against (post-#218 it takes a `@StringRes`
+id, so the error is a localized `UiText` rather than an inline string).
+
+## 6.5 Scan phase state machine
+
+`ScanViewModel` exposes a `ScanUiState` whose `phase` is a `ScanUiState.Phase`
+sealed interface (six members). The transitions across the scenarios above:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Loading: barcode decoded via ML Kit
+    Loading --> Preview: Add mode, name resolved
+    Loading --> ManualEntry: Add mode, no name resolved
+    Loading --> NotInInventory: Remove mode, not in pantry
+    Loading --> Error: repository or IO failure
+    Preview --> Idle: Confirm, addNew or applyDelta
+    ManualEntry --> Idle: Confirm, repository write
+    NotInInventory --> Loading: Switch to Add
+    Error --> Idle: dismiss or retry
+    Idle --> [*]
+```
+
+`Phase.Error` carries a `UiText` message (i18n, #218); `Phase.NotInInventory` is
+**Remove-mode only**, enforced by an `init { require(...) }` block in
+`ScanUiState`. A local hit at `quantity == 0` also routes to `NotInInventory`
+(nothing to decrement).

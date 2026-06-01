@@ -453,3 +453,39 @@ restructured to make the lesson load-bearing on its own.*
   clean-build before trusting the failure point — don't chase the phantom.
   Eviction criterion: incremental KSP stops emitting cache EOFExceptions
   (toolchain fix), or the repo pins `--no-build-cache` for local repro.
+- **Codecov `project`/`patch` checks post only on PRs, and `codecov/project`
+  first materialises only on the *first PR after* `codecov.yml`'s baseline merges
+  to the default branch.** A direct push *ingests* the baseline but posts no
+  check; the bootstrapping PR that adds `codecov.yml` shows only `codecov/patch`
+  (which the repo marks `informational`). Consequence: never promote
+  `codecov/project` to a **required** ruleset check until you have *observed* it
+  post green on a real PR — a required check that never posts deadlocks every
+  merge. And a ruleset is **per-branch**: `codecov/project` can only be required
+  on `main` once `codecov.yml` + a baseline exist on `main` (i.e. after a release
+  carries it there) **and** it is observed green on a main-targeting PR — adding
+  it before then risks deadlocking the next `release/* → main` PR. So the develop
+  ruleset (`16993554`) and the main ruleset (`16948699`) are promoted on
+  *different* events, not together. Bitten on #219/#222 (develop) 2026-06-01; the
+  main promotion is deliberately deferred to the next release. CI has zero path
+  filters, so even a docs-only PR runs the full emulator+coverage upload — the
+  observation vehicle can be any PR. Eviction criterion: `codecov.yml` is removed,
+  or both rulesets already require `codecov/project`.
+- **A Mermaid `sequenceDiagram` participant id must not be a reserved keyword —
+  and `off`/`on` are reserved (case-insensitively).** This repo's project-wide
+  shorthand "OFF" (Open Food Facts) as `participant OFF` produced, on GitHub's
+  renderer, `Parse error … Expecting 'ACTOR', got 'off'` and failed the *entire*
+  diagram (the collision surfaces wherever OFF appears in a participant position,
+  e.g. `Note over Repo,OFF`). Fix: rename the id and alias the display —
+  `participant OFFApi as Open Food Facts`. Two corollaries learned debugging #223:
+  (1) **punctuation in message text (after the `:`) is freeform/safe** — parens,
+  quotes, `→`, even a second `:` render fine; the trap is keyword collisions in
+  *participant positions*, NOT label punctuation. (2) **`stateDiagram-v2` labels
+  ARE stricter**: avoid unquoted `()` and literal `"` in transition labels
+  (`Expecting … got 'PS'`). Process lesson: there is **no local Mermaid renderer**
+  (no Node) and **grammar-reasoning review agents gave a false "all render-safe"**
+  twice — only the **rendered GitHub PR view** (human eyeball) reliably catches
+  these. Do not trust a subagent's Mermaid syntax verdict; have the diagrams
+  eyeballed on the PR. External render services (kroki/mermaid.ink) are blocked by
+  the sandbox classifier as exfil destinations — don't reach for them. Eviction
+  criterion: a Mermaid linter/renderer runs in CI, or the repo stops embedding
+  Mermaid.

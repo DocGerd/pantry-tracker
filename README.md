@@ -18,11 +18,11 @@ no accounts, no analytics, and no crash reporter.
 
 ## Scope / Status
 
-- **v1.0.0** (2026-05-18) and **v1.1.0** (2026-05-19) shipped as **signed
+- **v1.0.0** (2026-05-18) through **v1.3.1** (2026-05-29) have shipped as **signed
   sideload APKs** on [GitHub Releases](https://github.com/DocGerd/pantry-tracker/releases).
   There is no Play Store or F-Droid presence — distribution is sideload-only.
-- **v1.2** is feature-complete on `main` but **not yet released**. See
-  [`CHANGELOG.md`](CHANGELOG.md) for the per-version detail and the `Unreleased`
+- The current release is **[v1.3.1](https://github.com/DocGerd/pantry-tracker/releases/latest)**.
+  See [`CHANGELOG.md`](CHANGELOG.md) for the per-version detail and the `Unreleased`
   section for what's queued.
 
 What the app does (and deliberately does **not** do) is set out in the arc42
@@ -35,9 +35,9 @@ See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
 
 ## Screenshots
 
-_Screenshots are a follow-up._ Capturing them requires an emulator (or device)
-run, which is tracked separately; this README will gain a screenshots section
-once that capture lands.
+_Screenshots are tracked in [#225](https://github.com/DocGerd/pantry-tracker/issues/225)._
+Capturing them requires an emulator (or device) run; this README will gain a
+screenshots section once that capture lands.
 
 ## Install
 
