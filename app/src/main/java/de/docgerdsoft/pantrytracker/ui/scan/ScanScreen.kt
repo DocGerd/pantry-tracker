@@ -18,10 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.docgerdsoft.pantrytracker.R
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
 import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.LoadingSheet
@@ -89,7 +91,10 @@ fun ScanScreen(
                 CameraPreview(
                     onBarcode = viewModel::onBarcodeDecoded,
                     onCameraError = { e ->
-                        viewModel.onCameraError(e.message ?: "camera unavailable")
+                        viewModel.onCameraError(
+                            e.message?.let { UiText.Raw(it) }
+                                ?: UiText.Res(R.string.scan_error_camera_unavailable),
+                        )
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -122,7 +127,7 @@ fun ScanScreen(
                     onDismiss = viewModel::dismissPreview,
                 )
                 is ScanUiState.Phase.Error -> ErrorSheet(
-                    message = phase.message,
+                    message = phase.message.resolve(LocalContext.current),
                     onDismiss = viewModel::dismissPreview,
                 )
             }
@@ -164,7 +169,10 @@ private fun BindTestCameraSource(
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            viewModel.onCameraError(e.message ?: "camera source error")
+            viewModel.onCameraError(
+                e.message?.let { UiText.Raw(it) }
+                    ?: UiText.Res(R.string.scan_error_camera_source),
+            )
         }
     }
 }

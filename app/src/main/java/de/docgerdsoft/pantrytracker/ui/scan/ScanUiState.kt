@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.scan
 
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 
 /** UI state for the Scan screen. The phase is a small sealed hierarchy modelling
  *  the scan → decode → confirm flow. */
@@ -51,6 +52,6 @@ data class ScanUiState(
         /** A scan/confirm operation failed (DB write, camera bind, etc.). The UI
          *  shows the message and lets the user dismiss back to Idle. Per spec §7
          *  we surface failures inline rather than swallowing them. */
-        data class Error(val message: String) : Phase
+        data class Error(val message: UiText) : Phase
     }
 }

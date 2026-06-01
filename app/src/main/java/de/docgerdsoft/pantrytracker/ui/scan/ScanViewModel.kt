@@ -1,9 +1,12 @@
 package de.docgerdsoft.pantrytracker.ui.scan
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import de.docgerdsoft.pantrytracker.util.barcodeHint
 import de.docgerdsoft.pantrytracker.util.sanitizeBarcode
 import kotlinx.coroutines.CancellationException
@@ -32,6 +35,14 @@ class ScanViewModel(
     private var lookupJob: Job? = null
     private var confirmJob: Job? = null
     private var manualEntryJob: Job? = null
+
+    // Wraps a caught exception as a localizable "Couldn't <verb>: <cause>" UiText.
+    // The cause is the exception message, or a localized "unknown error" fallback.
+    private fun causedError(@StringRes messageId: Int, e: Exception): UiText =
+        UiText.Res(
+            messageId,
+            listOf(e.message?.let { UiText.Raw(it) } ?: UiText.Res(R.string.error_unknown_reason)),
+        )
 
     /**
      * Dispatch a barcode to the repository for resolution. De-duplicates the same
@@ -121,7 +132,7 @@ class ScanViewModel(
             // Log barcode as a redacted hint (SR-11): 4-prefix + ellipsis + 2-suffix.
             @Suppress("SwallowedException")
             logger.log(Level.WARNING, "resolveBarcode(${barcode.barcodeHint()}) failed", e)
-            ScanUiState.Phase.Error("Couldn't read inventory: ${e.message ?: "unknown error"}")
+            ScanUiState.Phase.Error(causedError(R.string.error_read_inventory, e))
         }
         _uiState.update { state ->
             val owns = (state.phase as? ScanUiState.Phase.Loading)?.barcode == barcode
@@ -195,7 +206,7 @@ class ScanViewModel(
                     "confirm() failed (mode=${state.mode}, phaseType=${phase::class.simpleName})",
                     e,
                 )
-                ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
+                ScanUiState.Phase.Error(causedError(R.string.scan_error_save, e))
             }
             _uiState.update { s ->
                 // Phase-ownership guard: don't clobber a fresh phase that arrived
@@ -256,7 +267,7 @@ class ScanViewModel(
                 // household-specific (SR-4).
                 @Suppress("SwallowedException")
                 logger.log(Level.WARNING, "submitManualEntry(qty=$initialQuantity) failed", e)
-                ScanUiState.Phase.Error("Couldn't save: ${e.message ?: "unknown error"}")
+                ScanUiState.Phase.Error(causedError(R.string.scan_error_save, e))
             }
             _uiState.update { state ->
                 // Phase-ownership guard: don't clobber a fresh phase that arrived
@@ -275,16 +286,21 @@ class ScanViewModel(
     }
 
     /** Called by CameraPreview when the camera or scanner permanently fails.
-     *  [reason] is the bare exception message (no verb prefix) — this method
-     *  wraps it in the canonical "Couldn't <verb>: <reason>" error tone.
-     *  The Throwable itself is already logged at the catch site in
-     *  CameraPreview, so we only need the user-facing reason here. */
-    fun onCameraError(reason: String) {
+     *  [reason] is the bare cause as a [UiText] (the exception message wrapped as
+     *  [UiText.Raw], or a localized fallback resource) — this method wraps it in
+     *  the canonical "Couldn't open camera: <reason>" error tone. The Throwable
+     *  itself is already logged at the catch site in CameraPreview, so we only
+     *  need the user-facing reason here. */
+    fun onCameraError(reason: UiText) {
         lookupJob?.cancel()
         confirmJob?.cancel()
         manualEntryJob?.cancel()
         _uiState.update {
-            it.copy(phase = ScanUiState.Phase.Error("Couldn't open camera: $reason"))
+            it.copy(
+                phase = ScanUiState.Phase.Error(
+                    UiText.Res(R.string.scan_error_open_camera, listOf(reason)),
+                ),
+            )
         }
     }
 }
