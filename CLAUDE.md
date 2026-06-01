@@ -419,3 +419,34 @@ restructured to make the lesson load-bearing on its own.*
   decision, deliberately not actioned in #182. Eviction criterion:
   `app/build.gradle.kts` switches to JaCoCo offline instrumentation, or
   the on-the-fly `jacoco` plugin is replaced.
+- **Reading string resources inside a Compose coroutine trips the
+  `LocalContextGetResourceValueCall` lint check.** This AGP/Compose-UI lint
+  (error severity on the repo's Compose BOM) fires when a `@Composable` reads
+  resources via `LocalContext.current` — e.g. `context.getString(R.string.x,
+  arg)`. It broke the #168 i18n PR (#217): `HomeScreen.SnackbarEventCollector`
+  built its snackbar messages with `context.getString(...)` inside a
+  `LaunchedEffect { snackbarEvents.collect { … } }` coroutine. `stringResource()`
+  is `@Composable`-only and CANNOT be called from the collect block, so the fix
+  is to **resolve the format *templates* with `stringResource()` in composition**
+  (above the `LaunchedEffect`) and **`String.format(Locale.getDefault(),
+  template, arg)` per-event inside the coroutine**. Use the explicit-`Locale`
+  `String.format` form — the bare Kotlin `.format()` extension trips detekt's
+  default-active `ImplicitDefaultLocale`. Note the asymmetry that makes this
+  confusing: `RelativeTime.format(context, …)` runs the *same* `context.getString`
+  but is NOT flagged, because its `context` is a plain function **parameter**, not
+  `LocalContext.current` — the lint only tracks values originating from
+  `LocalContext.current`, so threading a `Context` param is the other valid
+  escape. This is the fix recipe for the VM-layer strings in #218 and the
+  snackbar test in #219. Eviction criterion: #218 lands the VM-layer strings
+  using this pattern (establishing it in-code), or the lint check is
+  downgraded/removed.
+- **A stale local Gradle cache can fail at an *earlier* task than CI, masking
+  the real failure.** Reproducing #217's red CI locally, the first run failed at
+  `:app:kspDebugUnitTestKotlin` with `java.io.EOFException` (a corrupted
+  incremental/KSP cache artifact) — a task CI had sailed past. That masked the
+  ACTUAL failure three tasks later at `:app:lintDebug`; a `./gradlew clean`
+  cleared the EOFException and surfaced the real lint error. When a local
+  CI-reproduction hits an `EOFException`/odd cache error at a task CI passed,
+  clean-build before trusting the failure point — don't chase the phantom.
+  Eviction criterion: incremental KSP stops emitting cache EOFExceptions
+  (toolchain fix), or the repo pins `--no-build-cache` for local repro.
