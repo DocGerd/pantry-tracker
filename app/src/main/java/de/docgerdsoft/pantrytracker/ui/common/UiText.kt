@@ -35,6 +35,10 @@ sealed interface UiText {
         val args: List<UiText> = emptyList(),
     ) : UiText
 
+    // Dynamic format args require a vararg spread; the arg lists here are tiny
+    // (≤1 element), so the array-copy cost the SpreadOperator rule warns about is
+    // negligible.
+    @Suppress("SpreadOperator")
     fun resolve(context: Context): String = when (this) {
         is Raw -> value
         is Res ->

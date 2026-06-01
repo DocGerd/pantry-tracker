@@ -1,6 +1,5 @@
 package de.docgerdsoft.pantrytracker.ui.detail
 
-import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.common.UiText
 import org.junit.Assert.assertEquals

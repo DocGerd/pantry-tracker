@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.ui.scan
 
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -92,8 +93,7 @@ fun ScanScreen(
                     onBarcode = viewModel::onBarcodeDecoded,
                     onCameraError = { e ->
                         viewModel.onCameraError(
-                            e.message?.let { UiText.Raw(it) }
-                                ?: UiText.Res(R.string.scan_error_camera_unavailable),
+                            cameraErrorReason(e, R.string.scan_error_camera_unavailable),
                         )
                     },
                     modifier = Modifier.fillMaxSize(),
@@ -169,10 +169,16 @@ private fun BindTestCameraSource(
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            viewModel.onCameraError(
-                e.message?.let { UiText.Raw(it) }
-                    ?: UiText.Res(R.string.scan_error_camera_source),
-            )
+            viewModel.onCameraError(cameraErrorReason(e, R.string.scan_error_camera_source))
         }
     }
 }
+
+/**
+ * Maps a camera/scanner [Throwable] to the user-facing reason shown in the Scan
+ * error sheet: the exception message when present, otherwise the localized
+ * [fallback] resource. Extracted from [ScanScreen] so the elvis/safe-call stays
+ * out of that composable's CyclomaticComplexMethod budget.
+ */
+private fun cameraErrorReason(throwable: Throwable, @StringRes fallback: Int): UiText =
+    throwable.message?.let { UiText.Raw(it) } ?: UiText.Res(fallback)

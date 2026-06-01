@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.platform.app.InstrumentationRegistry
 import de.docgerdsoft.pantrytracker.PantryTrackerNavGraph
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.di.AppContainer
 import de.docgerdsoft.pantrytracker.testfixtures.FakeCameraSource
@@ -63,6 +64,11 @@ class ErrorToneSemanticsTest {
     @get:Rule
     val rule = createComposeRule()
 
+    // Resolve expected error copy from the resources so the assertions are
+    // locale-independent: the rendered text and the expectation both come from
+    // the same R.string entry, regardless of the device locale.
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+
     @Before
     fun grantCameraPermission() {
         InstrumentationRegistry.getInstrumentation().uiAutomation
@@ -100,20 +106,22 @@ class ErrorToneSemanticsTest {
         camera.emit("5449000000996")
 
         // ErrorSheet renders the error message as Text — wait for it to appear.
+        // Resolve the expected copy from the resource (FakeProductRepository
+        // threw RuntimeException("simulated network timeout")).
+        val expected = context.getString(R.string.error_read_inventory, "simulated network timeout")
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
-            rule.onAllNodesWithText("Couldn't read inventory:", substring = true)
+            rule.onAllNodesWithText(expected, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
-        // Explicit prefix assertion: message starts with the canonical "Couldn't <verb>:"
-        val nodes = rule.onAllNodesWithText("Couldn't read inventory:", substring = true)
+        // Explicit assertion: the resolved error message is displayed.
+        val nodes = rule.onAllNodesWithText(expected, substring = true)
             .fetchSemanticsNodes()
         assertTrue(
-            "Expected an on-screen error starting with 'Couldn't read inventory:' " +
-                "but found ${nodes.size} matching nodes",
+            "Expected an on-screen error '$expected' but found ${nodes.size} matching nodes",
             nodes.isNotEmpty(),
         )
-        rule.onNodeWithText("Couldn't read inventory:", substring = true).assertIsDisplayed()
+        rule.onNodeWithText(expected, substring = true).assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------
@@ -156,12 +164,14 @@ class ErrorToneSemanticsTest {
         rule.onNodeWithText("Name").performTextInput("Test Product")
         rule.onNodeWithText("Add to inventory").performClick()
 
-        // ErrorSheet with "Couldn't save:" prefix.
+        // ErrorSheet shows the resolved "Couldn't save: …" message
+        // (FakeProductRepository threw RuntimeException("disk full")).
+        val expected = context.getString(R.string.scan_error_save, "disk full")
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
-            rule.onAllNodesWithText("Couldn't save:", substring = true)
+            rule.onAllNodesWithText(expected, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithText("Couldn't save:", substring = true).assertIsDisplayed()
+        rule.onNodeWithText(expected, substring = true).assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------
@@ -218,12 +228,14 @@ class ErrorToneSemanticsTest {
         rule.onNodeWithText("Butter").performTextReplacement("Margarine")
         rule.onNodeWithText("Margarine").performImeAction()
 
-        // Detail screen shows the error via Snackbar — assert "Couldn't rename:" prefix.
+        // Detail screen shows the resolved "Couldn't rename: …" message via Snackbar
+        // (ErrorFakeRepository threw RuntimeException("permission denied")).
+        val expected = context.getString(R.string.detail_error_rename, "permission denied")
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
-            rule.onAllNodesWithText("Couldn't rename:", substring = true)
+            rule.onAllNodesWithText(expected, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithText("Couldn't rename:", substring = true).assertIsDisplayed()
+        rule.onNodeWithText(expected, substring = true).assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------

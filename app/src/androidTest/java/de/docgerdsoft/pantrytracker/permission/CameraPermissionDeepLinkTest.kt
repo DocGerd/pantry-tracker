@@ -11,10 +11,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.testfixtures.FakeIntentLauncher
 import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionGateContent
 import de.docgerdsoft.pantrytracker.ui.scan.CameraPermissionPhase
-import de.docgerdsoft.pantrytracker.ui.scan.SETTINGS_UNAVAILABLE_MESSAGE
 import de.docgerdsoft.pantrytracker.ui.scan.openAppSettings
 import de.docgerdsoft.pantrytracker.ui.theme.PantryTrackerTheme
 import org.junit.Assert.assertEquals
@@ -63,8 +63,8 @@ import org.junit.Test
  *     "Open settings", and asserts **at the seam**: `openAppSettings` swallowed
  *     the [android.content.ActivityNotFoundException] (the tap did not crash the
  *     test) and recorded exactly one intent. The Toast copy is pinned via the
- *     [SETTINGS_UNAVAILABLE_MESSAGE] constant, not an Espresso root matcher —
- *     Android 12+ Toasts are not inspectable via `isPlatformPopup()`.
+ *     `R.string.cam_error_settings_unavailable` resource, not an Espresso root
+ *     matcher — Android 12+ Toasts are not inspectable via `isPlatformPopup()`.
  */
 class CameraPermissionDeepLinkTest {
 
@@ -231,12 +231,12 @@ class CameraPermissionDeepLinkTest {
             1,
             fakeLauncher.launchedIntents.size,
         )
-        // Pin the exact OEM-fallback copy at its source-of-truth constant so a
-        // copy change is caught here without depending on the rendered Toast.
+        // Pin the exact OEM-fallback copy at its source-of-truth string resource
+        // so a copy change is caught here without depending on the rendered Toast.
         assertEquals(
             "Toast copy must match the project error-tone convention",
             "Couldn't open settings on this device",
-            SETTINGS_UNAVAILABLE_MESSAGE,
+            context.getString(R.string.cam_error_settings_unavailable),
         )
     }
 }
