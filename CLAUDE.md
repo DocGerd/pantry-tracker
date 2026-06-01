@@ -470,3 +470,22 @@ restructured to make the lesson load-bearing on its own.*
   filters, so even a docs-only PR runs the full emulator+coverage upload — the
   observation vehicle can be any PR. Eviction criterion: `codecov.yml` is removed,
   or both rulesets already require `codecov/project`.
+- **A Mermaid `sequenceDiagram` participant id must not be a reserved keyword —
+  and `off`/`on` are reserved (case-insensitively).** This repo's project-wide
+  shorthand "OFF" (Open Food Facts) as `participant OFF` produced, on GitHub's
+  renderer, `Parse error … Expecting 'ACTOR', got 'off'` and failed the *entire*
+  diagram (the collision surfaces wherever OFF appears in a participant position,
+  e.g. `Note over Repo,OFF`). Fix: rename the id and alias the display —
+  `participant OFFApi as Open Food Facts`. Two corollaries learned debugging #223:
+  (1) **punctuation in message text (after the `:`) is freeform/safe** — parens,
+  quotes, `→`, even a second `:` render fine; the trap is keyword collisions in
+  *participant positions*, NOT label punctuation. (2) **`stateDiagram-v2` labels
+  ARE stricter**: avoid unquoted `()` and literal `"` in transition labels
+  (`Expecting … got 'PS'`). Process lesson: there is **no local Mermaid renderer**
+  (no Node) and **grammar-reasoning review agents gave a false "all render-safe"**
+  twice — only the **rendered GitHub PR view** (human eyeball) reliably catches
+  these. Do not trust a subagent's Mermaid syntax verdict; have the diagrams
+  eyeballed on the PR. External render services (kroki/mermaid.ink) are blocked by
+  the sandbox classifier as exfil destinations — don't reach for them. Eviction
+  criterion: a Mermaid linter/renderer runs in CI, or the repo stops embedding
+  Mermaid.
