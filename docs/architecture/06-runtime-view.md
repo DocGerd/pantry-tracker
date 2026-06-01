@@ -13,17 +13,17 @@ sequenceDiagram
     participant Repo as ProductRepository
     participant OFFApi as Open Food Facts
     User->>CP: grant camera permission
-    CP->>VM: barcode decoded via ML Kit
-    VM->>VM: phase = Loading
-    VM->>Repo: lookupForPreview barcode
-    Repo->>Repo: findByBarcode returns null
-    Note over Repo,OFFApi: 30-day cache hit elides the OFF call
+    CP->>VM: barcode decoded (ML Kit)
+    VM->>VM: phase = Loading(barcode)
+    VM->>Repo: lookupForPreview(barcode)
+    Repo->>Repo: findByBarcode → null
+    Note over Repo,OFFApi: 30-day cache hit elides the Open Food Facts call
     Repo->>OFFApi: GET /api/v2/product/BARCODE.json
     OFFApi-->>Repo: 200 OK
-    Repo-->>VM: ScanCandidate.FromOff with name
-    VM->>VM: phase = Preview
+    Repo-->>VM: ScanCandidate.FromOff(name)
+    VM->>VM: phase = Preview(candidate)
     User->>VM: Confirm
-    VM->>Repo: addNew
+    VM->>Repo: addNew(...)
     VM->>VM: phase = Idle
 ```
 
@@ -70,14 +70,14 @@ sequenceDiagram
     actor User
     participant VM as ScanViewModel
     participant Repo as ProductRepository
-    Note over VM: mode = Remove, never calls OFF
-    VM->>VM: phase = Loading
-    VM->>Repo: findLocalByBarcode
-    Repo-->>VM: null or quantity 0
-    VM->>VM: phase = NotInInventory
+    Note over VM: mode = Remove (never calls Open Food Facts)
+    VM->>VM: phase = Loading(barcode)
+    VM->>Repo: findLocalByBarcode(barcode)
+    Repo-->>VM: null (or quantity 0)
+    VM->>VM: phase = NotInInventory(barcode)
     User->>VM: Switch to Add
-    VM->>VM: onSwitchToAdd sets mode = Add, phase = Loading
-    VM->>Repo: resolveBarcode
+    VM->>VM: onSwitchToAdd() → mode = Add, phase = Loading
+    VM->>Repo: resolveBarcode(barcode)
 ```
 
 Note: Remove mode does NOT call OFF. A local miss is unambiguously "nothing
@@ -98,11 +98,11 @@ sequenceDiagram
     participant Gate as CameraPermissionGate
     participant Settings as Android Settings
     Gate->>Gate: phase = HardDenied
-    User->>Gate: tap Open settings
-    Gate->>Settings: startActivity with APP_DETAILS intent
+    User->>Gate: tap "Open settings"
+    Gate->>Settings: startActivity(APP_DETAILS intent)
     User->>Settings: grant Camera permission
     Settings-->>Gate: ON_RESUME
-    Gate->>Gate: observer re-reads, phase = Granted
+    Gate->>Gate: DisposableEffect observer re-reads → phase = Granted
     Gate->>Gate: CameraPreview renders
 ```
 
@@ -120,16 +120,16 @@ sequenceDiagram
     participant VM as DetailViewModel
     participant Repo as ProductRepository
     User->>DS: navigate to detail screen
-    DS->>VM: observeById
-    User->>VM: rename newName
-    VM->>Repo: rename id, newName
+    DS->>VM: observeById(id)
+    User->>VM: rename(newName)
+    VM->>Repo: rename(id, newName)
     Repo--xVM: throws SQLException
-    VM->>VM: surfaceError with R.string.detail_error_rename
-    VM->>VM: error = UiText rendering Couldn't rename ...
+    VM->>VM: surfaceError(R.string.detail_error_rename, "rename", e)
+    VM->>VM: error = UiText rendering "Couldn't rename: …"
     VM-->>DS: error state
     DS->>User: snackbar
     User->>DS: dismiss
-    DS->>VM: dismissError
+    DS->>VM: dismissError()
 ```
 
 `surfaceError` in `DetailViewModel` is the canonical template that the M6
