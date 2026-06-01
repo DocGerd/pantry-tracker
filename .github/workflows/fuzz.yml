@@ -1,12 +1,25 @@
 name: Fuzz (Jazzer)
 
-# SR-144: non-gating, scheduled-plus-on-demand Jazzer fuzz job against
-# OffApiClient's JSON decode path. Framing per issue #144: this is
-# regression-catch quality, not OSS-Fuzz-grade fuzzing. Findings are
-# uploaded as workflow artifacts; the job is deliberately NOT in any
-# required-status-checks list — feature PRs do not block on it.
+# SR-144: Jazzer fuzz job against OffApiClient's JSON decode path. Framing
+# per issue #144: this is regression-catch quality, not OSS-Fuzz-grade
+# fuzzing. Two jobs (#230): `fuzz` runs the full ~5-minute coverage-guided
+# fuzz on the weekly schedule + manual dispatch; `regression` replays the
+# committed seed corpus (no fuzzing, seconds) on every PR as a fast guard
+# that the fuzz harness still wires up. Findings/reports are uploaded as
+# workflow artifacts. Neither job is in any required-status-checks list yet
+# — feature PRs do not block on them (the PR regression check may be promoted
+# to required later, once observed green).
 on:
   workflow_dispatch:
+  # #230: also run on PRs in fast regression mode (replay the committed seed
+  # corpus, no fuzzing) so a broken fuzz classpath can't slip through unrun
+  # again — the original break was invisible because this workflow was
+  # schedule-only. Intentionally no `paths:` filter: it matches the repo's
+  # other workflows and keeps this check safe to later promote to a required
+  # status check (a required check gated by `paths:` can deadlock PRs that
+  # don't touch those paths). The full ~5-minute fuzz stays schedule/dispatch-
+  # only — see the `if:` guards on the two jobs below.
+  pull_request:
   schedule:
     # Monday 04:15 UTC — deliberately offset from security.yml (Mon 06:00)
     # and codeql.yml (Wed 06:00) so the three scheduled security workflows
@@ -31,6 +44,10 @@ permissions:
 jobs:
   fuzz:
     name: Jazzer fuzz (OffApiClient)
+    # #230: the full coverage-guided fuzz (~5 min) runs only on the weekly
+    # schedule and manual dispatch — never on PRs, where the fast `regression`
+    # job below runs instead.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     # Hard ceiling on the whole job: 7 minutes. The @FuzzTest annotation's
     # `maxDuration = "5m"` is the per-method Jazzer ceiling; the additional
@@ -76,5 +93,49 @@ jobs:
             app/build/reports/tests/fuzzTest/
             app/build/test-results/fuzzTest/
             app/src/test/resources/de/docgerdsoft/pantrytracker/data/remote/OffApiClientFuzzTestInputs/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  regression:
+    name: Fuzz regression (seed corpus)
+    # #230: fast guard — replay the committed seed corpus through the fuzz
+    # harness in regression mode (JAZZER_FUZZ unset via -PfuzzRegression; no
+    # generative fuzzing, finishes in seconds, writes nothing). Runs on PRs and
+    # manual dispatch; the weekly `schedule` runs the full `fuzz` job instead.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    # Generous ceiling: the cost here is the Gradle build (compile the unit-test
+    # source set), not the replay itself (~1s). Belt-and-braces stop only.
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
+
+      - name: Run fuzz regression (replay seed corpus, no fuzzing)
+        # -PfuzzRegression leaves JAZZER_FUZZ unset, so Jazzer only replays the
+        # committed corpus under OffApiClientFuzzTestInputs/ and asserts the
+        # decode path doesn't crash on them. --no-daemon keeps the JVM lifecycle
+        # predictable; --stacktrace surfaces any Gradle-level wiring failure
+        # (the #230 class of bug) as a full trace in the job log.
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:fuzzTest -PfuzzRegression --no-daemon --stacktrace
+
+      - name: Upload regression report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: jazzer-regression-report
+          path: |
+            app/build/reports/tests/fuzzTest/
+            app/build/test-results/fuzzTest/
           if-no-files-found: ignore
           retention-days: 30
