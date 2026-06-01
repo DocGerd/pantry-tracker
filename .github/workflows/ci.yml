@@ -220,14 +220,14 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-      # Local mirror of the coverage gate (#219). Runs the LINE (statement)
-      # jacocoTestCoverageVerification on the merged unit + instrumented report as
-      # a fast in-job signal; the merged baseline is ~85.93% line. The enforced,
-      # merge-blocking gate is the `codecov/project` >=80% line-coverage status
-      # check (codecov.yml), added as a required check on the develop + main
-      # rulesets once it first reports green. This `androidTest` job's own check is
-      # not itself required, to avoid coupling merges to emulator-job reliability
-      # beyond the codecov status.
-      - name: Verify coverage ≥ 80% (local mirror of the codecov/project gate)
+      # The active coverage gate (#219). Runs the LINE (statement)
+      # jacocoTestCoverageVerification on the merged unit + instrumented report;
+      # the merged baseline is ~85.93% line. This is exactly what the **required
+      # `androidTest` status check** on the develop ruleset (16993554) runs — the
+      # active, merge-blocking coverage gate. A `codecov/project` >=80%
+      # line-coverage status check is also configured (codecov.yml) but does not
+      # currently post (account-level Codecov issue — #228), so it is NOT the
+      # required gate; the main ruleset (16948699) coverage promotion is deferred.
+      - name: Verify coverage ≥ 80% LINE (the required androidTest coverage gate)
         if: ${{ !cancelled() }}
         run: ./gradlew --no-daemon :app:jacocoTestCoverageVerification

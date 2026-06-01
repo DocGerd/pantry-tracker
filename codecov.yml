@@ -1,8 +1,12 @@
-# Codecov configuration — enforces the OpenSSF Silver test_statement_coverage80
-# MUST (#219). Codecov's `project` status measures merged LINE coverage parsed
-# from the JaCoCo XML uploaded by the emulator androidTest job in ci.yml — line
-# coverage == statement coverage. `project` is the enforced (merge-blocking, once
-# marked required on the rulesets) gate; `patch` is informational so a low-diff
+# Codecov configuration for the OpenSSF Silver test_statement_coverage80 MUST
+# (#219). Codecov's `project` status measures merged LINE coverage parsed from
+# the JaCoCo XML uploaded by the emulator androidTest job in ci.yml — line
+# coverage == statement coverage. NOTE: `codecov/project` does not currently
+# post on this repo (an account-level Codecov issue — #228), so it is NOT the
+# active gate; the merge-blocking coverage gate is instead the required
+# `androidTest` status check (jacocoTestCoverageVerification at 0.80 LINE) on the
+# develop ruleset. This `project` config is kept so the check can be promoted to
+# required once it starts posting green. `patch` is informational so a low-diff
 # PR is not blocked on per-diff coverage.
 coverage:
   status:
