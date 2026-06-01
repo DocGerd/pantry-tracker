@@ -106,4 +106,20 @@
         <item quantity="one">vor 1 Monat</item>
         <item quantity="other">vor %1$d Monaten</item>
     </plurals>
+
+    <!-- ViewModel-layer error strings (#218). Idiomatic German phrasing; the
+         ErrorToneSemanticsTest resolves via getString so it stays locale-correct. -->
+    <string name="error_unknown_reason">Unbekannter Fehler</string>
+    <string name="error_read_inventory">Bestand konnte nicht gelesen werden: %1$s</string>
+    <string name="scan_error_save">Speichern fehlgeschlagen: %1$s</string>
+    <string name="scan_error_open_camera">Kamera konnte nicht geöffnet werden: %1$s</string>
+    <string name="scan_error_camera_unavailable">Kamera nicht verfügbar</string>
+    <string name="scan_error_camera_source">Kameraquellenfehler</string>
+    <string name="detail_error_rename">Umbenennen fehlgeschlagen: %1$s</string>
+    <string name="detail_error_update_quantity">Menge konnte nicht aktualisiert werden: %1$s</string>
+    <string name="detail_error_save_restock">Nachkauf-Einstellungen konnten nicht gespeichert werden: %1$s</string>
+    <string name="detail_error_delete">Löschen fehlgeschlagen: %1$s</string>
+    <string name="buylist_error_load">Einkaufsliste konnte nicht geladen werden: %1$s</string>
+    <string name="buylist_error_restock">Nachkaufen fehlgeschlagen: %1$s</string>
+    <string name="cam_error_settings_unavailable">Einstellungen konnten auf diesem Gerät nicht geöffnet werden</string>
 </resources>
