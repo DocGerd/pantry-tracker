@@ -46,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +56,7 @@ import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.common.SnackbarEvent
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
+import java.util.Locale
 
 private const val OUT_OF_STOCK_ROW_ALPHA = 0.45f
 
@@ -79,10 +79,7 @@ fun HomeScreen(
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = onBuyListClick) {
-                        Icon(
-                            Icons.Filled.ShoppingCart,
-                            contentDescription = stringResource(R.string.cd_buying_list),
-                        )
+                        Icon(Icons.Filled.ShoppingCart, contentDescription = stringResource(R.string.cd_buying_list))
                     }
                 },
             )
@@ -90,10 +87,7 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { viewModel.openAddSheet() }) {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.cd_add_manually),
-                )
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_manually))
             }
         },
     ) { padding ->
@@ -320,14 +314,22 @@ private fun SnackbarEventCollector(
     viewModel: HomeViewModel,
     snackbarHostState: SnackbarHostState,
 ) {
-    val context = LocalContext.current
+    // Resolve format templates in composition (locale-correct via stringResource)
+    // and substitute the per-event arg inside the coroutine below. stringResource
+    // is @Composable-only, so it cannot be called from the collect block; reading
+    // strings off LocalContext.current there instead trips the Compose lint check
+    // LocalContextGetResourceValueCall.
+    val deletedTemplate = stringResource(R.string.home_deleted)
+    val undoLabel = stringResource(R.string.action_undo)
+    val errorDeleteTemplate = stringResource(R.string.home_error_delete)
+    val errorRestoreTemplate = stringResource(R.string.home_error_restore)
     LaunchedEffect(viewModel) {
         viewModel.snackbarEvents.collect { event ->
             when (event) {
                 is SnackbarEvent.Deleted -> {
                     val result = snackbarHostState.showSnackbar(
-                        message = context.getString(R.string.home_deleted, event.product.name),
-                        actionLabel = context.getString(R.string.action_undo),
+                        message = String.format(Locale.getDefault(), deletedTemplate, event.product.name),
+                        actionLabel = undoLabel,
                         duration = SnackbarDuration.Short,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
@@ -336,13 +338,13 @@ private fun SnackbarEventCollector(
                 }
                 is SnackbarEvent.DeleteFailed -> {
                     snackbarHostState.showSnackbar(
-                        message = context.getString(R.string.home_error_delete, event.name),
+                        message = String.format(Locale.getDefault(), errorDeleteTemplate, event.name),
                         duration = SnackbarDuration.Short,
                     )
                 }
                 is SnackbarEvent.RestoreFailed -> {
                     snackbarHostState.showSnackbar(
-                        message = context.getString(R.string.home_error_restore, event.name),
+                        message = String.format(Locale.getDefault(), errorRestoreTemplate, event.name),
                         duration = SnackbarDuration.Short,
                     )
                 }

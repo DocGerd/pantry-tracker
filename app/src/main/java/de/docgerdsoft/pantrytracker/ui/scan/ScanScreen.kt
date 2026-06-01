@@ -45,11 +45,7 @@ fun ScanScreen(
     BindTestCameraSource(cameraSource, viewModel)
 
     val topBarColor = if (state.mode == ScanMode.Add) AddGreen else RemoveRed
-    val topBarTitle = if (state.mode == ScanMode.Add) {
-        stringResource(R.string.scan_to_add)
-    } else {
-        stringResource(R.string.scan_to_remove)
-    }
+    val topBarTitle = stringResource(if (state.mode == ScanMode.Add) R.string.scan_to_add else R.string.scan_to_remove)
 
     // Haptic on transition into Preview/ManualEntry (i.e. each successful decode).
     // CONFIRM was added in API 30 (Android 11); fall back to KEYBOARD_TAP on
@@ -74,10 +70,7 @@ fun ScanScreen(
                 title = { Text(topBarTitle) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back),
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = topBarColor),
