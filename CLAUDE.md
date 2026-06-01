@@ -409,8 +409,8 @@ restructured to make the lesson load-bearing on its own.*
   (non-Robolectric) tests move the JVM-only number; the Compose UI
   screens (~69% of all instructions) and anything needing
   Robolectric/`Context` are unreachable for JVM-only coverage under the
-  current build config. The combined 86.85% that clears the OpenSSF
-  Silver `test_statement_coverage80` MUST comes from the **emulator
+  current build config. The combined ~85.93% line coverage that clears the
+  OpenSSF Silver `test_statement_coverage80` MUST comes from the **emulator
   `androidTest` `.ec`**, not Robolectric JVM tests. Do NOT run
   `:app:jacocoTestCoverageVerification` off-emulator — its 0.80 gate
   fails on the JVM-only ~19–25% BY DESIGN. To credit Robolectric/
