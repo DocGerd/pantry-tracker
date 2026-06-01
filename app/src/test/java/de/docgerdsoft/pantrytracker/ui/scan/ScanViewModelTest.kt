@@ -401,6 +401,27 @@ class ScanViewModelTest {
     }
 
     @Test
+    fun onBarcodeDecoded_repoThrowsNullMessage_usesUnknownReasonFallback() = runTest {
+        // A null exception message must surface the localized "unknown error"
+        // fallback as a nested UiText.Res — the only production path that emits a
+        // nested-Res arg (the rest carry the raw exception message).
+        fake.lookupShouldThrow = RuntimeException() // message == null
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("111")
+            awaitItem() // Loading
+            val error = awaitItem().phase as ScanUiState.Phase.Error
+            assertEquals(
+                UiText.Res(
+                    R.string.error_read_inventory,
+                    listOf(UiText.Res(R.string.error_unknown_reason)),
+                ),
+                error.message,
+            )
+        }
+    }
+
+    @Test
     fun confirm_applyDeltaThrows_transitionsToError() = runTest {
         val now = Clock.System.now()
         fake.seed(Product(id = 1, barcode = "x", name = "P", quantity = 0,

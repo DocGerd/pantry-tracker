@@ -94,12 +94,7 @@ class DetailViewModel(
         @Suppress("SwallowedException")
         logger.log(Level.WARNING, "$logTag failed", e)
         _uiState.update {
-            it.copy(
-                error = UiText.Res(
-                    messageId,
-                    listOf(e.message?.let { msg -> UiText.Raw(msg) } ?: UiText.Res(R.string.error_unknown_reason)),
-                ),
-            )
+            it.copy(error = UiText.causedError(messageId, R.string.error_unknown_reason, e))
         }
     }
 

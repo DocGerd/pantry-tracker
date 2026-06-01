@@ -35,13 +35,15 @@ import kotlin.time.Clock
  * Failure paths covered:
  *
  *  1. **Network/lookup failure during Scan-to-Add** — [FakeProductRepository.lookupShouldThrow]
- *     causes [ScanViewModel.resolveBarcode] to catch and transition to
- *     `Phase.Error("Couldn't read inventory: …")`. The [ErrorSheet] renders the
- *     message text so it is assertable via semantics.
+ *     causes [ScanViewModel.resolveBarcode] to catch and transition to a
+ *     `Phase.Error` whose `UiText` resolves (via `R.string.error_read_inventory`)
+ *     to "Couldn't read inventory: …". The [ErrorSheet] renders the resolved
+ *     text so it is assertable via semantics.
  *
  *  2. **Save failure after manual-entry confirm** — [FakeProductRepository.addShouldThrow]
- *     causes [ScanViewModel.submitManualEntry] to catch and transition to
- *     `Phase.Error("Couldn't save: …")`. The barcode resolves to an OFF miss
+ *     causes [ScanViewModel.submitManualEntry] to catch and transition to a
+ *     `Phase.Error` resolving (via `R.string.scan_error_save`) to
+ *     "Couldn't save: …". The barcode resolves to an OFF miss
  *     (null in [lookupResponses]) so the ManualEntry sheet appears first, then
  *     the Add button triggers the failure.
  *
@@ -52,10 +54,13 @@ import kotlin.time.Clock
  *     manual-entry sheet) so the test reaches the Detail screen with a single
  *     Home tap — avoiding the fragile add-sheet UI sequence on-device.
  *
- * These are prefix checks — asserting that the visible text STARTS WITH
- * "Couldn't " is the enforcement mechanism. A raw "java.lang.RuntimeException"
- * or "Error: …" message would fail the waitUntil condition and then the
- * assertIsDisplayed call, surfacing the regression immediately.
+ * Each assertion resolves its `expected` copy from the same `R.string` template
+ * the production code uses, with the injected exception reason interpolated, then
+ * asserts that full string is displayed — so the visible text must match the
+ * canonical "Couldn't <verb>: <reason>" copy exactly (locale-resolved via
+ * `getString`). A raw "java.lang.RuntimeException" or "Error: …" message would
+ * fail the waitUntil condition and then the assertIsDisplayed call, surfacing the
+ * regression immediately.
  *
  * Covers: UAT §15 row 1 [automated by SR-78].
  */
@@ -160,7 +165,7 @@ class ErrorToneSemanticsTest {
         }
 
         // Type a name into the "Name" field and confirm via "Add to inventory".
-        // submitManualEntry → addNew throws → Phase.Error("Couldn't save: …").
+        // submitManualEntry → addNew throws → Phase.Error resolving to "Couldn't save: …".
         rule.onNodeWithText("Name").performTextInput("Test Product")
         rule.onNodeWithText("Add to inventory").performClick()
 

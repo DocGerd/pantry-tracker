@@ -29,7 +29,9 @@ sealed interface UiText {
      *  exception message). */
     data class Raw(val value: String) : UiText
 
-    /** A string resource plus format args (themselves `UiText`, resolved first). */
+    /** A string resource plus format args (themselves `UiText`, resolved first).
+     *  Args resolve to strings, so the [id] template must use `%s` placeholders and
+     *  `args.size` must equal the template's placeholder count. */
     data class Res(
         @param:StringRes val id: Int,
         val args: List<UiText> = emptyList(),
@@ -47,5 +49,20 @@ sealed interface UiText {
             } else {
                 context.getString(id, *args.map { it.resolve(context) }.toTypedArray())
             }
+    }
+
+    companion object {
+        /**
+         * Builds a "Couldn't <verb>: <cause>" [Res]: the [messageId] template
+         * formatted with [cause]'s message, or the localized [unknownReasonId]
+         * fallback when that message is null. Centralizes the one-arg + fallback
+         * idiom shared by the ViewModel error helpers; [unknownReasonId] is a
+         * parameter (not hardcoded) so this generic type stays free of app `R`.
+         */
+        fun causedError(
+            @StringRes messageId: Int,
+            @StringRes unknownReasonId: Int,
+            cause: Throwable,
+        ): UiText = Res(messageId, listOf(cause.message?.let { Raw(it) } ?: Res(unknownReasonId)))
     }
 }

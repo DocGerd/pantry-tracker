@@ -36,13 +36,11 @@ class ScanViewModel(
     private var confirmJob: Job? = null
     private var manualEntryJob: Job? = null
 
-    // Wraps a caught exception as a localizable "Couldn't <verb>: <cause>" UiText.
-    // The cause is the exception message, or a localized "unknown error" fallback.
+    // Wraps a caught exception as a localizable "Couldn't <verb>: <cause>" UiText
+    // (exception message, or a localized "unknown error" fallback) via the shared
+    // UiText.causedError factory.
     private fun causedError(@StringRes messageId: Int, e: Exception): UiText =
-        UiText.Res(
-            messageId,
-            listOf(e.message?.let { UiText.Raw(it) } ?: UiText.Res(R.string.error_unknown_reason)),
-        )
+        UiText.causedError(messageId, R.string.error_unknown_reason, e)
 
     /**
      * Dispatch a barcode to the repository for resolution. De-duplicates the same

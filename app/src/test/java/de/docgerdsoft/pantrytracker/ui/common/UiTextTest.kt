@@ -7,8 +7,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class UiTextTest {
 
     private val context = ApplicationProvider.getApplicationContext<Context>()
@@ -37,5 +39,21 @@ class UiTextTest {
             listOf(UiText.Res(R.string.error_unknown_reason)),
         )
         assertEquals("Couldn't read inventory: unknown error", text.resolve(context))
+    }
+
+    @Test
+    fun causedError_withMessage_wrapsRawCause() {
+        assertEquals(
+            UiText.Res(R.string.scan_error_save, listOf(UiText.Raw("disk full"))),
+            UiText.causedError(R.string.scan_error_save, R.string.error_unknown_reason, RuntimeException("disk full")),
+        )
+    }
+
+    @Test
+    fun causedError_nullMessage_usesUnknownReasonFallback() {
+        assertEquals(
+            UiText.Res(R.string.scan_error_save, listOf(UiText.Res(R.string.error_unknown_reason))),
+            UiText.causedError(R.string.scan_error_save, R.string.error_unknown_reason, RuntimeException()),
+        )
     }
 }
