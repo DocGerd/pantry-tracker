@@ -400,14 +400,16 @@ tasks.register<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     violationRules {
         rule {
             limit {
-                counter = "INSTRUCTION"
+                counter = "LINE"
                 value = "COVEREDRATIO"
-                // SR-180 phase-2 gate: enforce the OpenSSF Silver
-                // test_statement_coverage80 MUST. Measured combined baseline
-                // (JVM unit + instrumented emulator) is 86.85% instruction, so
-                // 0.80 clears comfortably. Runs in the emulator CI job as a
-                // NON-required signal — never run :app:jacocoTestCoverageVerification
-                // off-emulator (JVM-only coverage is ~18.74% and would fail 0.80
+                // Enforces the OpenSSF Silver test_statement_coverage80 MUST.
+                // LINE is JaCoCo's statement-coverage counter; the measured
+                // combined baseline (JVM unit + instrumented emulator) is ~85.93%
+                // line, so 0.80 clears comfortably. The merge-blocking gate is the
+                // REQUIRED `codecov/project` >=80% check (#219), which also scores
+                // line coverage from this report's XML; this local task is a dev
+                // convenience. Never run :app:jacocoTestCoverageVerification
+                // off-emulator (JVM-only coverage is ~19% and would fail 0.80
                 // correctly; that is expected, not a reason to lower the gate).
                 minimum = "0.80".toBigDecimal()
             }
