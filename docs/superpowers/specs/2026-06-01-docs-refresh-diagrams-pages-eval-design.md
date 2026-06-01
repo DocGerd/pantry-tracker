@@ -194,7 +194,7 @@ maintenance budget; source of truth; dependency constraints; versioning), ground
 the pilot findings. The pilot **informs** the decision; it does not predetermine it.
 Hard constraints feeding the rationale: GOVERNANCE pins `docs/` as the canonical
 source of truth (a site must remain a *render*); the repo has **zero Python/Node
-toolchain** (54 `.md` files); GitHub already renders Mermaid natively.
+toolchain** (~46 tracked `.md` files); GitHub already renders Mermaid natively.
 
 ### B3. Branch on outcome
 

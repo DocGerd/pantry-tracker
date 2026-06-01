@@ -33,23 +33,6 @@ expiry-date tracking.
 
 See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
 
-## Documentation
-
-Full documentation lives under [`docs/`](docs/) and renders on GitHub — start at the
-**[documentation index](docs/README.md)** for a map and reading order. Highlights:
-
-- **[Architecture (arc42)](docs/architecture/01-introduction-and-goals.md)** — goals,
-  context, building blocks, runtime views, crosscutting concepts, and decisions
-  (with GitHub-rendered Mermaid diagrams).
-- **[Architecture Decision Records](docs/adr/)** — the numbered ADRs behind the design.
-- **[Security posture](docs/security-posture.md)** — plus the disclosure policy in
-  [`SECURITY.md`](SECURITY.md).
-- **[Release runbook](docs/release/SHIPPING.md)** — how a version is built, signed, and shipped.
-- **[Contributing](CONTRIBUTING.md)** and **[Governance](GOVERNANCE.md)**.
-
-Docs are kept as markdown-in-repo by
-[ADR-0007](docs/adr/0007-keep-documentation-markdown-in-repo.md) — no separate docs site.
-
 ## Screenshots
 
 _Screenshots are tracked in [#225](https://github.com/DocGerd/pantry-tracker/issues/225)._
@@ -109,10 +92,18 @@ list of what ships in the APK is in
 
 ## Documentation
 
-- [`docs/architecture/`](docs/architecture/) — arc42 architecture docs covering
-  all standard sections; read §1 and §3 first.
+Documentation is **markdown-in-repo, rendered by GitHub** (no separate docs site —
+see [ADR-0007](docs/adr/0007-keep-documentation-markdown-in-repo.md)). Start at the
+**[documentation index](docs/README.md)** for a map and reading order.
+
+- [`docs/README.md`](docs/README.md) — the docs index: reading order across the tree.
+- [`docs/architecture/`](docs/architecture/) — arc42 architecture docs covering all
+  standard sections (with GitHub-rendered Mermaid diagrams); read §1 and §3 first.
+- [`docs/adr/`](docs/adr/) — Architecture Decision Records (the numbered ADRs).
+- [`docs/security-posture.md`](docs/security-posture.md) — the living security
+  overview; [`SECURITY.md`](SECURITY.md) is how to report a vulnerability (privately).
+- [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) — the release runbook.
 - [`CHANGELOG.md`](CHANGELOG.md) — per-release notes (Keep a Changelog format).
-- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability (privately).
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute: the GitFlow
   workflow, branch naming, the review process, and the source-header convention.
 - [`GOVERNANCE.md`](GOVERNANCE.md) — the decision-making model (single-maintainer,

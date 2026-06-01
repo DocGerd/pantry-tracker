@@ -11,7 +11,7 @@ would have rendered was refreshed separately in
 
 ## Context
 
-The project's documentation is ~54 markdown files under `docs/` (arc42 12-section
+The project's documentation is ~46 tracked markdown files under `docs/` (arc42 12-section
 architecture, ADRs, security posture, the SHIPPING release runbook, UAT), rendered
 natively by GitHub and linked from `README.md` / `CONTRIBUTING.md` / `GOVERNANCE.md`.
 [`GOVERNANCE.md`](../../GOVERNANCE.md) §"What is canonical for handoff" pins the
