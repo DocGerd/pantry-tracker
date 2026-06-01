@@ -11,15 +11,15 @@ sequenceDiagram
     participant CP as CameraPreview
     participant VM as ScanViewModel
     participant Repo as ProductRepository
-    participant OFF
+    participant OFFApi as Open Food Facts
     User->>CP: grant camera permission
     CP->>VM: barcode decoded via ML Kit
     VM->>VM: phase = Loading
     VM->>Repo: lookupForPreview barcode
     Repo->>Repo: findByBarcode returns null
-    Note over Repo,OFF: 30-day cache hit elides the OFF call
-    Repo->>OFF: GET /api/v2/product/BARCODE.json
-    OFF-->>Repo: 200 OK
+    Note over Repo,OFFApi: 30-day cache hit elides the OFF call
+    Repo->>OFFApi: GET /api/v2/product/BARCODE.json
+    OFFApi-->>Repo: 200 OK
     Repo-->>VM: ScanCandidate.FromOff with name
     VM->>VM: phase = Preview
     User->>VM: Confirm
