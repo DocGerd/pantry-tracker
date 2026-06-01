@@ -29,12 +29,14 @@ import org.robolectric.annotation.GraphicsMode
  *
  * Verifies:
  *  - The app renders a recognisable light-mode scheme (§2 row 1).
- *  - The fern-green primary colour is visible on the top app bar in both light and dark modes
- *    (§2 row 2).
+ *  - The Fern-derived brand primary is visible on the top app bar in both light and dark modes
+ *    (§2 row 2). The visual intent ("Fern-derived brand colour present in both modes") holds;
+ *    note the literal dark hex is no longer Fern (see below).
  *
  * `qualifiers = "notnight-xxhdpi"` forces light mode; `qualifiers = "night-xxhdpi"` forces
- * dark mode.  Both use the same seed-fern primary (`Color(0xFF4F7942)`) because the project
- * uses the same `Fern` constant for both `lightColorScheme` and `darkColorScheme`.
+ * dark mode.  Light `primary` is the Fern seed `Color(0xFF4F7942)`; dark `primary` is its
+ * tone-80 derivative `Color(0xFFB4D49F)` (the M3-correct on-dark contrast tone), per the
+ * brand handoff's full light/dark role table in `Theme.kt`.
  *
  * ## Config notes
  * `sdk = [34]` is required for @GraphicsMode(NATIVE).
@@ -60,8 +62,9 @@ class ThemeScreenshotTest {
 
     /**
      * Dark-mode render of the same skeleton.
-     * Golden captures that the primary slot still uses the fern-green value in dark
-     * colour scheme (§2 row 2 — "primary colour fern green in both modes").
+     * Golden captures the dark primary slot — the Fern tone-80 derivative `#B4D49F`
+     * (§2 row 2 — read as "Fern-derived brand colour present in both modes"; the dark
+     * literal is the M3-correct lighter tone, not the raw Fern hex).
      */
     @Test
     @Config(qualifiers = "night-xxhdpi")

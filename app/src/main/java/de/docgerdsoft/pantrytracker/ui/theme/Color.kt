@@ -2,12 +2,12 @@ package de.docgerdsoft.pantrytracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Pantry/produce-evocative primary colour. Only the `primary` slot is
- *  overridden in [PantryTrackerTheme]; the rest of the scheme (secondary,
- *  tertiary, surface, error, …) comes from M3's hardcoded Baseline palette,
- *  not from this colour. True seed-derived tonal expansion would require
- *  `dynamicLightColorScheme(context)` (Android 12+, user-wallpaper-driven)
- *  or `material-color-utilities` — neither is wired up. */
+/** Pantry/produce-evocative seed colour — the single Fern accent of the
+ *  DocGerdSoft "one accent per product" identity. Used as the light-mode
+ *  `primary` and as the dark-mode `inversePrimary`. The full light/dark M3
+ *  tonal expansion seeded from this value lives inline in [PantryTrackerTheme]
+ *  (`lightColorScheme(...)` / `darkColorScheme(...)` in Theme.kt) — Fern is no
+ *  longer just a primary-only override over the M3 Baseline. */
 val Fern: Color = Color(0xFF4F7942)
 
 // Used by ScanButtonsRow in HomeScreen for the two big primary actions.

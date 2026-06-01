@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="560" viewBox="0 0 1280 560" role="img" aria-label="Pantry Tracker — scan a grocery barcode, confirm, and it's in your pantry">
+  <!--
+    README hero banner — VECTOR STOPGAP (1280x560).
+    Faithful approximation of the DocGerdSoft brand-doc .readme-hero block, NOT
+    pixel-exact. The committed Geist / Geist Mono webfonts cannot be embedded in
+    a repo SVG, so generic font families are used as a fallback (Geist / Geist
+    Mono is the authoritative spec face). The crisp, pixel-faithful artwork is
+    the DEFERRED 2560x1120 (2x) PNG export.
+    (C) 2026 Patrick Kuhn — DocGerdSoft (a brand of the individual, not a company).
+  -->
+  <defs>
+    <radialGradient id="fernBg" cx="18%" cy="16%" r="120%">
+      <stop offset="0%" stop-color="#5C8A4D"/>
+      <stop offset="46%" stop-color="#4F7942"/>
+      <stop offset="100%" stop-color="#39592F"/>
+    </radialGradient>
+    <!-- Faint white 44px datum grid, faded toward the bottom-right. -->
+    <pattern id="datumGrid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44,0 L0,0 L0,44" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.06"/>
+    </pattern>
+    <linearGradient id="gridFade" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="65%" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="gridMask">
+      <rect width="1280" height="560" fill="url(#gridFade)"/>
+    </mask>
+    <filter id="tileShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#1E2D18" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background: Fern radial gradient + masked datum grid. -->
+  <rect width="1280" height="560" fill="url(#fernBg)"/>
+  <rect width="1280" height="560" fill="url(#datumGrid)" mask="url(#gridMask)"/>
+
+  <!-- Left: white squircle icon tile, jars/shelf INVERTED to Fern. -->
+  <g transform="translate(96,188)" filter="url(#tileShadow)">
+    <rect x="0" y="0" width="184" height="184" rx="46" fill="#FBFBFC"/>
+    <!-- 108-grid icon centered in the 184 tile (scale 1.2, offset 27.2). -->
+    <g transform="translate(27.2,27.2) scale(1.2)" fill="#4F7942">
+      <!-- Left canister (short) + lid -->
+      <path d="M32.2,49 L39.8,49 A3.2,3.2 0 0 1 43,52.2 L43,65.8 A3.2,3.2 0 0 1 39.8,69 L32.2,69 A3.2,3.2 0 0 1 29,65.8 L29,52.2 A3.2,3.2 0 0 1 32.2,49 Z"/>
+      <path d="M32.5,44.4 L39.5,44.4 A1.5,1.5 0 0 1 41,45.9 L41,46.5 A1.5,1.5 0 0 1 39.5,48 L32.5,48 A1.5,1.5 0 0 1 31,46.5 L31,45.9 A1.5,1.5 0 0 1 32.5,44.4 Z"/>
+      <!-- Center canister (tall) + lid -->
+      <path d="M50.2,40 L57.8,40 A3.2,3.2 0 0 1 61,43.2 L61,65.8 A3.2,3.2 0 0 1 57.8,69 L50.2,69 A3.2,3.2 0 0 1 47,65.8 L47,43.2 A3.2,3.2 0 0 1 50.2,40 Z"/>
+      <path d="M50.5,35.4 L57.5,35.4 A1.5,1.5 0 0 1 59,36.9 L59,37.5 A1.5,1.5 0 0 1 57.5,39 L50.5,39 A1.5,1.5 0 0 1 49,37.5 L49,36.9 A1.5,1.5 0 0 1 50.5,35.4 Z"/>
+      <!-- Right canister (medium) + lid -->
+      <path d="M68.2,45 L75.8,45 A3.2,3.2 0 0 1 79,48.2 L79,65.8 A3.2,3.2 0 0 1 75.8,69 L68.2,69 A3.2,3.2 0 0 1 65,65.8 L65,48.2 A3.2,3.2 0 0 1 68.2,45 Z"/>
+      <path d="M68.5,40.4 L75.5,40.4 A1.5,1.5 0 0 1 77,41.9 L77,42.5 A1.5,1.5 0 0 1 75.5,44 L68.5,44 A1.5,1.5 0 0 1 67,42.5 L67,41.9 A1.5,1.5 0 0 1 68.5,40.4 Z"/>
+    </g>
+    <!-- Shelf = datum stroke, inverted to Fern. -->
+    <path d="M28,72 L80,72" transform="translate(27.2,27.2) scale(1.2)"
+          fill="none" stroke="#4F7942" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- Right: text block (all white). -->
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" fill="#FFFFFF">
+    <!-- Eyebrow: DocGerdSoft delta mark (shared mark-line.svg geometry) + label. -->
+    <g transform="translate(360,150)">
+      <g transform="scale(0.30)" fill="none" stroke="#FFFFFF" stroke-width="6.5">
+        <path d="M50 17.09 L88 82.91 L12 82.91 Z" stroke-linejoin="round"/>
+        <path d="M28.69 54 L71.31 54" stroke-linecap="round"/>
+      </g>
+      <text x="42" y="22" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            font-size="15" font-weight="500" letter-spacing="2.1" fill="#FFFFFF" fill-opacity="0.92">DOCGERDSOFT · OPEN TOOLS</text>
+    </g>
+
+    <!-- Title. -->
+    <text x="360" y="248" font-size="68" font-weight="600" letter-spacing="-2">Pantry Tracker</text>
+
+    <!-- One-liner (max ~42ch, wrapped). -->
+    <text x="360" y="300" font-size="20" font-weight="400" fill="#FFFFFF" fill-opacity="0.92">
+      <tspan x="360" dy="0">Scan a grocery barcode, confirm, and it's in</tspan>
+      <tspan x="360" dy="30">your pantry. Fully offline, single-user,</tspan>
+      <tspan x="360" dy="30">on-device. No accounts, no analytics.</tspan>
+    </text>
+
+    <!-- Pill row. -->
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="500">
+      <g transform="translate(360,418)">
+        <rect x="0" y="0" width="124" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="62" y="22" text-anchor="middle">Android 8.0+</text>
+      </g>
+      <g transform="translate(496,418)">
+        <rect x="0" y="0" width="248" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="124" y="22" text-anchor="middle">Jetpack Compose · Material 3</text>
+      </g>
+      <g transform="translate(756,418)">
+        <rect x="0" y="0" width="128" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="64" y="22" text-anchor="middle">Room · offline</text>
+      </g>
+      <g transform="translate(360,464)">
+        <rect x="0" y="0" width="112" height="34" rx="17" fill="#FFFFFF" fill-opacity="0.13" stroke="#FFFFFF" stroke-opacity="0.22"/>
+        <text x="56" y="22" text-anchor="middle">Apache-2.0</text>
+      </g>
+    </g>
+  </g>
+</svg>

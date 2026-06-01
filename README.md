@@ -1,5 +1,13 @@
 # Pantry Tracker
 
+<!--
+  Hero banner (vector stopgap). Recommended export: render docs/brand/hero.svg
+  (or the brand-doc `.readme-hero` HTML at 2x) to docs/brand/hero.png at
+  2560x1120 and swap the src below to the PNG for a crisp GitHub
+  social-preview / Open Graph card. DEFERRED to the maintainer.
+-->
+<img src="docs/brand/hero.svg" alt="Pantry Tracker — scan a grocery barcode, confirm, and it's in your pantry. Fully offline, single-user, on-device." width="100%">
+
 [![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/DocGerd/pantry-tracker/branch/develop/graph/badge.svg)](https://codecov.io/gh/DocGerd/pantry-tracker)
