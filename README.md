@@ -16,6 +16,13 @@ all of it stored in a local Room/SQLite database that works fully offline. The
 only network call the app ever makes is the anonymous barcode lookup; there are
 no accounts, no analytics, and no crash reporter.
 
+<!--
+  Hero banner (vector stopgap). The crisp 2560x1120 PNG export (render this SVG
+  or the brand-doc `.readme-hero` at 2x) is DEFERRED to the maintainer; swap the
+  src below to docs/brand/hero.png once it exists for a sharp social-preview card.
+-->
+<img src="docs/brand/hero.svg" alt="Pantry Tracker — scan a grocery barcode, confirm, and it's in your pantry. Fully offline, single-user, on-device." width="100%">
+
 ## Scope / Status
 
 - **v1.0.0** (2026-05-18) through **v1.3.1** (2026-05-29) have shipped as **signed

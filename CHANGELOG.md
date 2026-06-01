@@ -21,9 +21,21 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
   Toast) externalized to string resources with German translations via a new
   `UiText` resolvable-text type, completing the internationalization sweep
   (#218, #168).
+- Monochrome / themed-icon layer (Android 13+) on the adaptive launcher icon, so
+  the OS can tint the canisters-and-shelf foreground to the user's monochrome theme.
+- README hero banner (`docs/brand/hero.svg`) and store-style screenshots; the
+  crisp 2560×1120 PNG export of the hero is deferred to the maintainer.
 
 ### Changed
 
+- Refined the adaptive launcher-icon foreground geometry: the three flat
+  rectangles become rounded three-height pantry canisters with recessed lids,
+  and the shelf is redrawn as the DocGerdSoft datum stroke — all white on the
+  unchanged Fern `#4F7942` background.
+- Expanded the Material 3 theme from the previous primary-only override into a
+  full hand-built light/dark colour scheme seeded from Fern `#4F7942` (every M3
+  role mapped to hex). The `AddGreen` / `RemoveRed` verb accents are retained as
+  brand constants outside the scheme.
 - Backed the ≥80% statement-coverage gate by promoting the emulator-backed
   `androidTest` CI job (which runs `:app:jacocoTestCoverageVerification` at 0.80
   LINE on the merged unit + instrumented JaCoCo report; baseline ~85.93% line)
