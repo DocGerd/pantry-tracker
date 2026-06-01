@@ -454,24 +454,39 @@ restructured to make the lesson load-bearing on its own.*
   Eviction criterion: incremental KSP stops emitting cache EOFExceptions
   (toolchain fix), or the repo pins `--no-build-cache` for local repro.
 - **`codecov/project` never posts on this repo — the coverage gate is the
-  emulator `androidTest` job, not Codecov.** The plan in #219 was to promote
-  `codecov/project` (>=80% LINE, configured in `codecov.yml`) to a required
-  ruleset check, but it *never materialises* as a status check — an
-  account-level Codecov problem (cross-repo-confirmed against the sibling
-  hangarfit repo, so not per-repo/default-branch config), tracked in **#228**.
-  So on 2026-06-01 the **`androidTest`** job (which runs
-  `:app:jacocoTestCoverageVerification` at the 0.80 LINE gate on the merged
-  unit + instrumented JaCoCo report) was promoted instead and is the **active
-  required coverage check on the develop ruleset `16993554`** (now requires
-  `build` + `androidTest`). The main ruleset `16948699` stays **build-only**;
-  its coverage promotion is deferred to a future release. General lesson that
-  still holds: never promote a check to **required** until you have *observed*
-  it post green on a real PR — a required check that never posts deadlocks
-  every merge (exactly the trap `codecov/project` would have been). CI has zero
-  path filters, so even a docs-only PR runs the full emulator+coverage upload —
-  any PR is a valid observation vehicle. Bitten on #219/#222 (develop)
-  2026-06-01. Eviction criterion: `codecov.yml` is removed, or `codecov/project`
-  starts posting and is itself promoted to required (resolving #228).
+  emulator `androidTest` job, not Codecov. #228 CLOSED won't-fix (2026-06-01).**
+  The plan in #219 was to promote `codecov/project` (>=80% LINE, configured in
+  `codecov.yml`) to a required ruleset check, but it *never materialises* as a
+  status check — an **account/installation-level** Codecov fault, conclusively
+  isolated 2026-06-01 by a clean race-free re-test (PR #234): Codecov computed
+  the comparison (base/head totals, `ci_passed`) and posted `codecov/patch` but
+  dropped `codecov/project` from both the commit-status and check-runs APIs,
+  even with the project-enabling `codecov.yml` on both the head commit and the
+  (corrected) default branch. That rules out plan, default-branch, yaml-source,
+  config, and the GitHub-App `statuses:write` permission (patch posts through
+  the same path). **NOT plan-gated — do not re-investigate the Pro-plan
+  hypothesis:** for PUBLIC repos `codecov/project` is FREE; the only documented
+  restriction is *private* repos on the free/Team plan (Codecov FAQ; the
+  pricing page's "Project Coverage: not included" Developer/Team cell is
+  unqualified and overridden by the FAQ). The earlier "cross-confirmed via
+  hangarfit" reasoning is **weak** — hangarfit has no `codecov.yml` and Codecov
+  doesn't post project unless configured, so its patch-only is just the default.
+  So the **`androidTest`** job (`:app:jacocoTestCoverageVerification` at the
+  0.80 LINE gate on the merged unit + instrumented JaCoCo report) is the
+  **PERMANENT required coverage check on the develop ruleset `16993554`**
+  (requires `build` + `androidTest`). The main ruleset `16948699` stays
+  **build-only**; coverage promotion deferred to a future release. **General
+  lesson that still holds:** never promote a check to **required** until you
+  have *observed* it post green on a real PR — a required check that never
+  posts deadlocks every merge (the trap `codecov/project` would have been). CI
+  has zero path filters, so any PR (even docs-only) runs the full
+  emulator+coverage upload and is a valid observation vehicle. If
+  `codecov/project` is ever wanted again, a Codecov/Sentry support ticket is
+  the only lever, and switch `codecov.yml` `project.target` 80%→`auto` first
+  (its partial-counting metric ~77% < the JaCoCo LINE 85.93% → would post red).
+  Bitten #219/#222; closed won't-fix #228 (2026-06-01). Eviction criterion:
+  `codecov.yml` is removed, or `codecov/project` starts posting and is promoted
+  to required.
 - **A Mermaid `sequenceDiagram` participant id must not be a reserved keyword —
   and `off`/`on` are reserved (case-insensitively).** This repo's project-wide
   shorthand "OFF" (Open Food Facts) as `participant OFF` produced, on GitHub's
