@@ -442,8 +442,19 @@ restructured to make the lesson load-bearing on its own.*
   `AppIconScreenshotTest` paints the launcher drawable on a hardcoded `#4F7942`
   background (theme-independent — they stale only on an icon-asset change). #238
   was reverted for `@Ignore`-ing the rest instead of regenerating (#236/PR #239
-  did it correctly). Eviction criterion: the `upload-artifact` golden-emit step
-  leaves `ci.yml`, or the screenshot suite is removed.
+  did it correctly). **The inverse also bites — don't *over*-scope.** A
+  theme/colour change stales a golden ONLY if some golden actually renders the
+  changed role: #240 set 8 surface-tint roles (surfaceContainer*/surfaceBright/
+  surfaceDim/scrim/surfaceTint) yet staled **zero** goldens — none of the 11
+  render them (they paint only `background`/`primary`/`surfaceVariant`, and
+  `ScreenshotTestBase.renderToBitmap`'s decorView background comes from the
+  Android XML theme, not the Compose scheme). Before committing to the
+  multi-CI-round regen dance, `grep` the screenshot-test *sources*
+  (`app/src/test/.../screenshot/`) for the changed `colorScheme.<role>` names
+  plus `Surface(`/`Card(`/`tonalElevation` (elevation overlays `surfaceTint`);
+  no match → no golden stales → no round-trip. Eviction criterion: the
+  `upload-artifact` golden-emit step leaves `ci.yml`, or the screenshot suite is
+  removed.
 - **Reading string resources inside a Compose coroutine trips the
   `LocalContextGetResourceValueCall` lint check.** This AGP/Compose-UI lint
   (error severity on the repo's Compose BOM) fires when a `@Composable` reads
