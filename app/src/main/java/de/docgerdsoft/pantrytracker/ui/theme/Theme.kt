@@ -15,8 +15,8 @@ import androidx.compose.ui.graphics.Color
 // material-color-utilities (HCT) at the M3 surface-role tones, replacing the
 // former M3 Baseline-purple fallback (#240; previously a faint off-brand tint on
 // ModalBottomSheets, which use surfaceContainerLow). The generated neutral ramp
-// was reconciled against the handoff — it matches the handoff's
-// surface/surfaceContainer/surfaceVariant within rounding, so roles that share a
+// was reconciled against the handoff — it matches the handoff's neutral roles
+// (surface, surfaceContainer) within rounding, so roles that share a
 // tone with an existing role are pinned to the handoff value (surfaceBright and
 // surfaceDim share surface's tone; surfaceTint equals primary) and only the
 // genuinely-new tones take generator output. The AddGreen/RemoveRed verb accents
