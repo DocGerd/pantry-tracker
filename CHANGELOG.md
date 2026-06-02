@@ -35,9 +35,12 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 - Expanded the Material 3 theme from the previous primary-only override into a
   full hand-built light/dark colour scheme seeded from Fern `#4F7942` (the
   primary/secondary/tertiary/error/surface/outline/inverse roles mapped to hex;
-  the surface-tint tonal variants still fall back to M3 defaults, pending a
-  generator-seeded follow-up). The `AddGreen` / `RemoveRed` verb accents are
-  retained as brand constants outside the scheme.
+  the surface-tint tonal variants — surfaceContainerLowest/Low/High/Highest,
+  surfaceBright, surfaceDim, scrim, surfaceTint — seeded from Fern's neutral
+  tonal palette via material-color-utilities (HCT), so ModalBottomSheets and
+  other surface-tinted components no longer fall back to the M3 Baseline-purple
+  tint; #236/#240). The `AddGreen` / `RemoveRed` verb accents are retained as
+  brand constants outside the scheme.
 - Backed the ≥80% statement-coverage gate by promoting the emulator-backed
   `androidTest` CI job (which runs `:app:jacocoTestCoverageVerification` at 0.80
   LINE on the merged unit + instrumented JaCoCo report; baseline ~85.93% line)
