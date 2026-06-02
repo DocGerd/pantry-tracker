@@ -55,6 +55,7 @@ import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.common.SnackbarEvent
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
+import de.docgerdsoft.pantrytracker.ui.theme.OnVerb
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 import java.util.Locale
 
@@ -161,7 +162,10 @@ private fun ScanButtonsRow(
         Button(
             onClick = onAddClick,
             modifier = Modifier.weight(1f).height(80.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AddGreen),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AddGreen,
+                contentColor = OnVerb,
+            ),
         ) {
             Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
             Spacer(Modifier.width(8.dp))
@@ -170,7 +174,10 @@ private fun ScanButtonsRow(
         Button(
             onClick = onRemoveClick,
             modifier = Modifier.weight(1f).height(80.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = RemoveRed),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = RemoveRed,
+                contentColor = OnVerb,
+            ),
         ) {
             Icon(Icons.Filled.Remove, contentDescription = null)
             Spacer(Modifier.width(8.dp))
