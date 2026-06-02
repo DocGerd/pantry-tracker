@@ -10,12 +10,17 @@ import androidx.compose.ui.graphics.Color
 // Material 3 light/dark schemes seeded from Fern (#4F7942). The primary,
 // secondary, tertiary, error, surface, outline and inverse roles map verbatim
 // to the DocGerdSoft brand handoff's role->hex table. The surface-tint tonal
-// variants NOT set here (surfaceContainerLowest/Low/High/Highest, surfaceBright,
-// surfaceDim, scrim, surfaceTint) fall back to the M3 Baseline neutral palette,
-// not to Fern-derived tones — a documented gap (visible as a faint off-brand
-// tint on ModalBottomSheets, which use surfaceContainerLow); seeding them from
-// Fern via material-color-utilities is a follow-up. The AddGreen/RemoveRed verb
-// accents stay outside this scheme (see Color.kt).
+// variants (surfaceContainerLowest/Low/High/Highest, surfaceBright, surfaceDim,
+// scrim, surfaceTint) are seeded from Fern's neutral tonal palette via
+// material-color-utilities (HCT) at the M3 surface-role tones, replacing the
+// former M3 Baseline-purple fallback (#240; previously a faint off-brand tint on
+// ModalBottomSheets, which use surfaceContainerLow). The generated neutral ramp
+// was reconciled against the handoff — it matches the handoff's neutral roles
+// (surface, surfaceContainer) within rounding, so roles that share a
+// tone with an existing role are pinned to the handoff value (surfaceBright and
+// surfaceDim share surface's tone; surfaceTint equals primary) and only the
+// genuinely-new tones take generator output. The AddGreen/RemoveRed verb accents
+// stay outside this scheme (see Color.kt).
 private val LightColors = lightColorScheme(
     primary = Fern,
     onPrimary = Color(0xFFFFFFFF),
@@ -40,6 +45,14 @@ private val LightColors = lightColorScheme(
     surfaceVariant = Color(0xFFDEE5D8),
     onSurfaceVariant = Color(0xFF424940),
     surfaceContainer = Color(0xFFECEFE4),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF3F4EC),
+    surfaceContainerHigh = Color(0xFFE7E9E1),
+    surfaceContainerHighest = Color(0xFFE2E3DB),
+    surfaceBright = Color(0xFFF8FBF1),
+    surfaceDim = Color(0xFFD9DBD3),
+    surfaceTint = Fern,
+    scrim = Color(0xFF000000),
     outline = Color(0xFF72796D),
     outlineVariant = Color(0xFFC2C9BB),
     inverseSurface = Color(0xFF2E322B),
@@ -71,6 +84,14 @@ private val DarkColors = darkColorScheme(
     surfaceVariant = Color(0xFF424940),
     onSurfaceVariant = Color(0xFFC2C9BB),
     surfaceContainer = Color(0xFF1D211A),
+    surfaceContainerLowest = Color(0xFF0C0F0B),
+    surfaceContainerLow = Color(0xFF1A1C18),
+    surfaceContainerHigh = Color(0xFF282B26),
+    surfaceContainerHighest = Color(0xFF333630),
+    surfaceBright = Color(0xFF373A34),
+    surfaceDim = Color(0xFF11140E),
+    surfaceTint = Color(0xFFB4D49F),
+    scrim = Color(0xFF000000),
     outline = Color(0xFF8C9387),
     outlineVariant = Color(0xFF424940),
     inverseSurface = Color(0xFFE1E4D9),
