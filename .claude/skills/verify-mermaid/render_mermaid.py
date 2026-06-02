@@ -140,6 +140,12 @@ def preflight(doc, start, body):
                 label_text = (label_text or "") + " " + piece
         if label_text:
             stripped = label_text
+            # Strip Mermaid-supported inline HTML tags (<br>, <b>, …) BEFORE
+            # hunting for raw angle brackets — they are valid label formatting,
+            # not the <placeholder> trap. Without this we false-WARN on every
+            # <br/> in the repo's own node labels (03-/05- arc42 diagrams).
+            stripped = re.sub(r"</?(?:br|b|i|u|em|strong|sup|sub)\s*/?>", " ",
+                              stripped, flags=re.IGNORECASE)
             for a in sorted(SEQ_ARROWS, key=len, reverse=True):
                 stripped = stripped.replace(a, " ")
             if "<" in stripped or ">" in stripped:
@@ -209,11 +215,13 @@ def find_chrome():
 
 
 def render(html, mermaid_js, out_png, n_fences):
+    """Render to out_png. Returns one of "ok" | "no-chrome" | "no-png" and
+    NEVER raises, so a render problem stays advisory and the per-doc loop keeps
+    going. The caller surfaces this status on stdout AND in the Summary, so a
+    skipped/failed render can never read as a pass."""
     chrome = find_chrome()
     if not chrome:
-        print("  ! No Chrome/Chromium found — skipping visual render "
-              "(pre-flight greps above still ran).", file=sys.stderr)
-        return False
+        return "no-chrome"
     work = tempfile.mkdtemp(prefix="verify-mermaid-")
     try:
         shutil.copy(mermaid_js, os.path.join(work, "mermaid.min.js"))
@@ -226,27 +234,44 @@ def render(html, mermaid_js, out_png, n_fences):
                "--virtual-time-budget=8000",
                f"--screenshot={out_png}", f"--window-size=1400,{height}",
                f"file://{html_path}"]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"  ! Chrome render errored ({type(e).__name__}): {e}",
+                  file=sys.stderr)
+            return "no-png"
         if not os.path.exists(out_png):
             print(f"  ! Chrome render produced no PNG. stderr tail:\n"
                   f"    {res.stderr.strip()[-400:]}", file=sys.stderr)
-            return False
-        return True
+            return "no-png"
+        return "ok"
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
 def changed_markdown():
+    """Returns (any_ok, files). `any_ok` is False only if EVERY git probe
+    failed (origin/develop unfetched, not a repo, …) — letting the caller tell
+    "git couldn't compute the change set" apart from "genuinely no changed .md",
+    instead of silently reporting nothing-to-check as all-clear."""
     files = set()
-    for args in (["git", "diff", "--name-only"],
-                 ["git", "diff", "--name-only", "--cached"],
-                 ["git", "diff", "--name-only", "origin/develop...HEAD"]):
+    any_ok = False
+    for cmd in (["git", "diff", "--name-only"],
+                ["git", "diff", "--name-only", "--cached"],
+                ["git", "diff", "--name-only", "origin/develop...HEAD"]):
         try:
-            out = subprocess.run(args, capture_output=True, text=True).stdout
-            files.update(f for f in out.splitlines() if f.endswith(".md"))
-        except Exception:
-            pass
-    return sorted(f for f in files if os.path.exists(f))
+            r = subprocess.run(cmd, capture_output=True, text=True)
+        except Exception as e:
+            print(f"  ! git probe {' '.join(cmd)} raised: {e}", file=sys.stderr)
+            continue
+        if r.returncode != 0:
+            first = (r.stderr.strip().splitlines() or [""])[0]
+            print(f"  ! git probe {' '.join(cmd)} failed (rc={r.returncode}): "
+                  f"{first}", file=sys.stderr)
+            continue
+        any_ok = True
+        files.update(f for f in r.stdout.splitlines() if f.endswith(".md"))
+    return any_ok, sorted(f for f in files if os.path.exists(f))
 
 
 def main():
@@ -256,10 +281,28 @@ def main():
     ap.add_argument("--out", default=None, help="output dir for the PNG")
     args = ap.parse_args()
 
-    files = args.files or changed_markdown()
-    if not files:
-        print("No Markdown files to check (pass paths or have changed *.md).")
-        return 0
+    # Resolve the file list. Explicit paths are validated up front — a typo must
+    # not crash with a traceback nor be mistaken for a trap. With no paths, fall
+    # back to the changed Markdown, distinguishing "git couldn't tell me" from
+    # "genuinely nothing changed".
+    if args.files:
+        missing = [f for f in args.files if not os.path.exists(f)]
+        if missing:
+            print("ERROR: file(s) not found: " + ", ".join(missing),
+                  file=sys.stderr)
+            return 3
+        files = args.files
+    else:
+        git_ok, files = changed_markdown()
+        if not files:
+            if not git_ok:
+                print("Could not compute the changed Markdown set — every git "
+                      "probe failed (see stderr). Pass file paths explicitly; "
+                      "NOT verified.", file=sys.stderr)
+                return 2
+            print("No changed Markdown files to check (pass paths to force).")
+            return 0
+
     if not os.path.exists(args.mermaid_js):
         print(f"ERROR: vendored mermaid.min.js not found at {args.mermaid_js}",
               file=sys.stderr)
@@ -270,6 +313,7 @@ def main():
 
     grand_fences = 0
     grand_errors = 0
+    grand_rendered = 0
     # One PNG PER changed doc (issue #248 acceptance), so a many-fence doc never
     # clips and each diagram is traceable to its source file.
     for path in files:
@@ -297,22 +341,43 @@ def main():
 
         safe = path.replace(os.sep, "__").removesuffix(".md") + ".png"
         out_png = os.path.join(out_dir, safe)
-        if render(build_html(html_fences), args.mermaid_js, out_png, len(fences)):
+        status = render(build_html(html_fences), args.mermaid_js, out_png,
+                        len(fences))
+        if status == "ok":
+            grand_rendered += len(fences)
             print(f"  -- render --\n  Rendered → {out_png}")
             print("  EYEBALL IT: Read the PNG. A Mermaid error graphic (the bomb "
                   "'Syntax error in text') vs a real diagram = that fence failed "
                   "to parse.")
+        elif status == "no-chrome":
+            print("  -- render: SKIPPED — no Chrome/Chromium found. THE VISUAL "
+                  "LAYER DID NOT RUN; the greps above do NOT catch every parse "
+                  "error. NOT render-safe.")
+        else:  # "no-png"
+            print("  -- render: FAILED — Chrome produced no PNG (see stderr). "
+                  "THE VISUAL LAYER DID NOT RUN. NOT render-safe.")
         print()
 
+    incomplete = grand_fences and grand_rendered < grand_fences
     print("== Summary ==")
     print(f"  {grand_fences} fence(s) across {len(files)} file(s); "
+          f"{grand_rendered}/{grand_fences} rendered to PNG; "
           f"{grand_errors} deterministic ERROR(s).")
+    if incomplete:
+        print("  WARNING: not every fence was rendered — the visual eyeball is "
+              "INCOMPLETE. Do NOT report render-safe.")
     print("== Authority ==")
     print("  This is a STRONG PRE-CHECK, not the final authority. The rendered "
           "GitHub PR view is authoritative for Mermaid — do NOT claim "
           "render-safe from this tool (or from agent reasoning) alone.")
 
-    return 1 if grand_errors else 0
+    # Exit: 1 = deterministic ERROR trap; 2 = ran but verification INCOMPLETE
+    # (a render was skipped/failed); 0 = clean + fully rendered.
+    if grand_errors:
+        return 1
+    if incomplete:
+        return 2
+    return 0
 
 
 if __name__ == "__main__":

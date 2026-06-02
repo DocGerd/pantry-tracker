@@ -30,8 +30,14 @@ python3 .claude/skills/verify-mermaid/render_mermaid.py [FILE.md ...]
   `mermaid.min.js` next to the script: pinned **mermaid 10.9.6** UMD,
   gitleaks-clean, committed so rendering needs no network).
 
-Exit code is non-zero **only** when a deterministic ERROR-level trap is found;
-WARN-level findings and the render are advisory (you must eyeball the PNG).
+Exit codes: **0** = ran fully (every fence rendered) and no ERROR traps; **1** =
+a deterministic ERROR trap was found; **2** = ran but verification is
+**INCOMPLETE** — a render was skipped/failed (e.g. no Chrome) or the changed-set
+couldn't be computed, so you must **not** report render-safe; **3** = setup error
+(the vendored `mermaid.min.js`, or an explicitly-passed file, is missing).
+WARN-level findings stay advisory — eyeball the PNG regardless. The Summary line
+prints `<rendered>/<total> rendered`, so "checked nothing visually" can never be
+mistaken for "checked everything and it's clean".
 
 ## Two layers (neither is the final authority)
 
