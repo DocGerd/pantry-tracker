@@ -42,6 +42,7 @@ import de.docgerdsoft.pantrytracker.repository.ScanCandidate
 import de.docgerdsoft.pantrytracker.ui.common.sanitizeQuantityInput
 import de.docgerdsoft.pantrytracker.ui.scan.ScanMode
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
+import de.docgerdsoft.pantrytracker.ui.theme.OnVerb
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -127,6 +128,7 @@ fun ScanPreviewSheet(
                     onClick = onConfirm,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (mode == ScanMode.Add) AddGreen else RemoveRed,
+                        contentColor = OnVerb,
                     ),
                 ) {
                     Text(stringResource(if (mode == ScanMode.Add) R.string.scan_confirm_add else R.string.scan_confirm_remove))
@@ -224,7 +226,10 @@ fun NotInInventorySheet(
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onSwitchToAdd,
-                colors = ButtonDefaults.buttonColors(containerColor = AddGreen),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AddGreen,
+                    contentColor = OnVerb,
+                ),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Filled.Add, contentDescription = null)

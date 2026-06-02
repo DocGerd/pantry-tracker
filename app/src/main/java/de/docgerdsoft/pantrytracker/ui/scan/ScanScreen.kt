@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -32,6 +33,7 @@ import de.docgerdsoft.pantrytracker.ui.scan.components.ManualEntrySheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.NotInInventorySheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.ScanPreviewSheet
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
+import de.docgerdsoft.pantrytracker.ui.theme.OnVerb
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 import kotlinx.coroutines.CancellationException
 
@@ -68,17 +70,7 @@ fun ScanScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(topBarTitle) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = topBarColor),
-            )
-        },
+        topBar = { ScanTopBar(topBarTitle, topBarColor, onNavigateBack) },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             // Skip the real CameraX/ML Kit binding when a test [CameraSource]
@@ -133,6 +125,38 @@ fun ScanScreen(
             }
         }
     }
+}
+
+/**
+ * Scan top app bar. The container is the verb-accent fill ([AddGreen] /
+ * [RemoveRed]); the title + back-arrow foreground is pinned to [OnVerb] (white)
+ * so it reads on the fill in BOTH light and dark — the M3 default content colour
+ * flips dark in dark mode, rendering it at ~2:1 contrast (#241). Extracted from
+ * [ScanScreen] to keep that function under detekt's LongMethod threshold.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScanTopBar(
+    title: String,
+    containerColor: Color,
+    onNavigateBack: () -> Unit,
+) {
+    TopAppBar(
+        title = { Text(title) },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.cd_back),
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = containerColor,
+            titleContentColor = OnVerb,
+            navigationIconContentColor = OnVerb,
+        ),
+    )
 }
 
 /**
