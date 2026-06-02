@@ -1,8 +1,8 @@
 # Pantry Tracker
 
-[![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
-[![codecov](https://codecov.io/gh/DocGerd/pantry-tracker/branch/main/graph/badge.svg)](https://codecov.io/gh/DocGerd/pantry-tracker)
+[![CI](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/DocGerd/pantry-tracker/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/DocGerd/pantry-tracker/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/DocGerd/pantry-tracker/branch/develop/graph/badge.svg)](https://codecov.io/gh/DocGerd/pantry-tracker)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/DocGerd/pantry-tracker/badge)](https://scorecard.dev/viewer/?uri=github.com/DocGerd/pantry-tracker)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13017/badge)](https://www.bestpractices.dev/projects/13017)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
@@ -16,13 +16,20 @@ all of it stored in a local Room/SQLite database that works fully offline. The
 only network call the app ever makes is the anonymous barcode lookup; there are
 no accounts, no analytics, and no crash reporter.
 
+<!--
+  Hero banner (vector stopgap). The crisp 2560x1120 PNG export (render this SVG
+  or the brand-doc `.readme-hero` at 2x) is DEFERRED to the maintainer; swap the
+  src below to docs/brand/hero.png once it exists for a sharp social-preview card.
+-->
+<img src="docs/brand/hero.svg" alt="Pantry Tracker — scan a grocery barcode, confirm, and it's in your pantry. Fully offline, single-user, on-device." width="100%">
+
 ## Scope / Status
 
-- **v1.0.0** (2026-05-18) and **v1.1.0** (2026-05-19) shipped as **signed
+- **v1.0.0** (2026-05-18) through **v1.4.0** (2026-06-02) have shipped as **signed
   sideload APKs** on [GitHub Releases](https://github.com/DocGerd/pantry-tracker/releases).
   There is no Play Store or F-Droid presence — distribution is sideload-only.
-- **v1.2** is feature-complete on `main` but **not yet released**. See
-  [`CHANGELOG.md`](CHANGELOG.md) for the per-version detail and the `Unreleased`
+- The current release is **[v1.4.0](https://github.com/DocGerd/pantry-tracker/releases/latest)**.
+  See [`CHANGELOG.md`](CHANGELOG.md) for the per-version detail and the `Unreleased`
   section for what's queued.
 
 What the app does (and deliberately does **not** do) is set out in the arc42
@@ -35,9 +42,15 @@ See [ROADMAP.md](ROADMAP.md) for direction and explicit non-goals.
 
 ## Screenshots
 
-_Screenshots are a follow-up._ Capturing them requires an emulator (or device)
-run, which is tracked separately; this README will gain a screenshots section
-once that capture lands.
+> Captured on a Pixel 6 emulator (API 34) in the DocGerdSoft Material 3 scheme — light and dark.
+
+| Home | Scan | Detail | Home (dark) |
+|:---:|:---:|:---:|:---:|
+| ![Home screen — inventory list with search; out-of-stock items greyed out](docs/images/home.png) | ![Scan screen — resolved-product preview with a quantity stepper](docs/images/scan.png) | ![Detail screen — quantity stepper and restock limits](docs/images/detail.png) | ![Home screen rendered in the Material 3 dark theme](docs/images/home_dark.png) |
+
+- **Home** — your pantry at a glance: search, browse, and tap an item to edit it. Scan-to-add (green) / scan-to-remove (red) up top, a buying-list cart, and out-of-stock items greyed out. Shown in both the light and dark Material 3 schemes.
+- **Scan** — point the camera at a barcode; Pantry Tracker resolves it (from your pantry or via Open Food Facts) and a confirm tap adds or removes it.
+- **Detail** — adjust the quantity, set an optional low-stock limit + buy amount for the buying list, view the product image, or delete the item.
 
 ## Install
 
@@ -92,10 +105,18 @@ list of what ships in the APK is in
 
 ## Documentation
 
-- [`docs/architecture/`](docs/architecture/) — arc42 architecture docs covering
-  all standard sections; read §1 and §3 first.
+Documentation is **markdown-in-repo, rendered by GitHub** (no separate docs site —
+see [ADR-0007](docs/adr/0007-keep-documentation-markdown-in-repo.md)). Start at the
+**[documentation index](docs/README.md)** for a map and reading order.
+
+- [`docs/README.md`](docs/README.md) — the docs index: reading order across the tree.
+- [`docs/architecture/`](docs/architecture/) — arc42 architecture docs covering all
+  standard sections (with GitHub-rendered Mermaid diagrams); read §1 and §3 first.
+- [`docs/adr/`](docs/adr/) — Architecture Decision Records (the numbered ADRs).
+- [`docs/security-posture.md`](docs/security-posture.md) — the living security
+  overview; [`SECURITY.md`](SECURITY.md) is how to report a vulnerability (privately).
+- [`docs/release/SHIPPING.md`](docs/release/SHIPPING.md) — the release runbook.
 - [`CHANGELOG.md`](CHANGELOG.md) — per-release notes (Keep a Changelog format).
-- [`SECURITY.md`](SECURITY.md) — how to report a vulnerability (privately).
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute: the GitFlow
   workflow, branch naming, the review process, and the source-header convention.
 - [`GOVERNANCE.md`](GOVERNANCE.md) — the decision-making model (single-maintainer,

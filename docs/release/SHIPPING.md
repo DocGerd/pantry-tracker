@@ -93,6 +93,27 @@ installs it.
 The catch: a release APK must be **signed with your own keystore**. The
 keystore is irreplaceable — if you lose it, you can never sign an update.
 
+The end-to-end release flow, with its decision points:
+
+```mermaid
+flowchart TD
+    A[Start release/X.Y.Z off develop] --> B{All 4 keystore props set?}
+    B -->|none| Bu[app-release-unsigned.apk — NOT installable]
+    B -->|some| Be[GradleException at config time]
+    B -->|all four| C[assembleRelease to app-release.apk]
+    C --> D{Room schema changed?}
+    D -->|yes| E[Run migration UAT script]
+    D -->|no| G
+    E --> G
+    G[[Human merges release into main + develop]]
+    G --> F[On main, before tag: --write-locks, commit any diff]
+    F --> H[Tag vX.Y.Z on main]
+    H --> I[gh release create one-shot, immutable, asset at creation]
+    I --> J{SHA-256 + cert + attestation verify?}
+    J -->|ok| K[Published]
+    J -->|mismatch| L[Stop — do not publish]
+```
+
 ### One-time keystore setup
 
 ```bash
@@ -284,15 +305,15 @@ When it's time to ship v1.0 (not part of this PR — pre-flight only):
        `gh release create v1.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
 10. [ ] Install the release APK on your daily-driver device.
 
-> **Cosign + SLSA signing happens automatically (v1.3.0 onward).**
-> When the GitHub Release is published, [`.github/workflows/release.yml`](../../.github/workflows/release.yml)
-> runs on the `release: published` event and attaches three additional
-> artifacts: `app-release.apk.sig` (keyless cosign signature),
-> `app-release.apk.pem` (Fulcio certificate), and
-> `app-release.apk.intoto.jsonl` (SLSA Build L3 provenance). No manual
-> `cosign` step is needed from the releaser. The user-facing verification
-> command lives in [`SECURITY.md`](../../SECURITY.md). Releases v1.0.x /
-> v1.1.x / v1.2.x predate this workflow and are jarsigner-signed only.
+> **Release verification (all versions).** Each `app-release.apk` is signed
+> with the lifetime Android cert (`ec9a4bb8…b3d9`) and its SHA-256 is recorded
+> in the release notes — verify with `apksigner verify --print-certs` +
+> `sha256sum`. GitHub immutable releases also auto-generate a Sigstore artifact
+> attestation per asset (`gh attestation verify app-release.apk -R
+> DocGerd/pantry-tracker`, gh ≥ 2.49). The former cosign + SLSA-generator
+> `release.yml` was **retired** (broken under cosign v4, and its
+> attach-after-publish design is incompatible with immutable releases —
+> issue #210). See [`SECURITY.md`](../../SECURITY.md).
 
 ---
 
@@ -461,11 +482,51 @@ v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
        [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure))
        — one commit on `main` immediately before the tag.
 7. [ ] Tag: `git tag -a v1.3.0 -m "v1.3.0 release" && git push origin v1.3.0`
-8. [ ] Create the GitHub Release attaching `app-release.apk`:
-       `gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk --notes-file CHANGELOG.md`
-       — the **first** release to auto-trigger
-       [`release.yml`](../../.github/workflows/release.yml) (cosign + SLSA
-       provenance).
+8. [ ] Create the GitHub Release **one-shot**, with the APK attached at
+       creation (immutable releases reject adding assets after publish —
+       never the two-step):
+       `gh release create v1.3.0 app/build/outputs/apk/release/app-release.apk --title "v1.3.0 …" --notes-file <notes>`.
+       GitHub auto-generates a Sigstore artifact attestation for the asset; the
+       former cosign + SLSA `release.yml` was retired (issue #210).
+
+---
+
+## v1.4 release-cut checklist
+
+v1.4 is a **minor feature release** — German (`de`) localization (#168/#218) and
+the full Material 3 DocGerdSoft brand theme + redesigned launcher icon (#236/#240),
+plus the verb-button contrast a11y fix (#241). **No Room schema change** (the DB
+stays at schema v3, the v1.3 buying-list version) — so unlike v1.2/v1.3 there is
+**no `verify-migration-*.sh` step**; the upgrade-install is a plain `install -r`
+over v1.3.1, which still doubles as the signing-continuity check. Cut on a
+`release/1.4.0` branch off `develop`, PR'd into **both** `main` and `develop`
+(GitFlow).
+
+1. [ ] `release/1.4.0` off `develop`; `app/build.gradle.kts` bumped to
+       `versionCode = 7`, `versionName = "1.4.0"`; CHANGELOG `[Unreleased]`
+       promoted to `[1.4.0]`; README / SECURITY.md / CLAUDE.md latest-release
+       lines bumped to v1.4.0.
+2. [ ] Bridge signing properties if `GRADLE_USER_HOME` is redirected (see
+       Common gotchas).
+3. [ ] `./gradlew :app:assembleRelease` — verify `app-release.apk` exists
+       (not `app-release-unsigned.apk`).
+4. [ ] Confirm the signature: `apksigner verify --print-certs
+       app/build/outputs/apk/release/app-release.apk` shows cert SHA-256
+       `ec9a4bb8…b3d9`. Run `scripts/uat/verify-r8-keep-rules.sh` (SR-80). No
+       schema migration to verify; walk the relevant
+       [UAT checklist](../uat/v1-uat-checklist.md) scenarios on a real device
+       (incl. the German-locale strings and the new theme/icon rendering).
+5. [ ] A human merges the `release/1.4.0` PRs into `main` AND `develop`.
+6. [ ] **Lock dependencies for the tag** (see
+       [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure))
+       — placed on the **release branch** pre-merge so it rides into `main`
+       through the human's merge (Claude does not push `main`).
+7. [ ] Tag the merged `main` HEAD:
+       `git tag -a v1.4.0 origin/main -m "v1.4.0 release" && git push origin v1.4.0`
+8. [ ] Build the shippable APK **from the tag**, then create the GitHub Release
+       **one-shot**, APK attached at creation (immutable releases reject adding
+       assets after publish — never the two-step):
+       `gh release create v1.4.0 app/build/outputs/apk/release/app-release.apk --title "v1.4.0 …" --notes-file <notes>`.
 
 ---
 

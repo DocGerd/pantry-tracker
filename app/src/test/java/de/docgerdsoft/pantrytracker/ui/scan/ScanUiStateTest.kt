@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.scan
 
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -51,7 +52,7 @@ class ScanUiStateTest {
         val manual = ScanUiState(phase = ScanUiState.Phase.ManualEntry(barcode = "999", pendingQuantity = 2))
         assertTrue(manual.phase is ScanUiState.Phase.ManualEntry)
 
-        val error = ScanUiState(phase = ScanUiState.Phase.Error(message = "Couldn't scan: boom"))
+        val error = ScanUiState(phase = ScanUiState.Phase.Error(message = UiText.Raw("Couldn't scan: boom")))
         assertTrue(error.phase is ScanUiState.Phase.Error)
 
         val preview = ScanUiState(
@@ -74,7 +75,7 @@ class ScanUiStateTest {
         val manual = ScanUiState.Phase.ManualEntry(barcode = "456", pendingQuantity = 3)
         assertEquals("456", manual.barcode)
         assertEquals(3, manual.pendingQuantity)
-        assertEquals("Couldn't scan: x", ScanUiState.Phase.Error("Couldn't scan: x").message)
+        assertEquals(UiText.Raw("Couldn't scan: x"), ScanUiState.Phase.Error(UiText.Raw("Couldn't scan: x")).message)
         assertEquals("789", ScanUiState.Phase.NotInInventory("789").barcode)
     }
 

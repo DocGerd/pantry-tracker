@@ -1,8 +1,11 @@
 package de.docgerdsoft.pantrytracker.ui.detail
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,7 +72,7 @@ class DetailViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            surfaceError("read inventory", e)
+            surfaceError(R.string.error_read_inventory, "read inventory", e)
         }
     }
 
@@ -83,13 +86,16 @@ class DetailViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
-    // Surfaces a repository-operation failure as a user-visible message. Per spec §7
-    // "user-facing → inline" — silent logging is not enough. Mirrors ScanViewModel's
-    // Phase.Error transition; the screen renders this as a Snackbar.
-    private fun surfaceError(operation: String, e: Exception) {
+    // Surfaces a repository-operation failure as a localizable user-visible message.
+    // Per spec §7 "user-facing → inline". [messageId] is the "Couldn't <verb>: %1$s"
+    // template; [logTag] preserves the existing operation name in the WARNING log.
+    // Mirrors ScanViewModel's Phase.Error transition; the screen renders a Snackbar.
+    private fun surfaceError(@StringRes messageId: Int, logTag: String, e: Exception) {
         @Suppress("SwallowedException")
-        logger.log(Level.WARNING, "$operation failed", e)
-        _uiState.update { it.copy(error = "Couldn't $operation: ${e.message ?: "unknown error"}") }
+        logger.log(Level.WARNING, "$logTag failed", e)
+        _uiState.update {
+            it.copy(error = UiText.causedError(messageId, R.string.error_unknown_reason, e))
+        }
     }
 
     @Suppress("TooGenericExceptionCaught")
@@ -102,7 +108,7 @@ class DetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                surfaceError("rename", e)
+                surfaceError(R.string.detail_error_rename, "rename", e)
             }
         }
     }
@@ -117,7 +123,7 @@ class DetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                surfaceError("save restock settings", e)
+                surfaceError(R.string.detail_error_save_restock, "save restock settings", e)
             }
         }
     }
@@ -131,7 +137,7 @@ class DetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                surfaceError("update quantity", e)
+                surfaceError(R.string.detail_error_update_quantity, "update quantity", e)
             }
         }
     }
@@ -154,7 +160,7 @@ class DetailViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                surfaceError("delete", e)
+                surfaceError(R.string.detail_error_delete, "delete", e)
             }
         }
     }

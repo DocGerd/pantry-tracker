@@ -48,3 +48,6 @@ Thumbs.db
 # (see the `wrap` skill). Untracked by design; ignored here to harden against
 # an accidental `git add`.
 HANDOVER.md
+
+# Screenshot-test diagnostic renders (written on golden mismatch; never committed)
+app/src/test/snapshots/*_actual.png

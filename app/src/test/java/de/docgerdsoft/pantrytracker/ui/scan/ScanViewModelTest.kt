@@ -1,9 +1,11 @@
 package de.docgerdsoft.pantrytracker.ui.scan
 
 import app.cash.turbine.test
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.repository.ProductRepository
 import de.docgerdsoft.pantrytracker.repository.ScanCandidate
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import de.docgerdsoft.pantrytracker.util.JulLogCapture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -391,7 +393,31 @@ class ScanViewModelTest {
             awaitItem() // Loading
             val state = awaitItem()
             val error = state.phase as ScanUiState.Phase.Error
-            assertTrue(error.message.contains("DB exploded"))
+            assertEquals(
+                UiText.Res(R.string.error_read_inventory, listOf(UiText.Raw("DB exploded"))),
+                error.message,
+            )
+        }
+    }
+
+    @Test
+    fun onBarcodeDecoded_repoThrowsNullMessage_usesUnknownReasonFallback() = runTest {
+        // A null exception message must surface the localized "unknown error"
+        // fallback as a nested UiText.Res — the only production path that emits a
+        // nested-Res arg (the rest carry the raw exception message).
+        fake.lookupShouldThrow = RuntimeException() // message == null
+        vm.uiState.test {
+            awaitItem() // Idle
+            vm.onBarcodeDecoded("111")
+            awaitItem() // Loading
+            val error = awaitItem().phase as ScanUiState.Phase.Error
+            assertEquals(
+                UiText.Res(
+                    R.string.error_read_inventory,
+                    listOf(UiText.Res(R.string.error_unknown_reason)),
+                ),
+                error.message,
+            )
         }
     }
 
@@ -410,7 +436,10 @@ class ScanViewModelTest {
             vm.confirm()
             val state = awaitItem()
             val error = state.phase as ScanUiState.Phase.Error
-            assertTrue(error.message.contains("disk full"))
+            assertEquals(
+                UiText.Res(R.string.scan_error_save, listOf(UiText.Raw("disk full"))),
+                error.message,
+            )
         }
     }
 
@@ -426,7 +455,10 @@ class ScanViewModelTest {
             vm.submitManualEntry(name = "Widget", initialQuantity = 1)
             val state = awaitItem()
             val error = state.phase as ScanUiState.Phase.Error
-            assertTrue(error.message.contains("constraint violation"))
+            assertEquals(
+                UiText.Res(R.string.scan_error_save, listOf(UiText.Raw("constraint violation"))),
+                error.message,
+            )
         }
     }
 
@@ -662,10 +694,13 @@ class ScanViewModelTest {
     fun onCameraError_wrapsReasonWithCouldntOpenCameraPrefix() = runTest {
         vm.uiState.test {
             awaitItem() // Idle
-            vm.onCameraError("device busy")
+            vm.onCameraError(UiText.Raw("device busy"))
             val state = awaitItem()
             val error = state.phase as ScanUiState.Phase.Error
-            assertEquals("Couldn't open camera: device busy", error.message)
+            assertEquals(
+                UiText.Res(R.string.scan_error_open_camera, listOf(UiText.Raw("device busy"))),
+                error.message,
+            )
         }
     }
 
@@ -677,11 +712,13 @@ class ScanViewModelTest {
             awaitItem() // Idle
             vm.onBarcodeDecoded("12345")
             awaitItem() // Loading (the lookup is now suspended in awaitCancellation)
-            vm.onCameraError("camera died")
+            vm.onCameraError(UiText.Raw("camera died"))
             val state = awaitItem()
             assertTrue(state.phase is ScanUiState.Phase.Error)
-            assertEquals("Couldn't open camera: camera died",
-                (state.phase as ScanUiState.Phase.Error).message)
+            assertEquals(
+                UiText.Res(R.string.scan_error_open_camera, listOf(UiText.Raw("camera died"))),
+                (state.phase as ScanUiState.Phase.Error).message,
+            )
         }
         // FakeProductRepository.suspendOnLookup records every cancelled barcode.
         assertTrue("expected in-flight lookup for 12345 to be cancelled by onCameraError",

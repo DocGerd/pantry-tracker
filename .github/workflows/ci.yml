@@ -85,6 +85,21 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug testDebugUnitTest :detekt-rules:test lintDebug assembleDebugAndroidTest
 
+      - name: Upload screenshot goldens on test failure
+        # ScreenshotTestBase fail()s on a stale golden: on a MISSING golden it
+        # writes <name>.png (commit it directly); on a MISMATCH it writes
+        # <name>_actual.png (rename to <name>.png to adopt). CI-rendered bytes
+        # (ubuntu-latest, JDK 21) are the only ones the byte-exact suite accepts,
+        # so this uploads the whole snapshots dir (the *.png glob also matches
+        # *_actual.png) for download. Permanent golden-maintenance aid;
+        # diagnostic only, never a required check.
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: screenshot-goldens-actual
+          path: app/src/test/snapshots/*.png
+          if-no-files-found: warn
+
       - name: Detekt (Kotlin static analysis)
         # `!cancelled()` keeps Detekt running even when the build/test/lint step
         # fails, so devs get static-analysis feedback in the same iteration as
@@ -120,17 +135,68 @@ jobs:
       # job's setup-android.
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699  # v4.0.1
 
+      # #202: the `build` job caches Gradle via setup-gradle but this emulator job
+      # did not, so it paid a cold dependency download and re-assembled the app +
+      # test APK from scratch (the "double-assemble"). Adding the same SHA-pinned
+      # action restores the shared Gradle User Home (dependency + build cache)
+      # populated by prior runs; non-default branches are read-only by default, so
+      # the full reuse benefit (deps restored, recompile FROM-CACHE) lands after
+      # develop/main has run this job once. Coverage-neutral.
+      - uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e  # v6.1.0
+
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # #201: cache the AVD Quick Boot snapshot so each run resumes a warm emulator
+      # (projected ~6-15s) instead of paying a full cold boot (the long pole,
+      # ~563s of an ~11m job per the #200 spike). Two-step pattern from the
+      # reactivecircus/android-emulator-runner README: (1) restore the cache;
+      # (2) on a MISS only, boot once and save a snapshot; (3) the real run
+      # resumes from it. The key is suffixed with hashFiles() over this workflow
+      # file so any api-level/target/arch bump (they live here) auto-invalidates
+      # the snapshot — and editing the file is the escape hatch for a corrupt
+      # cached snapshot, since actions/cache never overwrites an existing key
+      # (no restore-keys, deliberately, so the suffix change isn't silently
+      # overridden by a prefix-match fallback). SHA-pinned per the repo's
+      # Pinned-Dependencies convention. Coverage-neutral — the run step still
+      # executes :app:connectedDebugAndroidTest unchanged.
+      - name: AVD cache
+        id: avd-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-35-google_apis-x86_64-${{ hashFiles('.github/workflows/ci.yml') }}
+
+      - name: Create AVD snapshot (cache miss only)
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.37.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
+      # The run step MUST switch the action default `-no-snapshot` → `-no-snapshot-save`
+      # (load the cached snapshot on boot but don't overwrite it on exit); with the
+      # default `-no-snapshot` the cached snapshot is never loaded and the cache is a
+      # silent no-op. `force-avd-creation: false` keeps the restored AVD from being
+      # clobbered. See the #201 spike gotcha.
       - uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.37.0
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
           script: ./gradlew :app:connectedDebugAndroidTest
 
       # SR-180: the emulator-runner step above ran connectedDebugAndroidTest with
@@ -169,12 +235,14 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-      # INFORMATIONAL gate (SR-180). This `androidTest` job is NOT a required
-      # status check and NO ruleset was edited, so a coverage regression below
-      # 0.80 shows red here WITHOUT blocking merges — a deliberate maintainer
-      # decision to avoid coupling merges to emulator reliability. The OpenSSF
-      # Silver test_statement_coverage80 MUST is satisfied by the demonstrated
-      # combined 86.85% instruction coverage, not by a merge-blocking check.
-      - name: Verify coverage ≥ 80% (non-required signal)
+      # The active coverage gate (#219). Runs the LINE (statement)
+      # jacocoTestCoverageVerification on the merged unit + instrumented report;
+      # the merged baseline is ~85.93% line. This is exactly what the **required
+      # `androidTest` status check** on the develop ruleset (16993554) runs — the
+      # active, merge-blocking coverage gate. A `codecov/project` >=80%
+      # line-coverage status check is also configured (codecov.yml) but does not
+      # currently post (account-level Codecov issue — #228), so it is NOT the
+      # required gate; the main ruleset (16948699) coverage promotion is deferred.
+      - name: Verify coverage ≥ 80% LINE (the required androidTest coverage gate)
         if: ${{ !cancelled() }}
         run: ./gradlew --no-daemon :app:jacocoTestCoverageVerification

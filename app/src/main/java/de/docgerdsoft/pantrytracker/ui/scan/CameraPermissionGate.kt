@@ -33,10 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import de.docgerdsoft.pantrytracker.R
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -153,16 +155,16 @@ fun CameraPermissionGateContent(
             onCancel = onNavigateBack,
         )
         CameraPermissionPhase.SoftDenied -> DeniedScreen(
-            headline = "Camera access needed",
-            body = "Pantry Tracker uses the camera to scan barcodes. Nothing leaves your device.",
-            primaryLabel = "Try again",
+            headline = stringResource(R.string.cam_needed_title),
+            body = stringResource(R.string.cam_needed_body),
+            primaryLabel = stringResource(R.string.cam_try_again),
             onPrimary = onContinue,
             onBack = onNavigateBack,
         )
         CameraPermissionPhase.HardDenied -> DeniedScreen(
-            headline = "Camera access blocked",
-            body = "Open Settings and allow camera access for Pantry Tracker, then come back.",
-            primaryLabel = "Open settings",
+            headline = stringResource(R.string.cam_blocked_title),
+            body = stringResource(R.string.cam_blocked_body),
+            primaryLabel = stringResource(R.string.cam_open_settings),
             onPrimary = onOpenSettings,
             onBack = onNavigateBack,
         )
@@ -173,12 +175,12 @@ fun CameraPermissionGateContent(
 private fun RationaleDialog(onContinue: () -> Unit, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text("Camera access") },
+        title = { Text(stringResource(R.string.cam_rationale_title)) },
         text = {
-            Text("We scan barcodes to find products. Nothing leaves your device.")
+            Text(stringResource(R.string.cam_rationale_body))
         },
-        confirmButton = { Button(onClick = onContinue) { Text("Continue") } },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancel") } },
+        confirmButton = { Button(onClick = onContinue) { Text(stringResource(R.string.action_continue)) } },
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 
@@ -207,7 +209,7 @@ private fun DeniedScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Button(onClick = onPrimary) { Text(primaryLabel) }
-            OutlinedButton(onClick = onBack) { Text("Go back") }
+            OutlinedButton(onClick = onBack) { Text(stringResource(R.string.action_go_back)) }
         }
     }
 }
@@ -268,13 +270,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-// Copy for the OEM-fallback Toast. `internal const` so the instrumented test
-// (SR-77) can pin the exact string at the seam instead of relying on an
-// Espresso Toast root matcher — Android 12+ Toasts are not inspectable via
-// `isPlatformPopup()`. Starts with "Couldn't" per the project error-tone
-// convention (see ErrorToneSemanticsTest, SR-78).
-internal const val SETTINGS_UNAVAILABLE_MESSAGE = "Couldn't open settings on this device"
-
 // `internal` (not private) so the instrumented test (SR-77) can reach it
 // directly for the ActivityNotFoundException → Toast path. The
 // [IntentLauncher] parameter is the injection seam — production passes
@@ -297,7 +292,7 @@ internal fun openAppSettings(context: Context, launcher: IntentLauncher) {
         logger.log(Level.WARNING, "Couldn't open settings: no Settings activity on device", e)
         Toast.makeText(
             context,
-            SETTINGS_UNAVAILABLE_MESSAGE,
+            context.getString(R.string.cam_error_settings_unavailable),
             Toast.LENGTH_LONG,
         ).show()
     }

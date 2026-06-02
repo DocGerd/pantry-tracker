@@ -1,7 +1,7 @@
 # Security posture
 
 > **Status:** Living document.
-> **Last reviewed:** 2026-05-28.
+> **Last reviewed:** 2026-06-01.
 > **Cadence:** reviewed on every major release (next: v2.0) and whenever a
 > structural item below changes (e.g. new CI workflow, signing-cert rotation,
 > distribution-channel change).
@@ -484,12 +484,18 @@ produces.
   maintainer's workstation from a keystore stored outside any
   version-controlled or CI-accessible location.
 
-SLSA provenance attestation for sideload APKs is on the backlog as a
-future hardening step. Adoption is gated on the
-[GitHub Artifact Attestations](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
-flow stabilising for Android-APK build artifacts; once it does, this
-document and `SHIPPING.md` will be updated together and the SLSA tag
-added to release notes.
+**Auto-attestation (active).** With GitHub immutable releases enabled, each
+release asset now receives an automatic Sigstore-backed
+[artifact attestation](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+binding its digest to the tag + commit (verify with `gh attestation verify
+app-release.apk -R DocGerd/pantry-tracker`). An earlier cosign + SLSA-generator
+`.github/workflows/release.yml` was attempted but **retired** — its
+attach-after-publish design is incompatible with immutable releases, and the
+cosign step was broken under cosign v4 (issue #210). **Source-level build
+provenance** (proving how/where the binary was built) remains a future step,
+gated on either reproducible builds (keystore stays offline) or CI-side
+signing (keystore in CI secrets). Scorecard Signed-Releases stays partial
+regardless, as it does not recognize Android APK signing.
 
 ### Branch-Protection — configured, with accepted gaps
 
@@ -505,16 +511,21 @@ Repository Rulesets, split since 2026-05-28 (see #158):
 
 - **Ruleset 16948699 "Protect main"** — covers `refs/heads/main` only.
   `strict_required_status_checks_policy: true` (PR head must be
-  up to date with `main` before merge).
+  up to date with `main` before merge). Required status check: `build`
+  only — the coverage gate's promotion to main is deferred (see #219, #228).
 - **Ruleset 16993554 "Protect develop"** — covers `refs/heads/develop`
   only. `strict_required_status_checks_policy: false` to avoid
   integration-branch rebase churn (feature PRs land on develop
   frequently; requiring up-to-date would force a rebase after every
-  intervening merge).
+  intervening merge). Required status checks: `build` + `androidTest` —
+  the latter runs `:app:jacocoTestCoverageVerification` at the 0.80 LINE
+  gate and is the active, merge-blocking coverage check (promoted
+  2026-06-01 per #219). A `codecov/project` check is configured in
+  `codecov.yml` but does not currently post (account-level Codecov
+  issue — #228), so it is not required.
 
 Both rulesets share the same other rules: PR-only merges (no direct
-push), the `build` job from `ci.yml` as the only required status
-check, no deletion, no non-fast-forward push, and
+push), no deletion, no non-fast-forward push, and
 `dismiss_stale_reviews_on_push: true` (a PR approval is voided when
 new commits land, so the approval reflects the current head).
 `required_linear_history` is **off** on both by design: release-prep
@@ -663,7 +674,8 @@ This document is reviewed:
 - **On any update to [`SECURITY.md`](../SECURITY.md)** — the scope
   definitions must agree.
 
-Last reviewed: **2026-05-28** (initial version, OSS-11).
+Last reviewed: **2026-06-01** (content confirmed current for #223; provenance
+section already reflects the v1.3.1 cosign/SLSA retirement, #210/#211).
 
 ## Assurance case
 

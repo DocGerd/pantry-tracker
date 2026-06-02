@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.platform.app.InstrumentationRegistry
 import de.docgerdsoft.pantrytracker.PantryTrackerNavGraph
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.di.AppContainer
 import de.docgerdsoft.pantrytracker.testfixtures.FakeCameraSource
@@ -34,13 +35,15 @@ import kotlin.time.Clock
  * Failure paths covered:
  *
  *  1. **Network/lookup failure during Scan-to-Add** — [FakeProductRepository.lookupShouldThrow]
- *     causes [ScanViewModel.resolveBarcode] to catch and transition to
- *     `Phase.Error("Couldn't read inventory: …")`. The [ErrorSheet] renders the
- *     message text so it is assertable via semantics.
+ *     causes [ScanViewModel.resolveBarcode] to catch and transition to a
+ *     `Phase.Error` whose `UiText` resolves (via `R.string.error_read_inventory`)
+ *     to "Couldn't read inventory: …". The [ErrorSheet] renders the resolved
+ *     text so it is assertable via semantics.
  *
  *  2. **Save failure after manual-entry confirm** — [FakeProductRepository.addShouldThrow]
- *     causes [ScanViewModel.submitManualEntry] to catch and transition to
- *     `Phase.Error("Couldn't save: …")`. The barcode resolves to an OFF miss
+ *     causes [ScanViewModel.submitManualEntry] to catch and transition to a
+ *     `Phase.Error` resolving (via `R.string.scan_error_save`) to
+ *     "Couldn't save: …". The barcode resolves to an OFF miss
  *     (null in [lookupResponses]) so the ManualEntry sheet appears first, then
  *     the Add button triggers the failure.
  *
@@ -51,10 +54,13 @@ import kotlin.time.Clock
  *     manual-entry sheet) so the test reaches the Detail screen with a single
  *     Home tap — avoiding the fragile add-sheet UI sequence on-device.
  *
- * These are prefix checks — asserting that the visible text STARTS WITH
- * "Couldn't " is the enforcement mechanism. A raw "java.lang.RuntimeException"
- * or "Error: …" message would fail the waitUntil condition and then the
- * assertIsDisplayed call, surfacing the regression immediately.
+ * Each assertion resolves its `expected` copy from the same `R.string` template
+ * the production code uses, with the injected exception reason interpolated, then
+ * asserts that full string is displayed — so the visible text must match the
+ * canonical "Couldn't <verb>: <reason>" copy exactly (locale-resolved via
+ * `getString`). A raw "java.lang.RuntimeException" or "Error: …" message would
+ * fail the waitUntil condition and then the assertIsDisplayed call, surfacing the
+ * regression immediately.
  *
  * Covers: UAT §15 row 1 [automated by SR-78].
  */
@@ -62,6 +68,11 @@ class ErrorToneSemanticsTest {
 
     @get:Rule
     val rule = createComposeRule()
+
+    // Resolve expected error copy from the resources so the assertions are
+    // locale-independent: the rendered text and the expectation both come from
+    // the same R.string entry, regardless of the device locale.
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Before
     fun grantCameraPermission() {
@@ -100,20 +111,22 @@ class ErrorToneSemanticsTest {
         camera.emit("5449000000996")
 
         // ErrorSheet renders the error message as Text — wait for it to appear.
+        // Resolve the expected copy from the resource (FakeProductRepository
+        // threw RuntimeException("simulated network timeout")).
+        val expected = context.getString(R.string.error_read_inventory, "simulated network timeout")
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
-            rule.onAllNodesWithText("Couldn't read inventory:", substring = true)
+            rule.onAllNodesWithText(expected, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
-        // Explicit prefix assertion: message starts with the canonical "Couldn't <verb>:"
-        val nodes = rule.onAllNodesWithText("Couldn't read inventory:", substring = true)
+        // Explicit assertion: the resolved error message is displayed.
+        val nodes = rule.onAllNodesWithText(expected, substring = true)
             .fetchSemanticsNodes()
         assertTrue(
-            "Expected an on-screen error starting with 'Couldn't read inventory:' " +
-                "but found ${nodes.size} matching nodes",
+            "Expected an on-screen error '$expected' but found ${nodes.size} matching nodes",
             nodes.isNotEmpty(),
         )
-        rule.onNodeWithText("Couldn't read inventory:", substring = true).assertIsDisplayed()
+        rule.onNodeWithText(expected, substring = true).assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------
@@ -152,16 +165,18 @@ class ErrorToneSemanticsTest {
         }
 
         // Type a name into the "Name" field and confirm via "Add to inventory".
-        // submitManualEntry → addNew throws → Phase.Error("Couldn't save: …").
+        // submitManualEntry → addNew throws → Phase.Error resolving to "Couldn't save: …".
         rule.onNodeWithText("Name").performTextInput("Test Product")
         rule.onNodeWithText("Add to inventory").performClick()
 
-        // ErrorSheet with "Couldn't save:" prefix.
+        // ErrorSheet shows the resolved "Couldn't save: …" message
+        // (FakeProductRepository threw RuntimeException("disk full")).
+        val expected = context.getString(R.string.scan_error_save, "disk full")
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
-            rule.onAllNodesWithText("Couldn't save:", substring = true)
+            rule.onAllNodesWithText(expected, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithText("Couldn't save:", substring = true).assertIsDisplayed()
+        rule.onNodeWithText(expected, substring = true).assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------
@@ -218,12 +233,14 @@ class ErrorToneSemanticsTest {
         rule.onNodeWithText("Butter").performTextReplacement("Margarine")
         rule.onNodeWithText("Margarine").performImeAction()
 
-        // Detail screen shows the error via Snackbar — assert "Couldn't rename:" prefix.
+        // Detail screen shows the resolved "Couldn't rename: …" message via Snackbar
+        // (ErrorFakeRepository threw RuntimeException("permission denied")).
+        val expected = context.getString(R.string.detail_error_rename, "permission denied")
         rule.waitUntil(timeoutMillis = TIMEOUT_MS) {
-            rule.onAllNodesWithText("Couldn't rename:", substring = true)
+            rule.onAllNodesWithText(expected, substring = true)
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        rule.onNodeWithText("Couldn't rename:", substring = true).assertIsDisplayed()
+        rule.onNodeWithText(expected, substring = true).assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------

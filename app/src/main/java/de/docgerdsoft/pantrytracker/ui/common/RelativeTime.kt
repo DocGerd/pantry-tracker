@@ -1,5 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.common
 
+import android.content.Context
+import de.docgerdsoft.pantrytracker.R
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -17,24 +19,41 @@ private const val DAYS_PER_MONTH_ROUGH = 30L
  *  guarantee, not an artifact of how the buckets cascade; the
  *  negativeDelta_returnsJustNow test pins it.
  *
- *  Buckets cascade up to "N months ago" using a ~30-day month. Pure function —
- *  no Android dependencies; fully testable. */
+ *  Buckets cascade up to "N months ago" using a ~30-day month. The strings live
+ *  in `<plurals>` resources (SR/i18n #168) so the grammar is locale-correct —
+ *  English collapses to one/other, German to its own one/other forms — and the
+ *  count is interpolated by the platform's plural selector. A [Context] is
+ *  required to resolve those resources. */
 object RelativeTime {
-    fun format(then: Instant, now: Instant): String {
+    fun format(context: Context, then: Instant, now: Instant): String {
+        val res = context.resources
         val delta = now - then
         return when {
-            delta < 60.seconds -> "just now"
-            delta < 60.minutes -> pluralize(delta.inWholeMinutes.toInt(), "minute")
-            delta < 24.hours -> pluralize(delta.inWholeHours.toInt(), "hour")
-            delta < 7.days -> pluralize(delta.inWholeDays.toInt(), "day")
-            // 28-day boundary: integer-divides to 0 weeks; falls into months
-            // bucket which then renders "0 months ago" (28/30 == 0). Acceptable
-            // v1 trade-off — pinned by months_from28dOnward in the test.
-            delta < 28.days -> pluralize((delta.inWholeDays / DAYS_PER_WEEK).toInt(), "week")
-            else -> pluralize((delta.inWholeDays / DAYS_PER_MONTH_ROUGH).toInt(), "month")
+            delta < 60.seconds -> context.getString(R.string.relative_just_now)
+            delta < 60.minutes -> {
+                val n = delta.inWholeMinutes.toInt()
+                res.getQuantityString(R.plurals.relative_minutes, n, n)
+            }
+            delta < 24.hours -> {
+                val n = delta.inWholeHours.toInt()
+                res.getQuantityString(R.plurals.relative_hours, n, n)
+            }
+            delta < 7.days -> {
+                val n = delta.inWholeDays.toInt()
+                res.getQuantityString(R.plurals.relative_days, n, n)
+            }
+            // 28-day boundary: `delta < 28.days` is false at exactly 28d, so it
+            // skips this weeks branch and lands in the months `else`, where
+            // 28/30 integer-divides to 0 -> "0 months ago". Acceptable v1
+            // trade-off — pinned by months_from28dOnward in the test.
+            delta < 28.days -> {
+                val n = (delta.inWholeDays / DAYS_PER_WEEK).toInt()
+                res.getQuantityString(R.plurals.relative_weeks, n, n)
+            }
+            else -> {
+                val n = (delta.inWholeDays / DAYS_PER_MONTH_ROUGH).toInt()
+                res.getQuantityString(R.plurals.relative_months, n, n)
+            }
         }
     }
-
-    private fun pluralize(n: Int, unit: String): String =
-        if (n == 1) "1 $unit ago" else "$n ${unit}s ago"
 }

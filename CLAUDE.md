@@ -3,8 +3,9 @@
 Standalone Android Kotlin/Compose app for whole-number kitchen inventory.
 Two Gradle modules: `:app` (the Android app) and `:detekt-rules` (a pure-JVM
 module holding the custom detekt rule set — see the ErrorTone note below).
-v1.0.0 shipped 2026-05-18; v1.1.0 (Fallbacks & undo) shipped 2026-05-19, both
-as signed sideload APKs on GitHub Releases.
+Latest release: v1.4.0 (2026-06-02). All releases ship as signed sideload
+APKs on GitHub Releases — note v* releases are immutable (asset must be
+attached at creation; see SHIPPING.md). CHANGELOG.md holds per-version history.
 
 This file is loaded into every Claude Code session in this repo. Keep it
 high-signal — pointers, not duplication of the source-of-truth docs.
@@ -185,11 +186,14 @@ app/                            # the Android :app module
     util/                       # small cross-cutting helpers
     MainActivity.kt, PantryTrackerApp.kt, PantryTrackerNavGraph.kt
 docs/
+  adr/                          # Architecture Decision Records (backfill track)
   architecture/                 # arc42 — load-bearing for design-decision context
   release/SHIPPING.md           # release procedure + gotchas
   security/                     # dated security review notes (e.g. 2026-05-17)
   superpowers/specs/            # design specs incl. v1 kitchen-inventory-design.md
+  superpowers/plans/            # dated implementation plans
   uat/                          # UAT checklist used for v1 sign-off
+scripts/uat/                    # Claude-runnable emulator UAT automation (+ README)
 CHANGELOG.md                    # release notes, terse-by-policy
 SECURITY.md                     # disclosure policy — see below
 ```
@@ -274,26 +278,16 @@ restructured to make the lesson load-bearing on its own.*
   finding counts (fire on violations, silent on conforming + success copy) — run
   it whenever you touch the rule. Eviction criterion: when `ErrorToneRuleTest`
   is deleted or the `pantry.ErrorTone` entry leaves `detekt-config.yml`.
-- **UAT scripts and bash automation: fresh-host end-to-end execution
-  is non-negotiable before declaring ready.** `bash -n` + `:app:detekt`
-  + the implementer subagent's "BUILD SUCCESSFUL" self-report are
-  necessary but not sufficient — the implementer's shell typically
-  has `$ANDROID_HOME/emulator/` and `gh` on PATH; a non-interactive
-  fresh shell (CI runner, a different agent, a colleague's dev box)
-  typically does NOT. SR-81's `scripts/uat/verify-migration-1-2.sh`
-  shipped with three bugs that none of those gates caught, surfacing
-  only on a re-run in a fresh shell: (1) bare `emulator -avd …` assumed
-  `$PATH` contained the SDK's `emulator/` directory — silent hang on
-  `adb wait-for-device` when only `platform-tools` was on PATH;
-  (2) `mktemp` + `gh release download --output` race — gh refuses to
-  overwrite the empty file `mktemp` created, needs `--clobber`;
-  (3) `grep -iE 'AndroidRuntime'` matched benign D/I-level Zygote-start
-  and VM-exit lines on every clean boot — script would have reported
-  `FAIL` on every successful migration. Pattern: any script with
-  PATH-resolved binaries, gh-CLI invocations, or logcat regex scanning
-  needs an actual run in a non-interactive shell on a fresh host
-  before merge. Evict once a "before-PR end-to-end" checklist for new
-  scripts lands in `scripts/uat/README.md`.
+- **Before-PR checklist for UAT scripts & instrumented tests lives in
+  [`scripts/uat/README.md`](scripts/uat/README.md) §"Before-PR end-to-end
+  checklist".** Consult it when adding/changing a UAT script or filtering one
+  instrumented test: static gates + "BUILD SUCCESSFUL" do NOT catch the
+  fresh-shell PATH/`gh`/logcat footguns or the `connectedDebugAndroidTest`
+  flag + stale-install footguns — a non-interactive fresh-shell run is
+  required before merge. (Full detail + copy-paste commands live in that
+  README section; kept there, not here, to stay out of every-session context.)
+  Eviction criterion: when that README section is deleted or the `scripts/uat/`
+  automation track is retired.
 - **Revoking a HELD runtime permission kills the shared `androidTest` process.**
   Signature: the in-flight test reports as FAILED, then the run aborts with no
   logcat for the crashed pid (`ActivityManager: Killing <pid>: permissions
@@ -342,24 +336,6 @@ restructured to make the lesson load-bearing on its own.*
   `:app:connectedDebugAndroidTest` on a local emulator (or push and let the
   CI emulator job at `.github/workflows/ci.yml` run
   `reactivecircus/android-emulator-runner` before declaring ready).
-- **Filtering a single instrumented test locally has two footguns** — both
-  surfaced only on a real emulator run during #191's `MIGRATION_2_3`
-  verification, never in the JVM gate or an implementer self-report. (1)
-  **`:app:connectedDebugAndroidTest` rejects Gradle's `--tests` flag**
-  ("Unknown command-line option '--tests'") — that flag is only for JVM
-  `Test` tasks like `:app:testDebugUnitTest`. Filter instrumented tests with
-  `-Pandroid.testInstrumentationRunnerArguments.class=<fully.qualified.Class>`.
-  (2) **`INSTALL_FAILED_UPDATE_INCOMPATIBLE: … signatures do not match`** — a
-  leftover install of `de.docgerdsoft.pantrytracker` from a prior session
-  (e.g. the *release*-signed sideload APK) blocks the *debug*-keystore-signed
-  test APK; the tell-tale is `Starting 0 tests / Finished 0 tests` with a fast
-  `BUILD FAILED`, so nothing actually ran. Fix: `adb uninstall
-  de.docgerdsoft.pantrytracker` **and** `adb uninstall
-  de.docgerdsoft.pantrytracker.test` before `connectedDebugAndroidTest`. Both
-  present as a code/test failure but are CLI-flag / device-state issues, so a
-  verbatim retry just fails again. Eviction criterion: a "before-PR
-  end-to-end" checklist in `scripts/uat/README.md` encodes the uninstall +
-  class-filter steps.
 - **GitFlow ruleset constraints for this repo.** Keep `develop` as the
   default branch — feature PRs target develop and rely on the
   default-branch behaviour of `Closes #N` to auto-close issues on merge
@@ -409,28 +385,6 @@ restructured to make the lesson load-bearing on its own.*
   got 3→3) and #144 (predicted 0→10, got 0→0). Eviction criterion:
   when Scorecard publishes per-check eligibility hints in the
   workflow output (would make pre-prediction unnecessary).
-- **Scorecard Pinned-Dependencies cannot be satisfied for the SLSA
-  provenance generator — and you must NOT "fix" it by SHA-pinning.**
-  `release.yml`'s `provenance` job references the SLSA generator
-  reusable workflow (`slsa-framework/slsa-github-generator/.github/
-  workflows/generator_generic_slsa3.yml`) by a **semver tag
-  (`@vX.Y.Z`), never a commit SHA**. This is mandatory:
-  `slsa-verifier` (which downstream users run) resolves the
-  trusted-builder identity from the ref, so a SHA pin silently breaks
-  SLSA Build-L3 provenance verification for released APKs (upstream
-  `slsa-verifier#12`, unresolved; the constraint is restated inline at
-  `release.yml`'s `provenance` job, ~L104-110). Scorecard's
-  Pinned-Dependencies check does **not** exempt it, so it permanently
-  caps that check at 9/10 and keeps code-scanning alert #14 alive
-  across rescans (confirmed: re-fired after the 2026-05-29 rescan even
-  though the cosign-installer on the same file IS SHA-pinned). Correct
-  disposition: leave the tag pin and **dismiss the alert as
-  `won't fix`** — and note the literal code-scanning `dismissed_reason`
-  is `won't fix` (space + apostrophe), NOT `wont_fix` (which 422s);
-  comment ≤280 chars. Bitten 2026-05-29 (#14 dismissed; the
-  2026-05-28 security-alert-backlog plan doc's `wont_fix` value would
-  have failed). Eviction criterion: `slsa-verifier#12` ships hash-pin
-  support, or `release.yml` stops using the SLSA generator.
 - **`.kts` + `java.time.Duration` inside a Gradle DSL block needs
   an explicit import.** Fully-qualified `java.time.Duration.ofMinutes(N)`
   may fail with `Unresolved reference 'time'` inside task-config
@@ -455,8 +409,8 @@ restructured to make the lesson load-bearing on its own.*
   (non-Robolectric) tests move the JVM-only number; the Compose UI
   screens (~69% of all instructions) and anything needing
   Robolectric/`Context` are unreachable for JVM-only coverage under the
-  current build config. The combined 86.85% that clears the OpenSSF
-  Silver `test_statement_coverage80` MUST comes from the **emulator
+  current build config. The combined ~85.93% line coverage that clears the
+  OpenSSF Silver `test_statement_coverage80` MUST comes from the **emulator
   `androidTest` `.ec`**, not Robolectric JVM tests. Do NOT run
   `:app:jacocoTestCoverageVerification` off-emulator — its 0.80 gate
   fails on the JVM-only ~19–25% BY DESIGN. To credit Robolectric/
@@ -465,3 +419,128 @@ restructured to make the lesson load-bearing on its own.*
   decision, deliberately not actioned in #182. Eviction criterion:
   `app/build.gradle.kts` switches to JaCoCo offline instrumentation, or
   the on-the-fly `jacoco` plugin is replaced.
+- **Regenerating Robolectric screenshot goldens runs through CI, and CI
+  only fires on PRs.** The 11 goldens (`app/src/test/snapshots/*.png`) are
+  `@GraphicsMode(NATIVE)`/Skia byte-exact and **host-non-portable** — a local
+  (WSL) render produces different bytes than `ubuntu-latest` even for unchanged
+  content, so NEVER commit dev-box-rendered goldens. `ScreenshotTestBase`'s
+  `compareOrWrite` has no record flag: deleting a stale golden makes the test
+  write a fresh one and `fail()` once. To capture the canonical CI bytes,
+  `ci.yml`'s `build` job has an `if: failure()` `actions/upload-artifact` step
+  (`screenshot-goldens-actual`) that uploads `app/src/test/snapshots/*.png`
+  whenever the unit-test step fails (added in PR #239). Procedure: delete the
+  affected goldens → **open/push the PR** (`ci.yml` triggers on `push` to
+  main/develop + `pull_request` ONLY — a feature-branch push runs NOTHING, so
+  the PR must exist for CI to emit goldens) → the `build` job fails →
+  `gh run download <id> -n screenshot-goldens-actual` → visually review each
+  PNG (the Read tool renders images) → commit → push → green. NOTE the blast
+  radius is easy to under-scope: the #236 brand change (full M3 scheme AND a new
+  icon drawable) staled **all 11** goldens — the 8 themed ones
+  (`Theme`/`GreyedRow`/`CoilImage`/`FontScale`) because every themed screen
+  renders through `PantryTrackerTheme`, so a re-mapped role moves its pixels (not
+  just the 2 in `ThemeScreenshotTest`), plus the 3 `icon_*` goldens because
+  `AppIconScreenshotTest` paints the launcher drawable on a hardcoded `#4F7942`
+  background (theme-independent — they stale only on an icon-asset change). #238
+  was reverted for `@Ignore`-ing the rest instead of regenerating (#236/PR #239
+  did it correctly). **The inverse also bites — don't *over*-scope.** A
+  theme/colour change stales a golden ONLY if some golden actually renders the
+  changed role: #240 set 8 surface-tint roles (surfaceContainer*/surfaceBright/
+  surfaceDim/scrim/surfaceTint) yet staled **zero** goldens — none of the 11
+  render them (they reference only `background`/`primary`/`surfaceVariant` and
+  their `on*` content roles — none of #240's 8 surface-tint roles — and
+  `ScreenshotTestBase.renderToBitmap`'s decorView background comes from the
+  Android XML theme, not the Compose scheme). Before committing to the
+  multi-CI-round regen dance, `grep` the screenshot-test *sources*
+  (`app/src/test/.../screenshot/`) for the changed `colorScheme.<role>` names
+  plus `Surface(`/`Card(`/`tonalElevation` (elevation overlays `surfaceTint`);
+  no match → no golden stales → no round-trip. Eviction criterion: the
+  `upload-artifact` golden-emit step leaves `ci.yml`, or the screenshot suite is
+  removed.
+- **Reading string resources inside a Compose coroutine trips the
+  `LocalContextGetResourceValueCall` lint check.** This AGP/Compose-UI lint
+  (error severity on the repo's Compose BOM) fires when a `@Composable` reads
+  resources via `LocalContext.current` — e.g. `context.getString(R.string.x,
+  arg)`. It broke the #168 i18n PR (#217): `HomeScreen.SnackbarEventCollector`
+  built its snackbar messages with `context.getString(...)` inside a
+  `LaunchedEffect { snackbarEvents.collect { … } }` coroutine. `stringResource()`
+  is `@Composable`-only and CANNOT be called from the collect block, so the fix
+  is to **resolve the format *templates* with `stringResource()` in composition**
+  (above the `LaunchedEffect`) and **`String.format(Locale.getDefault(),
+  template, arg)` per-event inside the coroutine**. Use the explicit-`Locale`
+  `String.format` form — the bare Kotlin `.format()` extension trips detekt's
+  default-active `ImplicitDefaultLocale`. Note the asymmetry that makes this
+  confusing: `RelativeTime.format(context, …)` resolves resources off a `Context`
+  the same way (`context.getString` / `context.resources.getQuantityString`) but is
+  NOT flagged, because its `context` is a plain function **parameter**, not
+  `LocalContext.current` — the lint only tracks values originating from
+  `LocalContext.current`, so threading a `Context` param is the other valid
+  escape. This is the fix recipe for the VM-layer strings in #218 and the
+  snackbar test in #219. Eviction criterion: the `LocalContextGetResourceValueCall`
+  lint check is downgraded/removed, or the Compose BOM stops flagging it at error
+  severity. (Not when #218 lands — the lint is permanent, so the recipe stays
+  load-bearing for any future `LaunchedEffect`/coroutine that needs a localized
+  string.)
+- **A stale local Gradle cache can fail at an *earlier* task than CI, masking
+  the real failure.** Reproducing #217's red CI locally, the first run failed at
+  `:app:kspDebugUnitTestKotlin` with `java.io.EOFException` (a corrupted
+  incremental/KSP cache artifact) — a task CI had sailed past. That masked the
+  ACTUAL failure three tasks later at `:app:lintDebug`; a `./gradlew clean`
+  cleared the EOFException and surfaced the real lint error. When a local
+  CI-reproduction hits an `EOFException`/odd cache error at a task CI passed,
+  clean-build before trusting the failure point — don't chase the phantom.
+  Eviction criterion: incremental KSP stops emitting cache EOFExceptions
+  (toolchain fix), or the repo pins `--no-build-cache` for local repro.
+- **`codecov/project` never posts on this repo — the coverage gate is the
+  emulator `androidTest` job, not Codecov.**
+  The plan in #219 was to promote `codecov/project` (>=80% LINE, configured in
+  `codecov.yml`) to a required ruleset check, but it *never materialises* as a
+  status check — an **account/installation-level** Codecov fault,
+  isolated 2026-06-01 by a clean race-free re-test (PR #234): Codecov computed
+  the comparison (base/head totals, `ci_passed`) and posted `codecov/patch` but
+  dropped `codecov/project` from both the commit-status and check-runs APIs,
+  even with the project-enabling `codecov.yml` on both the head commit and the
+  (corrected) default branch. That rules out plan, default-branch, yaml-source,
+  config, and a GitHub-App write-permission gap (patch posts via the same
+  check-runs path Codecov would use for project). **NOT plan-gated — do not re-investigate the Pro-plan
+  hypothesis:** for PUBLIC repos `codecov/project` is FREE; the only documented
+  restriction is *private* repos on the free/Team plan (Codecov FAQ; the
+  pricing page's "Project Coverage: not included" Developer/Team cell is
+  unqualified and overridden by the FAQ). The earlier "cross-confirmed via
+  hangarfit" reasoning is **weak** — hangarfit has no `codecov.yml` and Codecov
+  doesn't post project unless configured, so its patch-only is just the default.
+  So the **`androidTest`** job (`:app:jacocoTestCoverageVerification` at the
+  0.80 LINE gate on the merged unit + instrumented JaCoCo report) is the
+  **PERMANENT required coverage check on the develop ruleset `16993554`**
+  (requires `build` + `androidTest` + `Fuzz regression (seed corpus)`). The
+  main ruleset `16948699` stays
+  **build-only**; coverage promotion deferred to a future release. **General
+  lesson that still holds:** never promote a check to **required** until you
+  have *observed* it post green on a real PR — a required check that never
+  posts deadlocks every merge (the trap `codecov/project` would have been). CI
+  has zero path filters, so any PR (even docs-only) runs the full
+  emulator+coverage upload and is a valid observation vehicle. If
+  `codecov/project` is ever wanted again, a Codecov/Sentry support ticket is
+  the only lever, and switch `codecov.yml` `project.target` 80%→`auto` first
+  (its partial-counting metric ~77% < the JaCoCo LINE 85.93% → would post red).
+  Bitten #219/#222; closed won't-fix #228 (2026-06-01). Eviction criterion:
+  `codecov.yml` is removed, or `codecov/project` starts posting and is promoted
+  to required.
+- **A Mermaid `sequenceDiagram` participant id must not be a reserved keyword —
+  and `off`/`on` are reserved (case-insensitively).** This repo's project-wide
+  shorthand "OFF" (Open Food Facts) as `participant OFF` produced, on GitHub's
+  renderer, `Parse error … Expecting 'ACTOR', got 'off'` and failed the *entire*
+  diagram (the collision surfaces wherever OFF appears in a participant position,
+  e.g. `Note over Repo,OFF`). Fix: rename the id and alias the display —
+  `participant OFFApi as Open Food Facts`. Two corollaries learned debugging #223:
+  (1) **punctuation in message text (after the `:`) is freeform/safe** — parens,
+  quotes, `→`, even a second `:` render fine; the trap is keyword collisions in
+  *participant positions*, NOT label punctuation. (2) **`stateDiagram-v2` labels
+  ARE stricter**: avoid unquoted `()` and literal `"` in transition labels
+  (`Expecting … got 'PS'`). Process lesson: there is **no local Mermaid renderer**
+  (no Node) and **grammar-reasoning review agents gave a false "all render-safe"**
+  twice — only the **rendered GitHub PR view** (human eyeball) reliably catches
+  these. Do not trust a subagent's Mermaid syntax verdict; have the diagrams
+  eyeballed on the PR. External render services (kroki/mermaid.ink) are blocked by
+  the sandbox classifier as exfil destinations — don't reach for them. Eviction
+  criterion: a Mermaid linter/renderer runs in CI, or the repo stops embedding
+  Mermaid.

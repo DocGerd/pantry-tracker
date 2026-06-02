@@ -46,14 +46,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.docgerdsoft.pantrytracker.R
 import de.docgerdsoft.pantrytracker.data.local.Product
 import de.docgerdsoft.pantrytracker.ui.common.SnackbarEvent
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
+import de.docgerdsoft.pantrytracker.ui.theme.OnVerb
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
+import java.util.Locale
 
 private const val OUT_OF_STOCK_ROW_ALPHA = 0.45f
 
@@ -73,10 +77,10 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Pantry Tracker") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = onBuyListClick) {
-                        Icon(Icons.Filled.ShoppingCart, contentDescription = "Buying list")
+                        Icon(Icons.Filled.ShoppingCart, contentDescription = stringResource(R.string.cd_buying_list))
                     }
                 },
             )
@@ -84,7 +88,7 @@ fun HomeScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(onClick = { viewModel.openAddSheet() }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add manually")
+                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.cd_add_manually))
             }
         },
     ) { padding ->
@@ -102,7 +106,7 @@ fun HomeScreen(
             OutlinedTextField(
                 value = state.query,
                 onValueChange = viewModel::setQuery,
-                placeholder = { Text("Search") },
+                placeholder = { Text(stringResource(R.string.home_search_hint)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -158,20 +162,26 @@ private fun ScanButtonsRow(
         Button(
             onClick = onAddClick,
             modifier = Modifier.weight(1f).height(80.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = AddGreen),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AddGreen,
+                contentColor = OnVerb,
+            ),
         ) {
             Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Scan to Add")
+            Text(stringResource(R.string.scan_to_add))
         }
         Button(
             onClick = onRemoveClick,
             modifier = Modifier.weight(1f).height(80.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = RemoveRed),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = RemoveRed,
+                contentColor = OnVerb,
+            ),
         ) {
             Icon(Icons.Filled.Remove, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Scan to Remove")
+            Text(stringResource(R.string.scan_to_remove))
         }
     }
 }
@@ -211,7 +221,7 @@ internal fun ProductRow(
             }
         }
         Text(
-            text = "×${product.quantity}",
+            text = stringResource(R.string.quantity_count, product.quantity),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
         )
@@ -229,16 +239,19 @@ private fun EmptyState(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Your pantry is empty", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Tap Scan to Add or + to start tracking",
+                stringResource(R.string.home_empty_title),
+                style = MaterialTheme.typography.titleLarge,
+            )
+            Text(
+                stringResource(R.string.home_empty_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onScanAdd) { Text("Scan to Add") }
-                OutlinedButton(onClick = onAddManual) { Text("Add manually") }
+                Button(onClick = onScanAdd) { Text(stringResource(R.string.scan_to_add)) }
+                OutlinedButton(onClick = onAddManual) { Text(stringResource(R.string.add_manually)) }
             }
         }
     }
@@ -253,7 +266,7 @@ private fun NoMatchesHint(query: String) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            "No matches for \"$query\"",
+            stringResource(R.string.home_no_matches, query),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -274,13 +287,13 @@ private fun DeleteConfirmDialog(
     // the multi-agent review.
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Delete ${product.name}?") },
-        text = { Text("Delete ${product.name} from your pantry?") },
+        title = { Text(stringResource(R.string.home_delete_title, product.name)) },
+        text = { Text(stringResource(R.string.home_delete_body, product.name)) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Delete") }
+            TextButton(onClick = onConfirm) { Text(stringResource(R.string.action_delete)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -308,13 +321,22 @@ private fun SnackbarEventCollector(
     viewModel: HomeViewModel,
     snackbarHostState: SnackbarHostState,
 ) {
+    // Resolve format templates in composition (locale-correct via stringResource)
+    // and substitute the per-event arg inside the coroutine below. stringResource
+    // is @Composable-only, so it cannot be called from the collect block; reading
+    // strings off LocalContext.current there instead trips the Compose lint check
+    // LocalContextGetResourceValueCall.
+    val deletedTemplate = stringResource(R.string.home_deleted)
+    val undoLabel = stringResource(R.string.action_undo)
+    val errorDeleteTemplate = stringResource(R.string.home_error_delete)
+    val errorRestoreTemplate = stringResource(R.string.home_error_restore)
     LaunchedEffect(viewModel) {
         viewModel.snackbarEvents.collect { event ->
             when (event) {
                 is SnackbarEvent.Deleted -> {
                     val result = snackbarHostState.showSnackbar(
-                        message = "Deleted ${event.product.name}",
-                        actionLabel = "UNDO",
+                        message = String.format(Locale.getDefault(), deletedTemplate, event.product.name),
+                        actionLabel = undoLabel,
                         duration = SnackbarDuration.Short,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
@@ -323,13 +345,13 @@ private fun SnackbarEventCollector(
                 }
                 is SnackbarEvent.DeleteFailed -> {
                     snackbarHostState.showSnackbar(
-                        message = "Couldn't delete: ${event.name}",
+                        message = String.format(Locale.getDefault(), errorDeleteTemplate, event.name),
                         duration = SnackbarDuration.Short,
                     )
                 }
                 is SnackbarEvent.RestoreFailed -> {
                     snackbarHostState.showSnackbar(
-                        message = "Couldn't restore: ${event.name}",
+                        message = String.format(Locale.getDefault(), errorRestoreTemplate, event.name),
                         duration = SnackbarDuration.Short,
                     )
                 }

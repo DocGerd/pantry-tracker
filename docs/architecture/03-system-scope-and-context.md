@@ -2,33 +2,17 @@
 
 ## 3.1 Business context
 
-```
-                              ┌─────────────────────────────┐
-                              │                             │
-                              │   Open Food Facts (OFF)     │
-                              │   world.openfoodfacts.org   │
-                              │                             │
-                              └──────────────▲──────────────┘
-                                             │
-                                             │  HTTPS GET /api/v2/product/<barcode>.json
-                                             │  (anonymous, User-Agent identifies app)
-                                             │
-                              ┌──────────────┴──────────────┐
-       scan barcode           │                             │
-       view inventory ───────▶│      Pantry Tracker         │
-       rename / delete        │      (Android app, single   │
-                              │       user, on-device DB)   │
-                              │                             │
-                              └──────────────┬──────────────┘
-                                             │
-                                             │  Camera frames + permission
-                                             │  (Android system)
-                                             ▼
-                              ┌─────────────────────────────┐
-                              │   Android OS (CameraX,      │
-                              │   ML Kit Barcode Scanner,   │
-                              │   Room/SQLite, Settings)    │
-                              └─────────────────────────────┘
+```mermaid
+flowchart TD
+    User([User])
+    App["Pantry Tracker<br/>Android app · single user · on-device DB"]
+    OFF["Open Food Facts<br/>4-host chain · anonymous HTTPS GET"]
+    OS["Android OS<br/>CameraX · ML Kit · Room/SQLite · Settings"]
+    FS[("On-device storage")]
+    User -->|scan · view · rename · delete| App
+    App -->|"GET /api/v2/product/BARCODE.json"| OFF
+    App -->|camera frames + permission| OS
+    App -->|Room / SQLite| FS
 ```
 
 *OFF here is the project family: a lookup walks `world.openfoodfacts.org`
@@ -59,7 +43,7 @@ rules.*
 | OFF API | HTTPS GET, JSON response | 8 s timeout (connect/read/write), Ktor + OkHttp engine, `User-Agent: PantryTracker/<ver> (<repo URL>)`. Only the path `/api/v2/product/<barcode>.json` is used, against up to four hosts (`world.openfoodfacts.org` → `world.openbeautyfacts.org` → `world.openpetfoodfacts.org` → `world.openproductsfacts.org`) as a `404`-only fallback chain. |
 | Camera | CameraX preview + ImageAnalysis on a dedicated `Executors.newSingleThreadExecutor()` | Back camera only (`CameraSelector.DEFAULT_BACK_CAMERA`); single-frame KEEP_ONLY_LATEST backpressure. |
 | Barcode decoding | ML Kit on-device | Formats restricted to EAN-13/EAN-8/UPC-A/UPC-E. |
-| Local persistence | Room over SQLite | Single database file `pantry-tracker.db`. One table (`products`) with a unique index on `barcode`. |
+| Local persistence | Room over SQLite | Single database file `pantry-tracker.db`. Two tables — `products` (unique index on `barcode`) and `off_lookup_cache` (30-day cache of OFF lookups for non-pantry barcodes, #48). |
 | Image cache | Coil 3, OkHttp fetcher | OFF product photos cached on disk by URL. |
 | App settings deep-link | `Settings.ACTION_APPLICATION_DETAILS_SETTINGS` intent | Used only by the HardDenied camera-permission recovery path. |
 

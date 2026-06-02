@@ -1,3 +1,133 @@
 <resources>
-    <string name="app_name">Pantry Tracker</string>
+    <!-- Brand/product name — intentionally not localized; translatable="false"
+         stops lint's MissingTranslation from requiring a values-de/ entry. -->
+    <string name="app_name" translatable="false">Pantry Tracker</string>
+
+    <!-- Shared actions / labels -->
+    <string name="action_add">Add</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_undo">UNDO</string>
+    <string name="action_close">Close</string>
+    <string name="action_continue">Continue</string>
+    <string name="action_go_back">Go back</string>
+    <string name="action_bought">Bought</string>
+    <string name="field_name">Name</string>
+    <string name="field_initial_quantity">Initial quantity</string>
+
+    <!-- Shared content descriptions -->
+    <string name="cd_back">Back</string>
+    <string name="cd_product_photo">Product photo</string>
+    <string name="cd_add_manually">Add manually</string>
+    <string name="cd_buying_list">Buying list</string>
+    <string name="cd_delete_product">Delete product</string>
+    <string name="cd_decrease_quantity">Decrease quantity</string>
+    <string name="cd_increase_quantity">Increase quantity</string>
+    <string name="cd_decrement_quantity">Decrement quantity</string>
+    <string name="cd_increment_quantity">Increment quantity</string>
+    <string name="cd_bought">Bought %1$s</string>
+
+    <!-- Quantity badge (×N). Whole-number counts are intentionally not
+         locale-grouped — see #168 PR notes. -->
+    <string name="quantity_count">×%1$d</string>
+
+    <!-- Home screen -->
+    <string name="scan_to_add">Scan to Add</string>
+    <string name="scan_to_remove">Scan to Remove</string>
+    <string name="add_manually">Add manually</string>
+    <string name="home_search_hint">Search</string>
+    <string name="home_empty_title">Your pantry is empty</string>
+    <string name="home_empty_subtitle">Tap Scan to Add or + to start tracking</string>
+    <string name="home_no_matches">No matches for \"%1$s\"</string>
+    <string name="home_delete_title">Delete %1$s?</string>
+    <string name="home_delete_body">Delete %1$s from your pantry?</string>
+    <string name="home_deleted">Deleted %1$s</string>
+    <!-- Error-tone snackbars constructed in the Compose layer. Must keep the
+         "Couldn't <verb>: …" prefix (CLAUDE.md error-tone convention, SR-78). -->
+    <string name="home_error_delete">Couldn\'t delete: %1$s</string>
+    <string name="home_error_restore">Couldn\'t restore: %1$s</string>
+
+    <!-- Add-product sheet -->
+    <string name="add_sheet_title">Add product manually</string>
+
+    <!-- Buying list -->
+    <string name="buylist_title">Buying list</string>
+    <string name="buylist_empty_title">Nothing to buy</string>
+    <string name="buylist_empty_subtitle">Every tracked item is above its low limit.</string>
+    <string name="buylist_back_to_pantry">Back to pantry</string>
+
+    <!-- Detail screen -->
+    <string name="detail_title">Product details</string>
+    <string name="detail_brand">Brand: %1$s</string>
+    <string name="detail_barcode">Barcode: %1$s</string>
+    <string name="detail_last_updated">Last updated %1$s</string>
+    <string name="detail_restock">Restock</string>
+    <string name="detail_low_limit">Low limit</string>
+    <string name="detail_low_limit_hint">Leave blank to stop tracking</string>
+    <string name="detail_buy_amount">Buy amount</string>
+    <string name="detail_delete_title">Delete this product?</string>
+    <string name="detail_delete_body">\"%1$s\" will be removed from your inventory. This can\'t be undone.</string>
+
+    <!-- Scan screen + result sheets -->
+    <string name="scan_looking_up">Looking up %1$s…</string>
+    <string name="scan_confirm_add">Confirm Add</string>
+    <string name="scan_confirm_remove">Confirm Remove</string>
+    <string name="scan_manual_title">Not on Open Food Facts</string>
+    <string name="scan_manual_body">Barcode: %1$s\n\nGive it a name to add it to your inventory.</string>
+    <string name="scan_add_to_inventory">Add to inventory</string>
+    <string name="scan_not_in_inventory_title">Not in your inventory yet</string>
+    <string name="scan_not_in_inventory_body">Barcode %1$s isn\'t tracked yet. Add it instead?</string>
+    <string name="scan_switch_to_add">Switch to Add</string>
+    <string name="scan_error_title">Something went wrong</string>
+
+    <!-- Camera-permission gate -->
+    <string name="cam_needed_title">Camera access needed</string>
+    <string name="cam_needed_body">Pantry Tracker uses the camera to scan barcodes. Nothing leaves your device.</string>
+    <string name="cam_try_again">Try again</string>
+    <string name="cam_blocked_title">Camera access blocked</string>
+    <string name="cam_blocked_body">Open Settings and allow camera access for Pantry Tracker, then come back.</string>
+    <string name="cam_open_settings">Open settings</string>
+    <string name="cam_rationale_title">Camera access</string>
+    <string name="cam_rationale_body">We scan barcodes to find products. Nothing leaves your device.</string>
+
+    <!-- Relative time (DetailScreen "Last updated …") -->
+    <string name="relative_just_now">just now</string>
+    <plurals name="relative_minutes">
+        <item quantity="one">1 minute ago</item>
+        <item quantity="other">%1$d minutes ago</item>
+    </plurals>
+    <plurals name="relative_hours">
+        <item quantity="one">1 hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="relative_days">
+        <item quantity="one">1 day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
+    <plurals name="relative_weeks">
+        <item quantity="one">1 week ago</item>
+        <item quantity="other">%1$d weeks ago</item>
+    </plurals>
+    <plurals name="relative_months">
+        <item quantity="one">1 month ago</item>
+        <item quantity="other">%1$d months ago</item>
+    </plurals>
+
+    <!-- ViewModel-layer error strings (#218). Keep the "Couldn't <verb>: %1$s"
+         error-tone convention (SR-78). %1$s is the underlying cause (exception
+         message, or error_unknown_reason when null). error_read_inventory is
+         shared by the Scan and Detail screens. -->
+    <string name="error_unknown_reason">unknown error</string>
+    <string name="error_read_inventory">Couldn\'t read inventory: %1$s</string>
+    <string name="scan_error_save">Couldn\'t save: %1$s</string>
+    <string name="scan_error_open_camera">Couldn\'t open camera: %1$s</string>
+    <string name="scan_error_camera_unavailable">camera unavailable</string>
+    <string name="scan_error_camera_source">camera source error</string>
+    <string name="detail_error_rename">Couldn\'t rename: %1$s</string>
+    <string name="detail_error_update_quantity">Couldn\'t update quantity: %1$s</string>
+    <string name="detail_error_save_restock">Couldn\'t save restock settings: %1$s</string>
+    <string name="detail_error_delete">Couldn\'t delete: %1$s</string>
+    <string name="buylist_error_load">Couldn\'t load the buying list: %1$s</string>
+    <string name="buylist_error_restock">Couldn\'t restock: %1$s</string>
+    <string name="cam_error_settings_unavailable">Couldn\'t open settings on this device</string>
 </resources>

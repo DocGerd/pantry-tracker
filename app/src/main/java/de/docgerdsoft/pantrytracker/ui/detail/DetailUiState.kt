@@ -1,6 +1,7 @@
 package de.docgerdsoft.pantrytracker.ui.detail
 
 import de.docgerdsoft.pantrytracker.data.local.Product
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 
 data class DetailUiState(
     val product: Product? = null,
@@ -16,7 +17,7 @@ data class DetailUiState(
      *  consumed once via [DetailViewModel.dismissError]. null when no error
      *  is pending. Mirrors ScanViewModel's Phase.Error per spec §7 "user-
      *  facing → inline". */
-    val error: String? = null,
+    val error: UiText? = null,
 ) {
     init {
         // Lift the producer-side invariant to runtime. If the row is gone

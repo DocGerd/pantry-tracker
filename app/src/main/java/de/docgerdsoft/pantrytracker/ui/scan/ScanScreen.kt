@@ -2,6 +2,7 @@ package de.docgerdsoft.pantrytracker.ui.scan
 
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -18,8 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.docgerdsoft.pantrytracker.R
+import de.docgerdsoft.pantrytracker.ui.common.UiText
 import de.docgerdsoft.pantrytracker.ui.scan.components.CameraPreview
 import de.docgerdsoft.pantrytracker.ui.scan.components.ErrorSheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.LoadingSheet
@@ -27,6 +33,7 @@ import de.docgerdsoft.pantrytracker.ui.scan.components.ManualEntrySheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.NotInInventorySheet
 import de.docgerdsoft.pantrytracker.ui.scan.components.ScanPreviewSheet
 import de.docgerdsoft.pantrytracker.ui.theme.AddGreen
+import de.docgerdsoft.pantrytracker.ui.theme.OnVerb
 import de.docgerdsoft.pantrytracker.ui.theme.RemoveRed
 import kotlinx.coroutines.CancellationException
 
@@ -43,7 +50,7 @@ fun ScanScreen(
     BindTestCameraSource(cameraSource, viewModel)
 
     val topBarColor = if (state.mode == ScanMode.Add) AddGreen else RemoveRed
-    val topBarTitle = if (state.mode == ScanMode.Add) "Scan to Add" else "Scan to Remove"
+    val topBarTitle = stringResource(if (state.mode == ScanMode.Add) R.string.scan_to_add else R.string.scan_to_remove)
 
     // Haptic on transition into Preview/ManualEntry (i.e. each successful decode).
     // CONFIRM was added in API 30 (Android 11); fall back to KEYBOARD_TAP on
@@ -63,17 +70,7 @@ fun ScanScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(topBarTitle) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = topBarColor),
-            )
-        },
+        topBar = { ScanTopBar(topBarTitle, topBarColor, onNavigateBack) },
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             // Skip the real CameraX/ML Kit binding when a test [CameraSource]
@@ -87,7 +84,9 @@ fun ScanScreen(
                 CameraPreview(
                     onBarcode = viewModel::onBarcodeDecoded,
                     onCameraError = { e ->
-                        viewModel.onCameraError(e.message ?: "camera unavailable")
+                        viewModel.onCameraError(
+                            cameraErrorReason(e, R.string.scan_error_camera_unavailable),
+                        )
                     },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -120,12 +119,44 @@ fun ScanScreen(
                     onDismiss = viewModel::dismissPreview,
                 )
                 is ScanUiState.Phase.Error -> ErrorSheet(
-                    message = phase.message,
+                    message = phase.message.resolve(LocalContext.current),
                     onDismiss = viewModel::dismissPreview,
                 )
             }
         }
     }
+}
+
+/**
+ * Scan top app bar. The container is the verb-accent fill ([AddGreen] /
+ * [RemoveRed]); the title + back-arrow foreground is pinned to [OnVerb] (white)
+ * so it reads on the fill in BOTH light and dark — the M3 default content colour
+ * flips dark in dark mode, rendering it at ~2:1 contrast (#241). Extracted from
+ * [ScanScreen] to keep that function under detekt's LongMethod threshold.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScanTopBar(
+    title: String,
+    containerColor: Color,
+    onNavigateBack: () -> Unit,
+) {
+    TopAppBar(
+        title = { Text(title) },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.cd_back),
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = containerColor,
+            titleContentColor = OnVerb,
+            navigationIconContentColor = OnVerb,
+        ),
+    )
 }
 
 /**
@@ -162,7 +193,16 @@ private fun BindTestCameraSource(
         } catch (e: CancellationException) {
             throw e
         } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
-            viewModel.onCameraError(e.message ?: "camera source error")
+            viewModel.onCameraError(cameraErrorReason(e, R.string.scan_error_camera_source))
         }
     }
 }
+
+/**
+ * Maps a camera/scanner [Throwable] to the user-facing reason shown in the Scan
+ * error sheet: the exception message when present, otherwise the localized
+ * [fallback] resource. Extracted from [ScanScreen] so the elvis/safe-call stays
+ * out of that composable's CyclomaticComplexMethod budget.
+ */
+private fun cameraErrorReason(throwable: Throwable, @StringRes fallback: Int): UiText =
+    throwable.message?.let { UiText.Raw(it) } ?: UiText.Res(fallback)

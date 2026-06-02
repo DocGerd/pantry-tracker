@@ -12,6 +12,58 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-06-02
+
+### Added
+
+- German (`de`) translation of the Compose UI layer, with the user-facing
+  strings externalized to resources and relative-time labels using
+  locale-correct plurals (#168).
+- ViewModel-layer error messages (Scan / Detail / Buying-list / camera-settings
+  Toast) externalized to string resources with German translations via a new
+  `UiText` resolvable-text type, completing the internationalization sweep
+  (#218, #168).
+- Monochrome / themed-icon layer (Android 13+) on the adaptive launcher icon, so
+  the OS can tint the canisters-and-shelf foreground to the user's monochrome theme.
+- README hero banner (`docs/brand/hero.svg`) and store-style screenshots; the
+  crisp 2560×1120 PNG export of the hero is deferred to the maintainer.
+
+### Changed
+
+- Refined the adaptive launcher-icon foreground geometry: the three flat
+  rectangles become rounded three-height pantry canisters with recessed lids,
+  and the shelf is redrawn as the DocGerdSoft datum stroke — all white on the
+  unchanged Fern `#4F7942` background.
+- Expanded the Material 3 theme from the previous primary-only override into a
+  full hand-built light/dark colour scheme seeded from Fern `#4F7942` (the
+  primary/secondary/tertiary/error/surface/outline/inverse roles mapped to hex;
+  the surface-tint tonal variants — surfaceContainerLowest/Low/High/Highest,
+  surfaceBright, surfaceDim, scrim, surfaceTint — seeded from Fern's neutral
+  tonal palette via material-color-utilities (HCT), so ModalBottomSheets and
+  other surface-tinted components no longer fall back to the M3 Baseline-purple
+  tint; #236/#240). The `AddGreen` / `RemoveRed` verb accents are retained as
+  brand constants outside the scheme.
+- Backed the ≥80% statement-coverage gate by promoting the emulator-backed
+  `androidTest` CI job (which runs `:app:jacocoTestCoverageVerification` at 0.80
+  LINE on the merged unit + instrumented JaCoCo report; baseline ~85.93% line)
+  to a required check on the develop ruleset, and closed the delete/undo
+  snackbar render path + an EN/DE format-template drift guard, satisfying
+  OpenSSF Silver `test_statement_coverage80`. A `codecov/project` ≥80%
+  line-coverage check is configured in `codecov.yml` but does not currently
+  post (account-level Codecov issue, deferred — #228), so it is not yet the
+  required check. (#219)
+
+### Fixed
+
+- Verb-action buttons (Home "Scan to Add" / "Scan to Remove", the Scan top app
+  bar title + back arrow, and the scan result-sheet confirm / switch buttons)
+  now use a fixed white foreground on the `AddGreen` / `RemoveRed` fills instead
+  of the theme-derived M3 default content colour, which rendered the labels +
+  icons at ~2:1 contrast — the filled buttons (`onPrimary`) in dark mode, and
+  the Scan top bar (`onSurface`) in light mode. White reads on both fills in
+  light and dark (~6.6:1 on AddGreen, ~8.6:1 on RemoveRed), clearing WCAG 2.1
+  AA. (#241)
+
 ## [1.3.1] — 2026-05-29
 
 ### Changed

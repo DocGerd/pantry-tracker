@@ -108,14 +108,14 @@
 | `roles_responsibilities` | Roles documented | `Met` | See [GOVERNANCE.md](https://github.com/DocGerd/pantry-tracker/blob/develop/GOVERNANCE.md) §Roles. |
 | `access_continuity` | Access-continuity plan | `Unmet` | Single-maintainer; succession plan TBD — track via separate ticket. |
 | `bus_factor` | Bus factor ≥ 2 | `Unmet` | Currently 1 — structural; same accept-risk as Scorecard Contributors check. |
-| `documentation_roadmap` | Roadmap documented | `Unmet` | No `ROADMAP.md` yet — track via separate ticket (link to v1.3 milestone planned). |
+| `documentation_roadmap` | Roadmap documented | `Unmet` | [`ROADMAP.md`](https://github.com/DocGerd/pantry-tracker/blob/develop/ROADMAP.md) exists at repo root; criterion is satisfiable — pending the bestpractices.dev form link (a form edit, not a docs task). |
 | `documentation_architecture` | Architecture documented | `Met` | See [docs/architecture/](https://github.com/DocGerd/pantry-tracker/tree/develop/docs/architecture) (arc42). |
 | `documentation_security` | Security architecture documented | `Met` | See [docs/security-posture.md](https://github.com/DocGerd/pantry-tracker/blob/develop/docs/security-posture.md) + [docs/security/](https://github.com/DocGerd/pantry-tracker/tree/develop/docs/security). |
 | `documentation_quick_start` | Quick-start guide | `Met` | See [README.md §Install](https://github.com/DocGerd/pantry-tracker/blob/develop/README.md). |
 | `documentation_current` | Docs kept current | `Met` | CHANGELOG and arc42 reviewed per release. |
 | `documentation_achievements` | Achievements documented | `Met` | [CHANGELOG.md](https://github.com/DocGerd/pantry-tracker/blob/develop/CHANGELOG.md). |
 | `accessibility_best_practices` | Accessibility considered | `Met` | Compose semantics + content-description audit — see [`docs/uat/v1-uat-checklist.md`](https://github.com/DocGerd/pantry-tracker/blob/develop/docs/uat/v1-uat-checklist.md). |
-| `internationalization` | I18n considered | `Unmet` | Currently English-only; no i18n framework adopted yet. |
+| `internationalization` | I18n considered | `Met` | String-resource framework adopted with a full German (`values-de/`) translation of the Compose UI layer + locale-correct relative-time plurals (#168); AGP Lint `HardcodedText` gated to error as a regression guard. Residual ViewModel-layer error strings tracked in #218. |
 | `sites_password_security` | Project sites enforce password security | `N/A` | Project has no auth-bearing sites. |
 | `maintenance_or_update` | Project is maintained or updated | `Met` | Three releases in 10 days; weekly security scans active. |
 | `report_tracker` | Report tracker (silver level) | `Met` | [GitHub Issues](https://github.com/DocGerd/pantry-tracker/issues) with labels and milestones. |
@@ -136,7 +136,7 @@
 | `interfaces_current` | Public interfaces current | `N/A` | No public programmatic interfaces (Android app). |
 | `automated_integration_testing` | CI runs integration tests | `Met` | Robolectric + emulator-backed `connectedDebugAndroidTest` — see [`.github/workflows/ci.yml`](https://github.com/DocGerd/pantry-tracker/blob/develop/.github/workflows/ci.yml). |
 | `regression_tests_added50` | Regression tests for ≥ 50% bug fixes | `Met` | PR template enforces; see closed bugfix PRs (e.g. #117, #53). |
-| `test_statement_coverage80` | ≥ 80% statement coverage | `Unmet` | No coverage threshold gate currently — track via separate ticket. |
+| `test_statement_coverage80` | ≥ 80% statement coverage | `Met` | Merged JaCoCo **line** (statement) coverage is ~85.93% (≥ 80%), measured against the combined JVM-unit + emulator-instrumented report. Enforcement: the emulator-backed **`androidTest`** CI job runs `:app:jacocoTestCoverageVerification` at the 0.80 LINE gate on the merged report and is a **required** status check on the develop ruleset (`16993554`). A `codecov/project` ≥ 80% line-coverage status check is also configured in [`codecov.yml`](https://github.com/DocGerd/pantry-tracker/blob/develop/codecov.yml) but does not currently post (account-level Codecov issue, deferred — #228), so it is not (yet) a required check; the main ruleset (`16948699`) coverage promotion is likewise deferred. See [`.github/workflows/ci.yml`](https://github.com/DocGerd/pantry-tracker/blob/develop/.github/workflows/ci.yml). (#219) |
 | `test_policy_mandated` | Test addition mandatory | `Met` | PR template + multi-agent review enforce this. |
 | `tests_documented_added` | Test-addition policy documented (silver) | `Met` | See [CONTRIBUTING.md](https://github.com/DocGerd/pantry-tracker/blob/develop/CONTRIBUTING.md). |
 | `warnings_strict` | Strictest warnings (silver level) | `Met` | Detekt full ruleset + Lint baseline=0 + CodeQL `security-and-quality`. |
@@ -156,7 +156,7 @@
 | `static_analysis_common_vulnerabilities` | SA common vulns (silver) | `Met` | CodeQL `security-and-quality` covers CWE Top 25. |
 | `dynamic_analysis_unsafe` | Dyn-analysis on unsafe code (silver) | `N/A` | 100% Kotlin (memory-safe). |
 
-`Unmet` rows at silver level: `dco`, `access_continuity`, `bus_factor`, `documentation_roadmap`, `internationalization`, `test_statement_coverage80`, `signed_releases`, `version_tags_signed`, `assurance_case` — file follow-up tickets for the ones you want to close before claiming silver. Three of them (`signed_releases`, `bus_factor` ≈ Contributors, structural-zero accept-risk) overlap with sibling Scorecard tickets.
+`Unmet` rows at silver level: `dco`, `access_continuity`, `bus_factor`, `documentation_roadmap`, `signed_releases`, `version_tags_signed`, `assurance_case` — file follow-up tickets for the ones you want to close before claiming silver. Three of them (`signed_releases`, `bus_factor` ≈ Contributors, structural-zero accept-risk) overlap with sibling Scorecard tickets.
 
 ## Maintenance
 

@@ -67,6 +67,13 @@ review cycle (see [`CONTRIBUTING.md`](../CONTRIBUTING.md) → Code review):
 - `post-finding` — a `gh api`-based fallback for posting an inline review thread
   when the GitHub MCP isn't available.
 - `milestone-start` — scaffolds a new milestone (branch + spec stub + plan stub).
+- `release` — the GitFlow release-cut recipe: version bump on a `release/X.Y.Z`
+  branch, signed-APK build (with the `GRADLE_USER_HOME` signing-props bridge),
+  Room-migration UAT when the schema changed, dependency lock, then — after the
+  **human** merges to `main`+`develop` — tag the merge commit and create a
+  one-shot immutable GitHub Release. Distils [`docs/release/SHIPPING.md`](../docs/release/SHIPPING.md) §B
+  and the bitten gotchas (immutable-release one-shot, signing-props masking,
+  tag-burn). Human-initiated; respects the only-humans-merge rule.
 - `wrap` — standardised end-of-session handover.
 
 ## Adding new automations
