@@ -446,7 +446,8 @@ restructured to make the lesson load-bearing on its own.*
   theme/colour change stales a golden ONLY if some golden actually renders the
   changed role: #240 set 8 surface-tint roles (surfaceContainer*/surfaceBright/
   surfaceDim/scrim/surfaceTint) yet staled **zero** goldens — none of the 11
-  render them (they paint only `background`/`primary`/`surfaceVariant`, and
+  render them (they reference only `background`/`primary`/`surfaceVariant` and
+  their `on*` content roles — none of #240's 8 surface-tint roles — and
   `ScreenshotTestBase.renderToBitmap`'s decorView background comes from the
   Android XML theme, not the Compose scheme). Before committing to the
   multi-CI-round regen dance, `grep` the screenshot-test *sources*
