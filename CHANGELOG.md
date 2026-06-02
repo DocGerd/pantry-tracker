@@ -53,9 +53,11 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 - Verb-action buttons (Home "Scan to Add" / "Scan to Remove", the Scan top app
   bar title + back arrow, and the scan result-sheet confirm / switch buttons)
   now use a fixed white foreground on the `AddGreen` / `RemoveRed` fills instead
-  of the M3 default content colour, which flipped dark in dark mode and rendered
-  the labels + icons at ~2:1 contrast. White reads on both fills in light and
-  dark (~6.6:1 on AddGreen, ~8.6:1 on RemoveRed), clearing WCAG 2.1 AA. (#241)
+  of the theme-derived M3 default content colour, which rendered the labels +
+  icons at ~2:1 contrast — the filled buttons (`onPrimary`) in dark mode, and
+  the Scan top bar (`onSurface`) in light mode. White reads on both fills in
+  light and dark (~6.6:1 on AddGreen, ~8.6:1 on RemoveRed), clearing WCAG 2.1
+  AA. (#241)
 
 ## [1.3.1] — 2026-05-29
 

@@ -17,10 +17,12 @@ val AddGreen: Color = Color(0xFF2A6A2A)
 val RemoveRed: Color = Color(0xFF8A2A2A)
 
 /** Foreground (label + icon) for the [AddGreen] / [RemoveRed] verb-accent fills.
- *  Fixed near-white and mode-independent: the verb containers are themselves
- *  mode-independent, but the M3 default button / top-app-bar content colour
- *  flips dark in dark mode (onPrimary / onSurface), rendering dark-on-colour with
- *  low contrast. Pure white reads on both verb fills in light AND dark —
- *  ~6.6:1 on AddGreen, ~8.6:1 on RemoveRed (computed via WCAG relative
- *  luminance), comfortably clearing WCAG 2.1 AA (4.5:1 text, 3:1 icons). See #241. */
+ *  Fixed near-white and mode-independent. The verb containers are themselves
+ *  mode-independent, but the M3 default content colour is theme-derived and
+ *  reads low-contrast on them: filled buttons default to `onPrimary` (near-black
+ *  in DARK mode → ~2:1), and the Scan top app bar defaults to `onSurface`
+ *  (near-black in LIGHT mode → ~2:1 on RemoveRed) — both failing AA in at least
+ *  one mode. Pure white reads on both fills in light AND dark — ~6.6:1 on
+ *  AddGreen, ~8.6:1 on RemoveRed (computed via WCAG relative luminance),
+ *  comfortably clearing WCAG 2.1 AA (4.5:1 text, 3:1 icons). See #241. */
 val OnVerb: Color = Color.White
