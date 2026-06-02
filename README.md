@@ -25,10 +25,10 @@ no accounts, no analytics, and no crash reporter.
 
 ## Scope / Status
 
-- **v1.0.0** (2026-05-18) through **v1.3.1** (2026-05-29) have shipped as **signed
+- **v1.0.0** (2026-05-18) through **v1.4.0** (2026-06-02) have shipped as **signed
   sideload APKs** on [GitHub Releases](https://github.com/DocGerd/pantry-tracker/releases).
   There is no Play Store or F-Droid presence — distribution is sideload-only.
-- The current release is **[v1.3.1](https://github.com/DocGerd/pantry-tracker/releases/latest)**.
+- The current release is **[v1.4.0](https://github.com/DocGerd/pantry-tracker/releases/latest)**.
   See [`CHANGELOG.md`](CHANGELOG.md) for the per-version detail and the `Unreleased`
   section for what's queued.
 

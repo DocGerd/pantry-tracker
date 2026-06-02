@@ -491,6 +491,45 @@ v1.3 introduces a Room schema migration (`MIGRATION_2_3`: adds the opt-in
 
 ---
 
+## v1.4 release-cut checklist
+
+v1.4 is a **minor feature release** — German (`de`) localization (#168/#218) and
+the full Material 3 DocGerdSoft brand theme + redesigned launcher icon (#236/#240),
+plus the verb-button contrast a11y fix (#241). **No Room schema change** (the DB
+stays at schema v3, the v1.3 buying-list version) — so unlike v1.2/v1.3 there is
+**no `verify-migration-*.sh` step**; the upgrade-install is a plain `install -r`
+over v1.3.1, which still doubles as the signing-continuity check. Cut on a
+`release/1.4.0` branch off `develop`, PR'd into **both** `main` and `develop`
+(GitFlow).
+
+1. [ ] `release/1.4.0` off `develop`; `app/build.gradle.kts` bumped to
+       `versionCode = 7`, `versionName = "1.4.0"`; CHANGELOG `[Unreleased]`
+       promoted to `[1.4.0]`; README / SECURITY.md / CLAUDE.md latest-release
+       lines bumped to v1.4.0.
+2. [ ] Bridge signing properties if `GRADLE_USER_HOME` is redirected (see
+       Common gotchas).
+3. [ ] `./gradlew :app:assembleRelease` — verify `app-release.apk` exists
+       (not `app-release-unsigned.apk`).
+4. [ ] Confirm the signature: `apksigner verify --print-certs
+       app/build/outputs/apk/release/app-release.apk` shows cert SHA-256
+       `ec9a4bb8…b3d9`. Run `scripts/uat/verify-r8-keep-rules.sh` (SR-80). No
+       schema migration to verify; walk the relevant
+       [UAT checklist](../uat/v1-uat-checklist.md) scenarios on a real device
+       (incl. the German-locale strings and the new theme/icon rendering).
+5. [ ] A human merges the `release/1.4.0` PRs into `main` AND `develop`.
+6. [ ] **Lock dependencies for the tag** (see
+       [§ Release-tag dependency-lock procedure](#release-tag-dependency-lock-procedure))
+       — placed on the **release branch** pre-merge so it rides into `main`
+       through the human's merge (Claude does not push `main`).
+7. [ ] Tag the merged `main` HEAD:
+       `git tag -a v1.4.0 origin/main -m "v1.4.0 release" && git push origin v1.4.0`
+8. [ ] Build the shippable APK **from the tag**, then create the GitHub Release
+       **one-shot**, APK attached at creation (immutable releases reject adding
+       assets after publish — never the two-step):
+       `gh release create v1.4.0 app/build/outputs/apk/release/app-release.apk --title "v1.4.0 …" --notes-file <notes>`.
+
+---
+
 ## Common gotchas
 
 | Symptom | Cause | Fix |

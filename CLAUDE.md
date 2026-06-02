@@ -3,7 +3,7 @@
 Standalone Android Kotlin/Compose app for whole-number kitchen inventory.
 Two Gradle modules: `:app` (the Android app) and `:detekt-rules` (a pure-JVM
 module holding the custom detekt rule set — see the ErrorTone note below).
-Latest release: v1.3.1 (2026-05-29). All releases ship as signed sideload
+Latest release: v1.4.0 (2026-06-02). All releases ship as signed sideload
 APKs on GitHub Releases — note v* releases are immutable (asset must be
 attached at creation; see SHIPPING.md). CHANGELOG.md holds per-version history.
 

@@ -5,7 +5,7 @@
 Pantry Tracker ships as signed sideload APKs on
 [GitHub Releases](https://github.com/DocGerd/pantry-tracker/releases). Only the
 **latest release** receives security fixes; the current supported release is
-**v1.3.1** (2026-05-29). Older sideloaded APKs are unsupported — update to the
+**v1.4.0** (2026-06-02). Older sideloaded APKs are unsupported — update to the
 latest release.
 
 ## Reporting a Vulnerability
