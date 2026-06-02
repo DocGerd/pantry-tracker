@@ -12,6 +12,8 @@ For architecture documentation see [`docs/architecture/`](docs/architecture/).
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-06-02
+
 ### Added
 
 - German (`de`) translation of the Compose UI layer, with the user-facing
