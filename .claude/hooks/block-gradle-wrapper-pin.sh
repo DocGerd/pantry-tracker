@@ -32,11 +32,19 @@
 # only safe default for a guard hook. A guard that silently allows when it
 # can't tell what's happening is worse than no guard at all.
 #
+# The command is split at shell separators (`;` `|` `&` backtick `(` `)`
+# newline) and each segment judged in isolation, so a token or flag in a
+# DIFFERENT command segment never crosses over — `./gradlew tasks | grep
+# wrapper` is correctly allowed, and `./gradlew wrapper; echo
+# --gradle-distribution-sha256-sum` is correctly blocked (the flag lives in the
+# wrong segment). See the segment-splitting comment in the body.
+#
 # Known limitations (consistent with block-dangerous-bash.sh):
-# - Matches on raw command text. A Bash command whose *body* merely contains
-#   the literal `gradlew ... wrapper` (e.g. `echo "./gradlew wrapper ..."` as
-#   documentation, or `./gradlew help --task wrapper`) will false-positive and
-#   be blocked. Prefer the Write/Edit tools for such text, or add the SHA flag.
+# - Matches on raw command text WITHIN a segment. A `wrapper` token used as an
+#   argument *value* in the same gradlew segment (e.g. `./gradlew help --task
+#   wrapper`), or echoing the literal `./gradlew wrapper …` as documentation in
+#   one segment, still false-positives. Prefer the Write/Edit tools for such
+#   text, or add the SHA flag.
 # - Cannot catch deferred shell expansion (`t=wrapper; ./gradlew $t`); the
 #   literal text carries no `wrapper` task-token at hook-evaluation time.
 #
@@ -62,6 +70,18 @@
 #   echo '{"tool_input":{"command":"git status gradle/wrapper/gradle-wrapper.properties"}}' \
 #     | bash .claude/hooks/block-gradle-wrapper-pin.sh ; echo "exit=$?"
 # Expected: exit=0 (wrapper inside a path, not a gradlew task token).
+#   echo '{"tool_input":{"command":"./gradlew wrapper; echo --gradle-distribution-sha256-sum=fake"}}' \
+#     | bash .claude/hooks/block-gradle-wrapper-pin.sh ; echo "exit=$?"
+# Expected: exit=2 (segment-anchored: a SHA flag in a DIFFERENT segment must NOT excuse the bare wrapper).
+#   echo '{"tool_input":{"command":"./gradlew clean --gradle-distribution-sha256-sum x; ./gradlew wrapper"}}' \
+#     | bash .claude/hooks/block-gradle-wrapper-pin.sh ; echo "exit=$?"
+# Expected: exit=2 (the bare wrapper segment lacks its own SHA flag).
+#   echo '{"tool_input":{"command":"./gradlew clean && ./gradlew wrapper --gradle-version 9.6 --gradle-distribution-sha256-sum=x"}}' \
+#     | bash .claude/hooks/block-gradle-wrapper-pin.sh ; echo "exit=$?"
+# Expected: exit=0 (positive control: the SHA flag belongs to the wrapper segment within a chain).
+#   echo '{"tool_input":{"command":"./gradlew tasks --all | grep wrapper"}}' \
+#     | bash .claude/hooks/block-gradle-wrapper-pin.sh ; echo "exit=$?"
+# Expected: exit=0 (segment-anchored: a `wrapper` token in a DIFFERENT segment is not the wrapper task).
 #   echo 'not json' | bash .claude/hooks/block-gradle-wrapper-pin.sh ; echo "exit=$?"
 # Expected: exit=2 (fail-closed on parse failure).
 set -euo pipefail
@@ -99,30 +119,13 @@ if [[ -z "$command" ]]; then
     exit 0
 fi
 
-# Is this a `./gradlew` (or `gradlew`) invocation running the `wrapper` task?
-#   gradlew token: preceded by start, whitespace, or `/` (for `./gradlew`) and
-#     followed by whitespace — so `foogradlew` / `mygradlew` do NOT match.
-#   wrapper token: a standalone gradle task argument, preceded by whitespace or
-#     `:` (for `:wrapper`) and followed by whitespace — so it does NOT match
-#     `wrapper` inside a path (`gradle/wrapper/…`, preceded by `/`) or in
-#     `gradle-wrapper.properties` (preceded by `-`, followed by `.`).
-# The surrounding-space padding (" $command ") lets the boundary classes treat
-# the command's first/last tokens uniformly.
-is_gradlew=false
-is_wrapper_task=false
-[[ " $command " =~ (^|[[:space:]/])gradlew[[:space:]] ]] && is_gradlew=true
-[[ " $command " =~ [[:space:]:]wrapper[[:space:]] ]] && is_wrapper_task=true
-
-if [[ "$is_gradlew" == true && "$is_wrapper_task" == true ]]; then
-    # The wrapper task is being run. Allow ONLY if the SHA-pinning flag is
-    # present (space form `--gradle-distribution-sha256-sum VALUE` or attached
-    # form `--gradle-distribution-sha256-sum=VALUE`).
-    if [[ ! " $command " =~ [[:space:]]--gradle-distribution-sha256-sum([[:space:]=]) ]]; then
-        cat >&2 <<MSG
+reject() {
+    cat >&2 <<MSG
 Refusing to run this command: it regenerates the Gradle wrapper WITHOUT pinning
 distributionSha256Sum, which silently drops the SR-5 SHA pin from
 gradle/wrapper/gradle-wrapper.properties.
 
+Offending invocation: $1
 Full command: $command
 
 Use the atomic two-flag form (the ONLY invocation that rewrites both
@@ -137,8 +140,36 @@ with \`distributionUrl\`". \`.github/workflows/ci.yml\` asserts the pin on every
 PR, but a feature-branch push runs no CI — so an unpinned wrapper bricks the
 local dev loop before CI sees it. Fix the invocation; do not bypass this guard.
 MSG
-        exit 2
+    exit 2
+}
+
+# Split the command into segments at shell separators (`;` `|` `&` backtick
+# `(` `)` and newline) so a token or flag in a DIFFERENT command segment cannot
+# influence the decision for THIS gradlew invocation. This anchoring mirrors
+# block-dangerous-bash.sh scoping `main` to a single `git push`; here each
+# `gradlew … wrapper …` segment is judged in isolation. Without it:
+#   • `./gradlew wrapper; echo --gradle-distribution-sha256-sum` would falsely
+#     PASS (the SHA flag lives in the wrong segment), and
+#   • `./gradlew tasks | grep wrapper` would falsely BLOCK (the `wrapper` token
+#     lives in the wrong segment).
+sep_chars=$';|&()\x60'   # shell separators, incl. backtick (\x60)
+segmented="${command//[$sep_chars]/$'\n'}"
+
+while IFS= read -r segment; do
+    [[ -z "$segment" ]] && continue
+    # This segment must be a `gradlew` invocation (token preceded by
+    # start/whitespace/`/`, so `foogradlew` does NOT match) AND run the
+    # `wrapper` task (token preceded by whitespace or `:` for `:wrapper`, and
+    # followed by whitespace — so it does NOT match `wrapper` inside a path
+    # like `gradle/wrapper/…`, nor in `gradle-wrapper.properties`).
+    [[ " $segment " =~ (^|[[:space:]/])gradlew[[:space:]] ]] || continue
+    [[ " $segment " =~ [[:space:]:]wrapper[[:space:]] ]] || continue
+    # The wrapper task runs in THIS segment. Allow ONLY if the SHA-pinning flag
+    # is present IN THE SAME SEGMENT (space form
+    # `--gradle-distribution-sha256-sum VALUE` or attached form `…=VALUE`).
+    if [[ ! " $segment " =~ [[:space:]]--gradle-distribution-sha256-sum([[:space:]=]) ]]; then
+        reject "$(printf '%s' "$segment" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
     fi
-fi
+done <<< "$segmented"
 
 exit 0
