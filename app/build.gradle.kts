@@ -288,6 +288,29 @@ configurations.matching {
     resolutionStrategy.activateDependencyLocking()
 }
 
+// CVE-2026-44249 / -45416 / -47244 / -48043 (#264): Google's Unified Test Platform
+// (UTP) test-orchestration configs on :app (`unified-test-platform-core` and
+// `unified-test-platform-android-test-plugin-host-emulator-control`) pull
+// io.grpc:grpc-netty → vulnerable io.netty (4.1.93 / 4.1.110, both ≤ 4.1.134.Final).
+// This is BUILD-TIME TEST TOOLING ONLY: Netty is absent from every app runtime
+// classpath (releaseRuntimeClasspath / debugRuntimeClasspath), so it never ships in
+// the APK — verified, and these configs are the only Netty source in the build.
+// We pin it to the patched release anyway so the CI/dev test toolchain carries no
+// known-vulnerable Netty. AGP 9.2.1 is the latest STABLE AGP (9.3.0 is alpha-only)
+// and does not yet bump UTP's transitive, so a resolution pin is the only stable
+// lever. Drop this block once a stable AGP ships UTP with Netty > 4.1.134.Final.
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "io.netty") {
+            useVersion("4.1.135.Final")
+            because(
+                "CVE-2026-44249/45416/47244/48043: pin AGP UTP test-tooling Netty " +
+                    "to the patched release (build-time only; not shipped). See #264.",
+            )
+        }
+    }
+}
+
 detekt {
     buildUponDefaultConfig = true
     allRules = false
