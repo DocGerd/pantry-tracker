@@ -296,16 +296,22 @@ configurations.matching {
 // classpath (releaseRuntimeClasspath / debugRuntimeClasspath), so it never ships in
 // the APK — verified, and these configs are the only Netty source in the build.
 // We pin it to the patched release anyway so the CI/dev test toolchain carries no
-// known-vulnerable Netty. AGP 9.2.1 is the latest STABLE AGP (9.3.0 is alpha-only)
-// and does not yet bump UTP's transitive, so a resolution pin is the only stable
-// lever. Drop this block once a stable AGP ships UTP with Netty > 4.1.134.Final.
+// known-vulnerable Netty. No stable AGP yet bumps UTP's transitive, so a resolution
+// pin is the only stable lever (the exact AGP/UTP versions are recorded in the dated
+// docs/security-posture.md block + plan, which are expected to age). Drop this block
+// once a stable AGP ships UTP with Netty > 4.1.134.Final.
+//
+// Scoped to the 4.1.x line on purpose: useVersion forces UNCONDITIONALLY, including
+// downgrades — so we must NOT silently pull a future UTP bump to Netty 4.2.x back to
+// 4.1.135. Letting 4.2.x through means Dependabot re-evaluates it on its own merits
+// (4.2.x has a separate CVE branch, patched at 4.2.15.Final).
 configurations.configureEach {
     resolutionStrategy.eachDependency {
-        if (requested.group == "io.netty") {
+        if (requested.group == "io.netty" && requested.version.orEmpty().startsWith("4.1.")) {
             useVersion("4.1.135.Final")
             because(
                 "CVE-2026-44249/45416/47244/48043: pin AGP UTP test-tooling Netty " +
-                    "to the patched release (build-time only; not shipped). See #264.",
+                    "to the patched 4.1.x release (build-time only; not shipped). See #264.",
             )
         }
     }

@@ -326,8 +326,9 @@ corrected the source model and the remedy:
 it is fixable without an AGP upgrade** — a refinement to step 2 of the triage
 policy above. AGP 9.2.1 is the latest *stable* AGP (9.3.0 is alpha-only) and does
 not bump UTP's transitive, so a `resolutionStrategy` pin in
-[`app/build.gradle.kts`](../app/build.gradle.kts) forcing `io.netty:*` to
-`4.1.135.Final` is the stable lever. Verified: it moves all UTP Netty modules to
+[`app/build.gradle.kts`](../app/build.gradle.kts) forcing `io.netty:*` (within the
+4.1.x line — `useVersion` downgrades too, so a future UTP jump to Netty 4.2.x is
+left to flow through) to `4.1.135.Final` is the stable lever. Verified: it moves all UTP Netty modules to
 the patched release while leaving `app/gradle.lockfile` byte-identical (no runtime
 impact); UTP execution under the pinned Netty is gated by the required CI
 `androidTest` job. This both removes vulnerable Netty from the test toolchain and

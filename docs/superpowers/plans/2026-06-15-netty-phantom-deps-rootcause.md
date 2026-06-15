@@ -49,10 +49,13 @@ them. The real runtime CVE surface is separately and accurately gated by
 ```kotlin
 configurations.configureEach {
     resolutionStrategy.eachDependency {
-        if (requested.group == "io.netty") {
+        // Scoped to the 4.1.x line: useVersion forces unconditionally (incl.
+        // downgrades), so a future UTP bump to Netty 4.2.x must flow through
+        // untouched rather than be downgraded back to 4.1.135.
+        if (requested.group == "io.netty" && requested.version.orEmpty().startsWith("4.1.")) {
             useVersion("4.1.135.Final")
             because("CVE-2026-44249/45416/47244/48043: pin AGP UTP test-tooling Netty " +
-                "to the patched release (build-time only; not shipped). See #264.")
+                "to the patched 4.1.x release (build-time only; not shipped). See #264.")
         }
     }
 }
