@@ -288,6 +288,35 @@ configurations.matching {
     resolutionStrategy.activateDependencyLocking()
 }
 
+// CVE-2026-44249 / -45416 / -47244 / -48043 (#264): Google's Unified Test Platform
+// (UTP) test-orchestration configs on :app (`unified-test-platform-core` and
+// `unified-test-platform-android-test-plugin-host-emulator-control`) pull
+// io.grpc:grpc-netty → vulnerable io.netty (4.1.93 / 4.1.110, both ≤ 4.1.134.Final).
+// This is BUILD-TIME TEST TOOLING ONLY: Netty is absent from every app runtime
+// classpath (releaseRuntimeClasspath / debugRuntimeClasspath), so it never ships in
+// the APK — verified, and these configs are the only Netty source in the build.
+// We pin it to the patched release anyway so the CI/dev test toolchain carries no
+// known-vulnerable Netty. No stable AGP yet bumps UTP's transitive, so a resolution
+// pin is the only stable lever (the exact AGP/UTP versions are recorded in the dated
+// docs/security-posture.md block + plan, which are expected to age). Drop this block
+// once a stable AGP ships UTP with Netty > 4.1.134.Final.
+//
+// Scoped to the 4.1.x line on purpose: useVersion forces UNCONDITIONALLY, including
+// downgrades — so we must NOT silently pull a future UTP bump to Netty 4.2.x back to
+// 4.1.135. Letting 4.2.x through means Dependabot re-evaluates it on its own merits
+// (4.2.x has a separate CVE branch, patched at 4.2.15.Final).
+configurations.configureEach {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "io.netty" && requested.version.orEmpty().startsWith("4.1.")) {
+            useVersion("4.1.135.Final")
+            because(
+                "CVE-2026-44249/45416/47244/48043: pin AGP UTP test-tooling Netty " +
+                    "to the patched 4.1.x release (build-time only; not shipped). See #264.",
+            )
+        }
+    }
+}
+
 detekt {
     buildUponDefaultConfig = true
     allRules = false

@@ -1,7 +1,7 @@
 # Security posture
 
 > **Status:** Living document.
-> **Last reviewed:** 2026-06-01.
+> **Last reviewed:** 2026-06-15.
 > **Cadence:** reviewed on every major release (next: v2.0) and whenever a
 > structural item below changes (e.g. new CI workflow, signing-cert rotation,
 > distribution-channel change).
@@ -301,6 +301,45 @@ transitives are bumped to their patched versions in any stable AGP yet, so no
 `libs.versions.toml` bump could close them. They were dismissed as
 `tolerable_risk` per step 3 above, to be revisited when a stable AGP pulls the
 fixes.
+
+**2026-06-15 update (wave two — [#264](https://github.com/DocGerd/pantry-tracker/issues/264) / dismissals #29–#32, then *fixed*):**
+four new Netty CVEs (CVE-2026-44249 / -45416 / -47244 / -48043) re-flagged
+`netty-handler` / `netty-codec-http2` against `settings.gradle.kts`. Step-1
+verification on AGP 9.2.1 again found Netty absent from `git grep`,
+`app/gradle.lockfile`, `settings-gradle.lockfile`, `:buildEnvironment`,
+`releaseRuntimeClasspath`, and `debugRuntimeClasspath` — yet the GitHub
+dependency-graph SBOM still listed 24 Netty/grpc-netty entries. Tracing *why*
+corrected the source model and the remedy:
+
+- The submitted graph comes from GitHub's **Automatic Dependency Submission**
+  (`gradle/actions/setup-gradle`), which force-resolves every configuration — not
+  the static manifest parser (which reports `deps=0` for `settings.gradle.kts`).
+- The only Netty in the whole build is on **two `:app` project configurations**
+  created by Google's **Unified Test Platform (UTP)**, the instrumented-test
+  orchestrator: `unified-test-platform-core` (grpc-netty 1.57.2 → Netty 4.1.93)
+  and `unified-test-platform-android-test-plugin-host-emulator-control`
+  (grpc-netty 1.69.1 → Netty 4.1.110). UTP runs on the CI/dev machine during
+  `connectedAndroidTest`; it is build-time test tooling, never in the APK
+  (`grpc-netty` is unsupported on Android at runtime).
+
+**Because the Netty lives on *project* configurations (not the plugin classpath),
+it is fixable without an AGP upgrade** — a refinement to step 2 of the triage
+policy above. AGP 9.2.1 is the latest *stable* AGP (9.3.0 is alpha-only) and does
+not bump UTP's transitive, so a `resolutionStrategy` pin in
+[`app/build.gradle.kts`](../app/build.gradle.kts) forcing `io.netty:*` (within the
+4.1.x line — `useVersion` downgrades too, so a future UTP jump to Netty 4.2.x is
+left to flow through) to `4.1.135.Final` is the stable lever. Verified: it moves all UTP Netty modules to
+the patched release while leaving `app/gradle.lockfile` byte-identical (no runtime
+impact); UTP execution under the pinned Netty is gated by the required CI
+`androidTest` job. This both removes vulnerable Netty from the test toolchain and
+makes the next force-resolved submission report the patched version — clearing the
+alerts at the source rather than per-wave dismissal. The four wave-two alerts were
+dismissed as `tolerable_risk` in the interim. **General rule:** for a
+`settings.gradle.kts`-flagged transitive, check whether it sits on a *project*
+configuration (forceable via `resolutionStrategy`) before falling back to
+dismissal — only genuine plugin/buildscript-classpath transitives are
+AGP-version-gated. Full analysis:
+[`docs/superpowers/plans/2026-06-15-netty-phantom-deps-rootcause.md`](superpowers/plans/2026-06-15-netty-phantom-deps-rootcause.md).
 
 ## Structural OpenSSF Scorecard zeros — and what we do instead
 
@@ -674,8 +713,10 @@ This document is reviewed:
 - **On any update to [`SECURITY.md`](../SECURITY.md)** — the scope
   definitions must agree.
 
-Last reviewed: **2026-06-01** (content confirmed current for #223; provenance
-section already reflects the v1.3.1 cosign/SLSA retirement, #210/#211).
+Last reviewed: **2026-06-15** (added the wave-two Netty triage + `resolutionStrategy`
+pin remedy to §"Build-time vs. runtime exposure model", #264; prior review
+2026-06-01 for #223, provenance section reflects the v1.3.1 cosign/SLSA
+retirement, #210/#211).
 
 ## Assurance case
 
