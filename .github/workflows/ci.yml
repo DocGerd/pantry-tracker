@@ -174,7 +174,7 @@ jobs:
 
       - name: Create AVD snapshot (cache miss only)
         if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.37.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d  # v2.38.0
         with:
           api-level: 35
           target: google_apis
@@ -189,7 +189,7 @@ jobs:
       # default `-no-snapshot` the cached snapshot is never loaded and the cache is a
       # silent no-op. `force-avd-creation: false` keeps the restored AVD from being
       # clobbered. See the #201 spike gotcha.
-      - uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.37.0
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d  # v2.38.0
         with:
           api-level: 35
           target: google_apis
