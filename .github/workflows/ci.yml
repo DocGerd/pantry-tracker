@@ -62,7 +62,7 @@ jobs:
             echo "::notice::No Gradle wrapper yet -- milestone 0 (project skeleton) has not started. CI will activate once the Android skeleton lands."
           fi
 
-      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95  # v5.6.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         if: steps.gate.outputs.ready == 'true'
         with:
           distribution: temurin
@@ -71,7 +71,7 @@ jobs:
       - uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699  # v4.0.1
         if: steps.gate.outputs.ready == 'true'
 
-      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92  # v6.2.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
         if: steps.gate.outputs.ready == 'true'
 
       - name: Build, unit-test, lint
@@ -123,7 +123,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95  # v5.6.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961  # v5.7.0
         with:
           distribution: temurin
           java-version: '21'
@@ -142,7 +142,7 @@ jobs:
       # populated by prior runs; non-default branches are read-only by default, so
       # the full reuse benefit (deps restored, recompile FROM-CACHE) lands after
       # develop/main has run this job once. Coverage-neutral.
-      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92  # v6.2.0
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb  # v6.3.0
 
       - name: Enable KVM
         run: |
