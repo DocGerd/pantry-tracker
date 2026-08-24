@@ -14,14 +14,23 @@ high-signal — pointers, not duplication of the source-of-truth docs.
 
 The repo follows **GitFlow**: `develop` is the integration branch + default,
 `main` is release-tagged/production. **Every change reaching `develop` OR
-`main` MUST go through a PR that the human merges.** Claude may open PRs, push
-to feature branches, dispatch review subagents, post + resolve inline threads,
-create tags, build APKs, and create GitHub Releases — but MUST NOT invoke `gh
-pr merge` or `git push origin develop`/`git push origin main` (or any
-equivalent that lands code on either protected branch). No exceptions for
+`main` MUST go through a PR that the human merges** (one carve-out, below).
+Claude may open PRs, push to feature branches, dispatch review subagents,
+post + resolve inline threads, create tags, build APKs, and create GitHub
+Releases — but MUST NOT invoke `gh pr merge` or `git push origin
+develop`/`git push origin main` (or any equivalent that lands code on either
+protected branch). No exceptions for
 one-line reverts, "UAT-verified" hotfixes, wrap-up phases, or ambiguous "do
 the rest" / "continue" instructions. When in doubt, ASK before merging. The
 audit-trail gate is the human's explicit click on "Merge pull request".
+
+**Standing carve-out (2026-08-24, #297):** Claude MAY merge a **Dependabot-
+authored PR based on `develop` with every check green**, without asking —
+after the normal review verdict is posted. Nothing else: not `main` in any
+form, not a human-authored PR, not a pending or failing check.
+`.claude/hooks/block-dangerous-bash.sh` enforces all three conditions against
+the GitHub API (a hook sees only argv, so it fetches author/base/checks) and
+fails closed. Regression suite: `bash .claude/hooks/test-block-dangerous-bash.sh`.
 
 ## Commands
 
@@ -111,7 +120,10 @@ force-pushing — those rules are not restated here. Repo-specific:
   appearing inside a `git commit -m "..."` body (even as documentation) is
   also blocked. If you need to mention one of the forbidden flags in commit
   copy, rephrase ("skip hooks", "force-push") instead of using the literal
-  flag.
+  flag. To *author* text containing a blocked literal (test fixtures, docs),
+  use the **Write/Edit tools** — the hook intercepts Bash only. The PR-merge
+  branch is a **gate**, not a flat reject, since 2026-08-24 (see the governance
+  carve-out above).
 
 ### detekt config: list keys REPLACE, not merge
 
@@ -544,3 +556,27 @@ restructured to make the lesson load-bearing on its own.*
   the sandbox classifier as exfil destinations — don't reach for them. Eviction
   criterion: a Mermaid linter/renderer runs in CI, or the repo stops embedding
   Mermaid.
+- **`manifest_path` on a Dependabot alert from Automatic Dependency Submission
+  is an information-free label, not a classpath hint.** Every Maven alert this
+  repo has had reports `settings.gradle.kts`; GraphQL shows that file has
+  `dependenciesCount: 0` — the label is stamped on the whole force-resolved
+  graph. Find the real source with `./gradlew :app:dependencies` /
+  `./gradlew buildEnvironment`, never by reading the manifest path.
+  **Three levers, not one:** (1) `:app` project configs →
+  `resolutionStrategy.eachDependency` in `app/build.gradle.kts`; (2) the **root
+  buildscript/plugin classpath** → `buildscript { configurations.classpath {
+  resolutionStrategy.force(…) } }` in `build.gradle.kts` — this IS forceable
+  (verified twice on Gradle 9.5.1: `bcprov 1.79 -> 1.85`), contradicting
+  `docs/security-posture.md` ~line 340 (#294); (3) genuinely blocked →
+  accept-risk, e.g. KGP #45, where the force *resolves* but leaks a prerelease
+  `kotlin-stdlib` into `debugRuntimeClasspath` and breaks dependency locking.
+  Also: **a resolution pin expires.** The 2026-08 wave (#290/#291) fired because
+  new advisories moved the vulnerable range up to include the pinned version —
+  the pin was working exactly as written. Always re-derive the *current*
+  first-patched version rather than trusting the alert's
+  `first_patched_version`: #290 needed 4.1.137.Final, while all ten alerts
+  advertised 4.1.136.Final, which a newer GHSA already covered. And Dependabot
+  can **never** open a PR for this alert class (no parsed manifest declares the
+  versions), so waiting for one is a permanent no-op. Eviction criterion:
+  Automatic Dependency Submission starts reporting real per-classpath manifest
+  paths.
