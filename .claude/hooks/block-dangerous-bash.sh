@@ -331,7 +331,22 @@ if [[ " $command_match " =~ (^|[[:space:]])--force-with-lease([[:space:]=]|$) ]]
 # `git status && git push -f` still match. The cost is over-matching across
 # quoted strings containing the literal text `git push`, which is acceptable
 # (see "Known limitation" in the header).
-git_lead='(^|[[:space:]\;\|\&\(`])git([[:space:]]+[^[:space:]]+)*[[:space:]]+'
+# NOTE on [[:blank:]] vs [[:space:]] in the SPANNING loops below. These three
+# regexes walk across argv tokens, and [[:space:]] includes NEWLINE -- which let a
+# match straddle the newline-joined candidates of the union probe. A real command
+# false-blocked on exactly that: the word appearing inside an `echo` on one line,
+# and a harmless `gh pr list` on another, matched as if they were one invocation
+# even though the word came FIRST.
+#
+# Shell words live on one line (line continuations are already normalized into the
+# candidates), so confining these loops to blanks confines a match to a single
+# line, and therefore to a single candidate. The simple word-boundaried FLAG
+# checks further up keep [[:space:]] deliberately: they match ONE token, so they
+# cannot straddle anything.
+#
+# This matters beyond tidiness. A guard that fires on ordinary commands teaches
+# you to route around it, which is a security failure with a friendly face.
+git_lead='(^|[[:space:]\;\|\&\(`])git([[:blank:]]+[^[:space:];|&]+)*[[:blank:]]+'
 if [[ "$command_match" =~ ${git_lead}commit[[:space:]] ]] && \
    [[ " $command_match " =~ (^|[[:space:]])-n([[:space:]=]|$) ]]; then
     reject "git commit -n"
@@ -392,7 +407,7 @@ fi
 #   git push origin feature/main-x      branch name merely contains "main"
 #                                       (preceded by `/` but not in dst position)
 #   git push origin feature/foo && echo main  the `&&` breaks argv-token continuity
-push_main_regex="${git_lead}push[[:space:]]+([^[:space:]\;\|\&]+[[:space:]]+)*\+?(refs/heads/|[^[:space:]\;\|\&]*:(refs/heads/)?)?main(\^[^[:space:]\;\|\&]*)?([[:space:]\;\|\&\)\`]|$)"
+push_main_regex="${git_lead}push[[:blank:]]+([^[:space:]\;\|\&]+[[:blank:]]+)*\+?(refs/heads/|[^[:space:]\;\|\&]*:(refs/heads/)?)?main(\^[^[:space:]\;\|\&]*)?([[:space:]\;\|\&\)\`]|$)"
 if [[ "$command_match" =~ $push_main_regex ]]; then
     reject_governance "git push to main"
 fi
@@ -413,7 +428,7 @@ fi
 # merge invocation, because cobra resolves the subcommand past a parent flag.
 # The trailing `[^A-Za-z0-9_.-]*` on the `gh` token catches `$(which gh)` and
 # its backtick form via the union probe.
-gh_pr_merge_regex='(^|[^A-Za-z0-9_.-])([^[:space:]]*/)?gh[^A-Za-z0-9_.-]*([[:space:]]+[^[:space:]]+)*[[:space:]]+pr([[:space:]]+[^[:space:]]+)*[[:space:]]+merge([^[:alnum:]_-]|$)'
+gh_pr_merge_regex='(^|[^A-Za-z0-9_.-])([^[:space:]]*/)?gh[^A-Za-z0-9_.-]*([[:blank:]]+[^[:space:];|&]+)*[[:blank:]]+pr([[:blank:]]+[^[:space:];|&]+)*[[:blank:]]+merge([^[:alnum:]_-]|$)'
 if [[ "$command_match" =~ $gh_pr_merge_regex ]]; then
     reject_governance "PR merge from the shell"
 fi

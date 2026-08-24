@@ -171,6 +171,29 @@ in'
 run 2 "quoted --force"                  'git push "--force" origin x'
 run 2 "backslashed --force"             'git push --fo\rce origin x'
 
+echo "== false-positive guards: a match must not straddle lines =="
+# The spanning loops once used [[:space:]] (which includes newline), so a match
+# could straddle the newline-joined candidates of the union probe. These are all
+# ordinary commands that were being BLOCKED. A guard that fires on normal work
+# teaches you to route around it.
+run 0 "word on an earlier line than gh pr"  'echo "closed by the merge?"
+gh pr list --state open'
+run 0 "word after an unrelated gh pr"       'gh pr list --state open
+echo "the merge landed"'
+run 0 "gh pr view then the word"            'gh pr view 298
+echo "done: merge"'
+run 0 "word alone on its own line"          'echo merge
+git status'
+run 0 "git push on one line, main on next"  'git push origin feature/x
+echo main'
+# ...but a real invocation ON ONE LINE of a multi-line command must STILL block.
+run 2 "real one on a later line"            'echo hello
+gh pr merge 5 --squash'
+run 2 "real one on an earlier line"         'gh pr merge 5
+echo done'
+run 2 "real push to main on a later line"   'echo hello
+git push origin main'
+
 echo "== API merge vectors also refused =="
 run 2 "gh api PUT pulls/N/merge"        'gh api -X PUT repos/o/r/pulls/5/merge'    'GitHub API'
 run 2 "gh api --method PUT"             'gh api --method PUT repos/o/r/pulls/5/merge' 'GitHub API'
