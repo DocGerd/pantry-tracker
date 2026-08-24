@@ -604,3 +604,22 @@ restructured to make the lesson load-bearing on its own.*
   versions), so waiting for one is a permanent no-op. Eviction criterion:
   Automatic Dependency Submission starts reporting real per-classpath manifest
   paths.
+- **Don't enforce policy by parsing shell command text — enforce at the typed
+  tool layer.** `block-dangerous-bash.sh` tried to gate merges by recognising
+  them in the command string. A PreToolUse hook sees only that string, so
+  deciding *whether* something is a merge is irreducibly a **deny-list**: you
+  cannot allow-list "is this a merge?", you must recognise it, and recognising
+  it means re-implementing bash expansion. Three adversarial rounds (2026-08-24,
+  ~145 agents) closed shell operators → backslashes → `$x` / `${x-word}` /
+  `$'\x6d'` / brace lists, and **each round's fix re-opened an earlier round's
+  hole** (the `$`-strip turned `merge$x` into `mergex`; the union probe that
+  replaced it then straddled newlines, #300). It does not converge. Resolution
+  (#298): refuse *all* shell merges, and move the carve-out to the GitHub MCP
+  tool, whose parameters are typed rather than parsed. **Generalise before
+  adding any new guard:** if the policy needs facts that are not in argv (author,
+  base branch, merge state), or the input is attacker-chosen text, put the check
+  where the values arrive typed. Corollary: this matcher is permanently
+  incomplete, so treat the hook as a **speed bump** — the governance rule at the
+  top of this file is the binding control, and a matcher miss is a *total*
+  bypass (the hook ends in `exit 0`), not a degraded check. Eviction criterion:
+  the hook stops pattern-matching command text.
