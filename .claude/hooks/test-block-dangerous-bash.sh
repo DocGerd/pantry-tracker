@@ -15,40 +15,64 @@
 # be mistaken for full coverage.
 set -uo pipefail
 
-HOOK="$(dirname "${BASH_SOURCE[0]}")/block-dangerous-bash.sh"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
+HOOK="$HERE/block-dangerous-bash.sh"
 pass=0 fail=0
 
-# run <expected_exit> <label> <command-text>
-run() {
-    local expected="$1" label="$2" cmd="$3" actual payload
-    payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.argv[1]}}))' "$cmd")
-    printf '%s' "$payload" | bash "$HOOK" >/dev/null 2>&1
-    actual=$?
-    if [[ "$actual" == "$expected" ]]; then
-        pass=$((pass + 1))
-        printf '  ok   %-58s exit=%s\n' "$label" "$actual"
-    else
-        fail=$((fail + 1))
-        printf '  FAIL %-58s exit=%s (expected %s)\n' "$label" "$actual" "$expected"
+[[ -r "$HOOK" ]] || { echo "cannot read $HOOK"; exit 1; }
+
+STUB_DIR=$(mktemp -d) || { echo "mktemp failed"; exit 1; }
+[[ -n "$STUB_DIR" && -d "$STUB_DIR" ]] || { echo "mktemp produced no dir"; exit 1; }
+trap 'rm -rf -- "$STUB_DIR"' EXIT
+
+# payload <command-text>  — emits the hook's stdin JSON, or exits non-zero.
+# Guarded: an unguarded failure here would make every expect-2 case "pass"
+# vacuously, since the hook would receive empty stdin and fail closed anyway.
+payload() {
+    python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.argv[1]}}))' "$1"
+}
+
+check() {  # check <expected_exit> <label> <actual> <stderr-file> [expected_reason]
+    local expected="$1" label="$2" actual="$3" errfile="$4" reason="${5:-}"
+    if [[ "$actual" != "$expected" ]]; then
+        fail=$((fail + 1)); printf '  FAIL %-54s exit=%s (expected %s)\n' "$label" "$actual" "$expected"
+        return
     fi
+    if [[ -n "$reason" ]] && ! grep -qF -- "$reason" "$errfile"; then
+        fail=$((fail + 1)); printf '  FAIL %-54s exit=%s but reason not %q\n' "$label" "$actual" "$reason"
+        printf '       stderr: %s\n' "$(head -3 "$errfile" | tr '\n' ' ')"
+        return
+    fi
+    pass=$((pass + 1)); printf '  ok   %-54s exit=%s\n' "$label" "$actual"
+}
+
+# run <expected_exit> <label> <command-text> [expected_reason_substring]
+run() {
+    local expected="$1" label="$2" cmd="$3" reason="${4:-}" actual p
+    local err="$STUB_DIR/err"
+    if ! p=$(payload "$cmd"); then
+        fail=$((fail + 1)); printf '  FAIL %-54s (payload build failed)\n' "$label"; return
+    fi
+    printf '%s' "$p" | bash "$HOOK" >/dev/null 2>"$err"
+    actual=$?
+    check "$expected" "$label" "$actual" "$err" "$reason"
 }
 
 # raw <expected_exit> <label> <stdin-text>   — for malformed-input cases
 raw() {
     local expected="$1" label="$2" body="$3" actual
-    printf '%s' "$body" | bash "$HOOK" >/dev/null 2>&1
+    local err="$STUB_DIR/err"
+    printf '%s' "$body" | bash "$HOOK" >/dev/null 2>"$err"
     actual=$?
-    if [[ "$actual" == "$expected" ]]; then
-        pass=$((pass + 1)); printf '  ok   %-58s exit=%s\n' "$label" "$actual"
-    else
-        fail=$((fail + 1)); printf '  FAIL %-58s exit=%s (expected %s)\n' "$label" "$actual" "$expected"
-    fi
+    check "$expected" "$label" "$actual" "$err"
 }
 
 echo "== escape-hatch flags =="
 run 2 "git commit --no-verify"          'git commit --no-verify -m x'
 run 2 "--force-with-lease=<val> bypass" 'git push --force-with-lease=origin/main'
+run 2 "bare --force"                    'git push --force origin feature/x'
 run 2 "git -c lead-in + commit -n"      'git -c user.name=x commit -n -m foo'
+run 2 "git push -f"                     'git push -f origin feature/x'
 run 0 "plain git commit"                'git commit -m x'
 run 0 "curl --no-verify-ssl (FP guard)" 'curl --no-verify-ssl https://x'
 run 0 "tar -f (FP guard)"               'tar -xvf foo.tar'
@@ -63,78 +87,143 @@ run 2 "git push origin main"            'git push origin main'
 run 2 "HEAD:main refspec"               'git push origin HEAD:main'
 run 2 "delete refspec :main"            'git push origin :main'
 run 2 "refs/heads/main"                 'git push origin refs/heads/main'
+run 2 "HEAD:refs/heads/main"            'git push origin HEAD:refs/heads/main'
 run 2 "force-refspec +main"             'git push origin +main'
+run 2 "revspec suffix main^"            'git push origin main^'
 run 2 "eval-wrapped push to main"       'eval "git push origin main"'
 run 0 "main as SRC (main:foo)"          'git push origin main:foo'
 run 0 "branch merely contains main"     'git push origin feature/main-cleanup'
 run 0 "main after && (FP guard)"        'git push origin feature/foo && echo main'
 
-echo "== merge carve-out (#297) =="
+echo "== merge gate: non-canonical shapes rejected =="
 run 0 "gh pr view is not a merge"       'gh pr view 47'
-run 2 "no explicit PR number"           'gh pr merge'
-run 2 "--admin never allowed"           'gh pr merge 289 --admin'
-run 2 "compound command"                'gh pr checks 1 && gh pr merge 1'
-run 2 "ambiguous: two integers"         'gh pr merge 1 2'
-# Single quotes are deliberate here: these fixtures must reach the hook as the
-# LITERAL text `$(...)` / backticks. Expanding them would run the merge for real.
+run 2 "no explicit PR number"           'gh pr merge'                         'canonical merge form'
+run 2 "--admin"                         'gh pr merge 289 --admin'             'canonical merge form'
+run 2 "--admin with backslash"          'gh pr merge 289 --ad\min'            'canonical merge form'
+run 2 "--auto defers past the snapshot" 'gh pr merge --auto 4242 --merge'     'canonical merge form'
+run 2 "&& chaining"                     'gh pr checks 1 && gh pr merge 1'     'canonical merge form'
+run 2 "newline chaining"                'gh pr merge 4242 --merge
+gh pr merge 4243 --merge'                                                     'canonical merge form'
+run 2 "bare & background operator"      'sleep 1 & gh pr merge 4242 --merge'  'canonical merge form'
+run 2 "semicolon chaining"              'gh pr merge 4242; echo done'         'canonical merge form'
+run 2 "process substitution"            'gh pr merge 4242 --body <(cat x)'    'canonical merge form'
+run 2 "flag value harvested as PR num"  'gh pr merge --body 4242 my-branch'   'canonical merge form'
+run 2 "branch positional, not a number" 'gh pr merge my-feature-branch'       'canonical merge form'
+run 2 "URL positional"                  'gh pr merge https://github.com/o/r/pull/5' 'canonical merge form'
+run 2 "--repo retarget"                 'gh pr merge 4242 --repo evil/other'  'canonical merge form'
+run 2 "-R retarget"                     'gh pr merge 4242 -R evil/other'      'canonical merge form'
+run 2 "GH_REPO= env prefix"             'GH_REPO=evil/other gh pr merge 4242' 'canonical merge form'
+run 2 "path-qualified binary"           '/usr/bin/gh pr merge 4242 --merge'   'canonical merge form'
+run 2 "root-level flag before pr"       'gh -R evil/other pr merge 4242'      'canonical merge form'
+run 2 "unicode digits"                  'gh pr merge ٤٢'                      'canonical merge form'
+run 2 "two integers"                    'gh pr merge 1 2'                     'canonical merge form'
+run 2 "trailing garbage on number"      'gh pr merge 5x'                      'canonical merge form'
+# Single quotes are deliberate: these two must reach the hook as the LITERAL
+# text. Expanding them would run a real merge.
 # shellcheck disable=SC2016
-run 2 "subshell form"                   'echo $(gh pr merge 47)'
+run 2 "subshell form"                   'echo $(gh pr merge 47)'              'canonical merge form'
 # shellcheck disable=SC2016
-run 2 "backtick form"                   'echo `gh pr merge 47`'
+run 2 "backtick form"                   'echo `gh pr merge 47`'               'canonical merge form'
+
+echo "== merge gate: API merge vectors refused outright =="
+run 2 "gh api PUT pulls/N/merge"        'gh api -X PUT repos/o/r/pulls/5/merge'    'GitHub API'
+run 2 "gh api --method PUT"             'gh api --method PUT repos/o/r/pulls/5/merge' 'GitHub API'
+run 2 "graphql mergePullRequest"        'gh api graphql -f query=mergePullRequest' 'GitHub API'
+
+echo "== merge gate: live API (canonical shape, real PR) =="
 run 2 "[net] merged PR rejected"        'gh pr merge 289 --merge'
 run 2 "[net] nonexistent PR"            'gh pr merge 999999 --merge'
 
 # --- stubbed-gh cases ---------------------------------------------------------
 # The live cases above can only ever assert a REJECT — there is rarely an open,
 # green Dependabot PR lying around, and a suite that never exercises the allow
-# path would pass just as happily if the carve-out were dead code. So: put a
-# fake `gh` on PATH and drive each condition independently. `timeout` resolves
-# its child through PATH (execvp), so the stub is picked up by the hook's
-# `timeout -k 5 25 gh ...` calls unchanged.
-STUB_DIR=$(mktemp -d)
-trap 'rm -rf "$STUB_DIR"' EXIT
+# path would pass just as happily if the carve-out were dead code.
+#
+# The hook pins GH_BIN to an absolute path on purpose (a bare `gh` would resolve
+# through a user-writable $PATH). Rather than adding a production override — a
+# backdoor in the thing being secured — the seam is a one-line rewritten COPY of
+# the hook, and we assert that exactly one line changed.
+STUB_HOOK="$STUB_DIR/hook.sh"
+sed "s#^GH_BIN=.*#GH_BIN=\"$STUB_DIR/gh\"#" "$HOOK" >"$STUB_HOOK" || exit 1
+if [[ "$(diff <(sed 's/[[:space:]]*$//' "$HOOK") <(sed 's/[[:space:]]*$//' "$STUB_HOOK") | grep -c '^<')" != "1" ]]; then
+    echo "FATAL: stub seam rewrote != 1 line of the hook; refusing to trust the stubbed results"
+    exit 1
+fi
+
+# Contract-asserting stub. Exits 9 if the hook asks it anything unexpected, so a
+# hook that queries the WRONG PR, drops --repo, or changes its --json field list
+# fails the suite instead of silently passing.
 cat >"$STUB_DIR/gh" <<'STUB'
 #!/usr/bin/env bash
-# Minimal `gh` stand-in: understands `pr view` and `pr checks`, driven by env.
 if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
-    printf '%s|%s|%s|%s\n' "$STUB_AUTHOR" "$STUB_BASE" "$STUB_STATE" "$STUB_DRAFT"
+    [[ "${3:-}" == "$STUB_EXPECT_PR" ]] || { echo "stub: pr view ${3:-} != $STUB_EXPECT_PR" >&2; exit 9; }
+    [[ "$*" == *"--repo $STUB_EXPECT_REPO"* ]] || { echo "stub: missing --repo $STUB_EXPECT_REPO" >&2; exit 9; }
+    [[ "$*" == *"author,baseRefName,state,isDraft,mergeStateStatus,headRefName,commits"* ]] \
+        || { echo "stub: unexpected --json field list" >&2; exit 9; }
+    printf '%s\n' "$STUB_AUTHOR" "$STUB_BASE" "$STUB_STATE" "$STUB_DRAFT" \
+                  "$STUB_MERGESTATE" "$STUB_HEAD" "$STUB_COMMIT_AUTHORS"
     exit 0
 fi
 if [[ "${1:-}" == "pr" && "${2:-}" == "checks" ]]; then
+    [[ "${3:-}" == "$STUB_EXPECT_PR" ]] || { echo "stub: pr checks ${3:-} != $STUB_EXPECT_PR" >&2; exit 9; }
     exit "$STUB_CHECKS_RC"
 fi
-exit 1
+echo "stub: unexpected invocation: $*" >&2
+exit 9
 STUB
 chmod +x "$STUB_DIR/gh"
 
-# stub <expected> <label> <author> <base> <state> <draft> <checks_rc>
+export STUB_EXPECT_PR=4242 STUB_EXPECT_REPO="DocGerd/pantry-tracker"
+
+# stub <expected> <label> <author> <base> <state> <draft> <mergestate> <head> <commitauthors> <rc> [reason]
 stub() {
-    local expected="$1" label="$2" actual payload
-    export STUB_AUTHOR="$3" STUB_BASE="$4" STUB_STATE="$5" STUB_DRAFT="$6" STUB_CHECKS_RC="$7"
-    payload=$(python3 -c 'import json,sys; print(json.dumps({"tool_input":{"command":sys.argv[1]}}))' 'gh pr merge 4242 --merge')
-    printf '%s' "$payload" | PATH="$STUB_DIR:$PATH" bash "$HOOK" >/dev/null 2>&1
-    actual=$?
-    if [[ "$actual" == "$expected" ]]; then
-        pass=$((pass + 1)); printf '  ok   %-58s exit=%s\n' "$label" "$actual"
-    else
-        fail=$((fail + 1)); printf '  FAIL %-58s exit=%s (expected %s)\n' "$label" "$actual" "$expected"
+    local expected="$1" label="$2" reason="${11:-}" actual p
+    local err="$STUB_DIR/err"
+    export STUB_AUTHOR="$3" STUB_BASE="$4" STUB_STATE="$5" STUB_DRAFT="$6" \
+           STUB_MERGESTATE="$7" STUB_HEAD="$8" STUB_COMMIT_AUTHORS="$9" STUB_CHECKS_RC="${10}"
+    if ! p=$(payload 'gh pr merge 4242 --merge'); then
+        fail=$((fail + 1)); printf '  FAIL %-54s (payload build failed)\n' "$label"; return
     fi
+    printf '%s' "$p" | bash "$STUB_HOOK" >/dev/null 2>"$err"
+    actual=$?
+    check "$expected" "$label" "$actual" "$err" "$reason"
 }
 
+D=app/dependabot
 echo "== carve-out conditions, stubbed gh =="
-stub 0 "ALLOW: dependabot->develop, green"  'app/dependabot'  develop OPEN   false 0
-stub 0 "ALLOW: REST login spelling"         'dependabot[bot]' develop OPEN   false 0
-stub 2 "author is a human"                  'DocGerd'         develop OPEN   false 0
-stub 2 "author is another bot"              'app/renovate'    develop OPEN   false 0
-stub 2 "base is main, not develop"          'app/dependabot'  main    OPEN   false 0
-stub 2 "base is a release branch"           'app/dependabot'  release/1.5.0 OPEN false 0
-stub 2 "PR already merged"                  'app/dependabot'  develop MERGED false 0
-stub 2 "PR closed"                          'app/dependabot'  develop CLOSED false 0
-stub 2 "PR is a draft"                      'app/dependabot'  develop OPEN   true  0
-stub 2 "checks pending (rc=8)"              'app/dependabot'  develop OPEN   false 8
-stub 2 "checks failing (rc=1)"              'app/dependabot'  develop OPEN   false 1
-stub 2 "checks timed out (rc=124)"          'app/dependabot'  develop OPEN   false 124
-unset STUB_AUTHOR STUB_BASE STUB_STATE STUB_DRAFT STUB_CHECKS_RC
+stub 0 "ALLOW: dependabot->develop, clean"  "$D" develop OPEN false CLEAN dependabot/x "$D" 0
+stub 0 "ALLOW: REST login spelling" 'dependabot[bot]' develop OPEN false CLEAN dependabot/x 'dependabot[bot]' 0
+stub 2 "author is a human"          DocGerd develop OPEN false CLEAN dependabot/x "$D" 0 "not Dependabot"
+stub 2 "author is another bot"      app/renovate develop OPEN false CLEAN dependabot/x "$D" 0 "not Dependabot"
+stub 2 "base is main"               "$D" main    OPEN false CLEAN dependabot/x "$D" 0 "not 'develop'"
+stub 2 "base is a release branch"   "$D" release/1.5.0 OPEN false CLEAN dependabot/x "$D" 0 "not 'develop'"
+stub 2 "PR already merged"          "$D" develop MERGED false CLEAN dependabot/x "$D" 0 "not OPEN"
+stub 2 "PR closed"                  "$D" develop CLOSED false CLEAN dependabot/x "$D" 0 "not OPEN"
+stub 2 "PR is a draft"              "$D" develop OPEN true  CLEAN dependabot/x "$D" 0 "is a draft"
+stub 2 "head branch not dependabot" "$D" develop OPEN false CLEAN feature/evil "$D" 0 "is not a 'dependabot/' branch"
+stub 2 "a commit by someone else"   "$D" develop OPEN false CLEAN dependabot/x "$D mallory" 0 "commit authored by 'mallory'"
+# An empty commit-author list collapses the response to 6 fields, because
+# command substitution strips trailing newlines — so the field-count guard fires
+# before the emptiness check ever runs. Still fails closed, just one guard
+# earlier; asserting the real reason keeps that documented rather than surprising.
+stub 2 "no commit authors -> field-count guard" "$D" develop OPEN false CLEAN dependabot/x "" 0 "expected 7"
+stub 2 "mergeState BLOCKED"         "$D" develop OPEN false BLOCKED dependabot/x "$D" 0 "not CLEAN"
+stub 2 "mergeState BEHIND"          "$D" develop OPEN false BEHIND  dependabot/x "$D" 0 "not CLEAN"
+stub 2 "mergeState UNSTABLE"        "$D" develop OPEN false UNSTABLE dependabot/x "$D" 0 "not CLEAN"
+stub 2 "checks pending (rc=8)"      "$D" develop OPEN false CLEAN dependabot/x "$D" 8 "pending checks"
+stub 2 "checks failing (rc=1)"      "$D" develop OPEN false CLEAN dependabot/x "$D" 1 "failing checks"
+stub 2 "checks timed out (rc=124)"  "$D" develop OPEN false CLEAN dependabot/x "$D" 124 "timed out"
+stub 2 "pipe in branch name"        "$D" 'develop|OPEN|false' OPEN false CLEAN dependabot/x "$D" 0 "not 'develop'"
+
+echo "== allow path emits an audit line =="
+export STUB_AUTHOR="$D" STUB_BASE=develop STUB_STATE=OPEN STUB_DRAFT=false \
+       STUB_MERGESTATE=CLEAN STUB_HEAD=dependabot/x STUB_COMMIT_AUTHORS="$D" STUB_CHECKS_RC=0
+if payload 'gh pr merge 4242 --merge' | bash "$STUB_HOOK" 2>"$STUB_DIR/err" >/dev/null &&
+   grep -q "allowing merge of PR #4242" "$STUB_DIR/err"; then
+    pass=$((pass + 1)); printf '  ok   %-54s\n' "audit line on stderr"
+else
+    fail=$((fail + 1)); printf '  FAIL %-54s\n' "audit line on stderr"
+fi
 
 NET_OK="no"
 if timeout -k 5 20 gh auth status </dev/null >/dev/null 2>&1; then NET_OK="yes"; fi

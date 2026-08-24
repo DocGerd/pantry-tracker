@@ -9,7 +9,8 @@
 #   -n on git commit      (= --no-verify shorthand; tolerates `git -c x=y commit -n`)
 #   -f on git push        (= --force shorthand; tolerates `git -c x=y push -f`)
 #
-# Governance-enforced blocks (CLAUDE.md hard rule: "only humans merge to main"):
+# Governance-enforced blocks (CLAUDE.md hard rule: "only humans merge to develop
+# or main"):
 #   git push <...>main    any push whose destination ref is `main`, in any
 #                         common refspec form: bare `main`, `HEAD:main`, `:main`
 #                         (delete), `abc123:main`, `refs/heads/main`,
@@ -27,14 +28,18 @@
 #                         below.
 #
 # Governance CARVE-OUT (granted 2026-08-24; see issue #297):
-#   A Dependabot-authored PR based on `develop` whose checks are all green may
-#   be merged without a human click. Because a PreToolUse hook sees only the
-#   command text — author, base branch and check status are simply not in argv —
-#   the three conditions are verified against the GitHub API by
-#   verify_carve_out_or_reject() rather than by pattern matching. Everything
-#   else still rejects: anything targeting `main`, any human-authored PR, any
-#   PR with a failing or pending check, and any command shape the function
-#   cannot conclusively reason about.
+#   A Dependabot-authored PR based on `develop` that GitHub reports as CLEAN
+#   may be merged without a human click. Because a PreToolUse hook sees only the
+#   command text — author, base branch and merge state are simply not in argv —
+#   those conditions are verified against the GitHub API by
+#   verify_carve_out_or_reject() rather than by pattern matching.
+#
+#   The command itself must be the CANONICAL form and nothing else (see the
+#   design note above verify_carve_out_or_reject): the gate allow-lists one
+#   shape rather than trying to enumerate dangerous ones. Everything else
+#   rejects — anything targeting `main`, any human-authored PR, any PR GitHub
+#   does not report CLEAN, and every non-canonical command shape, harmless
+#   ones included.
 #
 # A quote-stripping pre-pass normalizes the command before governance matching,
 # so `git push origin "main"`, `eval "git push origin main"`, and
@@ -218,47 +223,77 @@ MSG
 
 # Governance carve-out (granted 2026-08-24; see issue #297).
 #
-# Allows exactly one shape: merging a Dependabot-authored PR based on `develop`
-# whose checks are all green. Every condition is verified against the GitHub API
-# because none of them is present in the command text.
+# DESIGN NOTE — read this before editing.
 #
-# Fails CLOSED at every step — an unparseable command, an unreachable API, a
-# timeout, a draft PR, or any unexpected field value all reject. The cost of a
-# false reject is one message to the maintainer; the cost of a false allow is an
-# unreviewed merge.
+# The first version of this gate enumerated the DANGEROUS command shapes
+# (compound operators, `--admin`, …) and allowed whatever was left. An
+# adversarial review of PR #298 broke that four independent ways:
+#   - a bare newline or `&` chained a SECOND, unvalidated merge onto the command;
+#   - `--body 4242 some-branch` made the gate validate #4242 while gh merged the
+#     branch's PR instead — validated one thing, merged another;
+#   - `-R other/repo` retargeted the merge at a repository the gate never looked at;
+#   - `--ad\min` slipped the flag check, because bash strips the backslash only
+#     AFTER the hook has already inspected the text.
 #
-# Assumes the Bash cwd is inside this repository: `gh` resolves the target repo
-# from the git remote. Outside a git repo `gh` fails, and we reject.
+# Enumerating the bad is the wrong shape for this problem — the attacker picks
+# the input, so any list of forbidden forms is a list you have to keep complete
+# forever. So the gate now accepts exactly ONE canonical command form and
+# rejects everything else, including plenty of harmless variants. A merge that
+# needs a non-canonical flag is the human's click, not this hook's problem.
+#
+#   canonical:  gh pr merge <N> [--merge|--squash|--rebase] [--delete-branch]
+#
+# All carve-out conditions are then verified against the GitHub API, because
+# none of them is present in the command text at all.
+#
+# Fails CLOSED everywhere: unparseable command, unreachable API, timeout, wrong
+# field count, or any unexpected value rejects. A false reject costs one message
+# to the maintainer; a false allow is an unreviewed merge.
 CARVE_OUT_AUTHORS=("app/dependabot" "dependabot[bot]")
 CARVE_OUT_BASE="develop"
+CARVE_OUT_HEAD_PREFIX="dependabot/"
+# Pinned, not resolved from the git remote: `-R`/`--repo`/`GH_REPO` must not be
+# able to point the gate at a different repository than the one being merged.
+CARVE_OUT_REPO="DocGerd/pantry-tracker"
 GH_TIMEOUT=25
+# Absolute path. A bare `gh` resolves through $PATH, and any user-writable PATH
+# entry ahead of /usr/bin would let a planted stub answer the gate's questions.
+GH_BIN="/usr/bin/gh"
 
 verify_carve_out_or_reject() {
     local cmd="$1"
-    local decision pr_number meta pr_author pr_base pr_state pr_draft checks_rc author_ok a
+    local decision pr_number checks_rc author_ok a b ok raw
+    local pr_author pr_base pr_state pr_draft pr_mergestate pr_head pr_commit_authors
+    local -a meta
 
-    # Step 1 — command shape + PR-number extraction, in python3 (already a hard
-    # dependency of this hook). Compound and substituted commands are refused
-    # outright: if the merge is chained, piped, or wrapped in a substitution we
-    # cannot be certain the invocation we validated is the one that will run.
+    [[ -x "$GH_BIN" ]] || reject_governance "$GH_BIN is not executable (failing closed)"
+
+    # Step 1 — the command must be EXACTLY the canonical form, or nothing.
+    #
+    # Deliberately validated against the RAW command, not the quote-stripped
+    # copy: stripping quotes changes what bash would actually execute, so a
+    # decision made on the stripped text is a decision about a command that
+    # never runs.
     if ! decision=$(printf '%s' "$cmd" | python3 -c '
 import re, sys
-cmd = sys.stdin.read()
-if re.search(r"&&|\|\||;|\||\$\(|`|<<", cmd):
-    print("REJECT:compound or substituted command containing a PR merge")
+cmd = sys.stdin.read().strip()
+# One test kills every operator at once -- newline, CR, ";", "&", "|", "$",
+# backtick, quotes, backslash, "/", "=", "(" -- with no list to keep in sync.
+# Anything outside [A-Za-z0-9 -] simply is not part of a canonical merge.
+if re.search(r"[^A-Za-z0-9 \-]", cmd):
+    print("REJECT:not the canonical merge form (disallowed characters)")
     raise SystemExit
-if re.search(r"(^|\s)--admin(\s|=|$)", cmd):
-    print("REJECT:PR merge with --admin (bypasses branch protection)")
-    raise SystemExit
-m = re.search(r"(?:^|[\s;|&(`])gh\s+pr\s+merge\b(.*)$", cmd, re.S)
+CANON = re.compile(
+    r"gh pr merge (?P<n>[0-9]{1,7})"
+    r"(?: --(?:merge|squash|rebase))?"
+    r"(?: --delete-branch)?"
+)
+m = CANON.fullmatch(cmd)
 if not m:
-    print("REJECT:could not isolate the merge invocation")
+    print("REJECT:not the canonical merge form -- expected "
+          "gh pr merge <N> [--merge|--squash|--rebase] [--delete-branch]")
     raise SystemExit
-nums = [t for t in m.group(1).split() if t.isdigit()]
-if len(nums) != 1:
-    print("REJECT:need exactly one explicit PR number, found %d" % len(nums))
-    raise SystemExit
-print("PR:%s" % nums[0])
+print("PR:%s" % m.group("n"))
 '); then
         reject_governance "hook could not evaluate the merge command (failing closed)"
     fi
@@ -269,46 +304,88 @@ print("PR:%s" % nums[0])
         *)        reject_governance "unrecognised hook decision (failing closed)" ;;
     esac
 
-    # Step 2 — author, base branch, state and draft status, straight from the API.
-    if ! meta=$(timeout -k 5 "$GH_TIMEOUT" gh pr view "$pr_number" \
-                    --json author,baseRefName,state,isDraft \
-                    --jq '[.author.login, .baseRefName, .state, (.isDraft|tostring)] | join("|")' \
-                    </dev/null 2>/dev/null); then
+    # Step 2 — every carve-out condition, straight from the API.
+    #
+    # Fields come back ONE PER LINE. `|` is legal in a git branch name, so a
+    # `join("|")` was genuinely ambiguous — a branch called `develop|OPEN|false`
+    # is a valid ref. Newline is not: git forbids control characters in ref
+    # names, so a value can never contain the delimiter.
+    #
+    # `env -u` strips GH_REPO/GH_HOST so the surrounding environment cannot aim
+    # the gate at a different repo or host than the merge will land on.
+    if ! raw=$(env -u GH_REPO -u GH_HOST \
+                   timeout -k 5 "$GH_TIMEOUT" "$GH_BIN" pr view "$pr_number" \
+                   --repo "$CARVE_OUT_REPO" \
+                   --json author,baseRefName,state,isDraft,mergeStateStatus,headRefName,commits \
+                   --jq '.author.login, .baseRefName, .state, (.isDraft|tostring), .mergeStateStatus, .headRefName, ([.commits[].authors[].login]|unique|join(" "))' \
+                   </dev/null 2>/dev/null); then
         reject_governance "could not reach the GitHub API for PR #$pr_number (failing closed)"
     fi
-    IFS='|' read -r pr_author pr_base pr_state pr_draft <<<"$meta" || true
-    if [[ -z "${pr_author:-}" || -z "${pr_base:-}" || -z "${pr_state:-}" ]]; then
-        reject_governance "incomplete API response for PR #$pr_number (failing closed)"
+    mapfile -t meta <<<"$raw"
+    if [[ "${#meta[@]}" -ne 7 ]]; then
+        reject_governance "unexpected API response for PR #$pr_number (${#meta[@]} fields, expected 7) — failing closed"
     fi
+    pr_author="${meta[0]}"
+    pr_base="${meta[1]}"
+    pr_state="${meta[2]}"
+    pr_draft="${meta[3]}"
+    pr_mergestate="${meta[4]}"
+    pr_head="${meta[5]}"
+    pr_commit_authors="${meta[6]}"
 
     # `gh pr view --json author` returns the GraphQL login `app/dependabot`; the
     # REST API returns `dependabot[bot]`. Accept both so this does not silently
     # start rejecting if gh switches API surface underneath us.
+    #
+    # Note the `if` form rather than `[[ … ]] && author_ok=1`: under `set -e` a
+    # failing `&&` on the LAST loop iteration makes the loop — and therefore this
+    # function — return non-zero, which would exit the hook with neither 0 nor 2.
     author_ok=0
     for a in "${CARVE_OUT_AUTHORS[@]}"; do
-        [[ "$pr_author" == "$a" ]] && author_ok=1
+        if [[ "$pr_author" == "$a" ]]; then author_ok=1; fi
     done
-    if [[ "$author_ok" -ne 1 ]]; then
+    [[ "$author_ok" -eq 1 ]] ||
         reject_governance "PR #$pr_number is authored by '$pr_author', not Dependabot"
-    fi
-    if [[ "$pr_base" != "$CARVE_OUT_BASE" ]]; then
+    [[ "$pr_base" == "$CARVE_OUT_BASE" ]] ||
         reject_governance "PR #$pr_number targets '$pr_base', not '$CARVE_OUT_BASE'"
-    fi
     # Load-bearing, not cosmetic: `gh pr checks` returns 0 for an already-merged
     # or closed PR, so without this test a stale merge command would sail past
     # step 3 on a PR that is no longer open.
-    if [[ "$pr_state" != "OPEN" ]]; then
+    [[ "$pr_state" == "OPEN" ]] ||
         reject_governance "PR #$pr_number is $pr_state, not OPEN"
-    fi
-    if [[ "$pr_draft" != "false" ]]; then
+    [[ "$pr_draft" == "false" ]] ||
         reject_governance "PR #$pr_number is a draft"
-    fi
+    # `.author.login` says who OPENED the PR — it does not change when someone
+    # else pushes to the head branch, and `dependabot/**` is in no ruleset. So
+    # require the head branch to be Dependabot's, and every commit on it to be
+    # authored by Dependabot.
+    [[ "$pr_head" == "$CARVE_OUT_HEAD_PREFIX"* ]] ||
+        reject_governance "PR #$pr_number head '$pr_head' is not a '$CARVE_OUT_HEAD_PREFIX' branch"
+    [[ -n "$pr_commit_authors" ]] ||
+        reject_governance "PR #$pr_number reported no commit authors (failing closed)"
+    for a in $pr_commit_authors; do
+        ok=0
+        for b in "${CARVE_OUT_AUTHORS[@]}"; do
+            if [[ "$a" == "$b" ]]; then ok=1; fi
+        done
+        [[ "$ok" -eq 1 ]] ||
+            reject_governance "PR #$pr_number has a commit authored by '$a', not Dependabot"
+    done
+    # THE authoritative check gate. `gh pr checks` rc=0 means only "nothing that
+    # has posted is failing" — it is silent about a REQUIRED check that has not
+    # posted at all, so a PR missing two of three required contexts still returns
+    # 0. mergeStateStatus is GitHub's own verdict against the branch-protection
+    # rules, so it is what actually has to be CLEAN.
+    [[ "$pr_mergestate" == "CLEAN" ]] ||
+        reject_governance "PR #$pr_number mergeStateStatus is $pr_mergestate, not CLEAN"
 
-    # Step 3 — check status. This gh build has no `gh pr checks --json`, so the
-    # documented exit-code contract IS the interface: 0 = all pass, 8 = pending,
-    # anything else = failing. 124/137 are timeout's own SIGTERM/SIGKILL codes.
+    # Step 3 — check status, as a cheap pre-filter behind mergeStateStatus. This
+    # gh build has no `gh pr checks --json`, so the documented exit-code contract
+    # IS the interface: 0 = all pass, 8 = pending, anything else = failing.
+    # 124/137 are timeout's own SIGTERM/SIGKILL codes.
     set +e
-    timeout -k 5 "$GH_TIMEOUT" gh pr checks "$pr_number" </dev/null >/dev/null 2>&1
+    env -u GH_REPO -u GH_HOST timeout -k 5 "$GH_TIMEOUT" "$GH_BIN" pr checks "$pr_number" \
+        --repo "$CARVE_OUT_REPO" </dev/null >/dev/null 2>&1
     checks_rc=$?
     set -e
     case "$checks_rc" in
@@ -320,7 +397,7 @@ print("PR:%s" % nums[0])
 
     printf '%s\n' \
         "block-dangerous-bash: allowing merge of PR #$pr_number under the Dependabot carve-out (#297)." \
-        "  author=$pr_author  base=$pr_base  state=$pr_state  checks=all-green" >&2
+        "  author=$pr_author  head=$pr_head  base=$pr_base  state=$pr_state  mergeState=$pr_mergestate" >&2
     exit 0
 }
 
@@ -396,9 +473,27 @@ fi
 # Since 2026-08-24 this is a *gate*, not a flat reject: matching hands off to
 # verify_carve_out_or_reject(), which either exits 0 (Dependabot → develop, all
 # checks green) or calls reject_governance() with the specific reason.
-gh_pr_merge_regex='(^|[[:space:]\;\|\&\(`])gh[[:space:]]+pr[[:space:]]+merge([[:space:]]|$)'
+#
+# The pattern is deliberately WIDER than the canonical form the gate accepts.
+# Over-matching is safe — it just routes a command into the gate, which then
+# rejects anything non-canonical. UNDER-matching is the dangerous direction: the
+# hook's last statement is `exit 0`, so a merge that fails to match here runs
+# with no verification whatsoever. Hence the leading class admits any
+# non-identifier character, an optional leading path (`/usr/bin/gh`), and
+# arbitrary root-level flags between `gh` and `pr` (`gh -R o/r pr merge`).
+gh_pr_merge_regex='(^|[^A-Za-z0-9_.-])([^[:space:]]*/)?gh([[:space:]]+[^[:space:]]+)*[[:space:]]+pr[[:space:]]+merge([^[:alnum:]_-]|$)'
 if [[ "$command_match" =~ $gh_pr_merge_regex ]]; then
-    verify_carve_out_or_reject "$command_match"
+    verify_carve_out_or_reject "$command"
+fi
+
+# The REST/GraphQL merge endpoints reach the same place as the porcelain command
+# and are invisible to the pattern above. They carry no PR-number-and-flags shape
+# the gate can validate, so they are refused outright rather than gated — and
+# CLAUDE.md actively steers sessions toward `gh api` for other things, which
+# makes an inadvertent bypass realistic rather than theoretical.
+api_merge_regex='pulls/[0-9]+/merge|mergePullRequest'
+if [[ "$command_match" =~ $api_merge_regex ]]; then
+    reject_governance "PR merge via the GitHub API (use the canonical command, or ask the maintainer)"
 fi
 
 exit 0

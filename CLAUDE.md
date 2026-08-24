@@ -28,9 +28,13 @@ audit-trail gate is the human's explicit click on "Merge pull request".
 authored PR based on `develop` with every check green**, without asking —
 after the normal review verdict is posted. Nothing else: not `main` in any
 form, not a human-authored PR, not a pending or failing check.
-`.claude/hooks/block-dangerous-bash.sh` enforces all three conditions against
-the GitHub API (a hook sees only argv, so it fetches author/base/checks) and
-fails closed. Regression suite: `bash .claude/hooks/test-block-dangerous-bash.sh`.
+`.claude/hooks/block-dangerous-bash.sh` gates it: the command must be the
+**canonical** form `gh pr merge <N> [--merge|--squash|--rebase]
+[--delete-branch]` — the gate allow-lists one shape rather than enumerating
+dangerous ones — and author, base, state, head branch, commit authors and
+`mergeStateStatus == CLEAN` are then fetched from the API, since none of them
+is in argv. Fails closed. Regression suite (70 cases):
+`bash .claude/hooks/test-block-dangerous-bash.sh`.
 
 ## Commands
 
@@ -567,10 +571,11 @@ restructured to make the lesson load-bearing on its own.*
   buildscript/plugin classpath** → `buildscript { configurations.classpath {
   resolutionStrategy.force(…) } }` in `build.gradle.kts` — this IS forceable
   (verified twice on Gradle 9.5.1: `bcprov 1.79 -> 1.85`), contradicting
-  `docs/security-posture.md` ~line 340 (#294); (3) genuinely blocked →
-  accept-risk, e.g. KGP #45, where the force *resolves* but leaks a prerelease
-  `kotlin-stdlib` into `debugRuntimeClasspath` and breaks dependency locking.
-  Also: **a resolution pin expires.** The 2026-08 wave (#290/#291) fired because
+  `docs/security-posture.md` ~line 340 (#291/#294); (3) genuinely blocked →
+  accept-risk, e.g. KGP accept-risk #292 (Dependabot alert #45), where the force
+  *resolves* but leaks a prerelease `kotlin-stdlib` into `debugRuntimeClasspath`
+  and breaks dependency locking.
+  Also: **a resolution pin expires.** The 2026-08 Netty wave (#290) fired because
   new advisories moved the vulnerable range up to include the pinned version —
   the pin was working exactly as written. Always re-derive the *current*
   first-patched version rather than trusting the alert's
