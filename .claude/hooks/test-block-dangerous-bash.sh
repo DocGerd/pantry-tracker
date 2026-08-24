@@ -18,6 +18,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
 HOOK="$HERE/block-dangerous-bash.sh"
 pass=0 fail=0
+# The canonical form names the repo, so the command the gate validates and the
+# command gh executes refer to the same repository.
+R=" --repo DocGerd/pantry-tracker"
 
 [[ -r "$HOOK" ]] || { echo "cannot read $HOOK"; exit 1; }
 
@@ -125,14 +128,30 @@ run 2 "subshell form"                   'echo $(gh pr merge 47)'              'c
 # shellcheck disable=SC2016
 run 2 "backtick form"                   'echo `gh pr merge 47`'               'canonical merge form'
 
+echo "== matcher under-match regressions (round 2) =="
+# Each of these is a TOTAL bypass if the matcher misses it: the hook's last
+# statement is `exit 0`, so an unmatched merge runs with no verification at all.
+run 2 "flag between pr and merge"       'gh pr -R evil/other merge 4242 --merge'   'canonical merge form'
+run 2 "--repo between pr and merge"     'gh pr --repo evil/other merge 4242'       'canonical merge form'
+run 2 "backslash inside merge"          'gh pr merg\e 4242 --admin'                'canonical merge form'
+run 2 "backslash inside pr"             'gh p\r merge 4242 --merge'                'canonical merge form'
+run 2 "backslash inside gh"             'g\h pr merge 4242 --merge'                'canonical merge form'
+run 2 "backslash before merge"          'gh pr \merge 4242 --merge'                'canonical merge form'
+# shellcheck disable=SC2016
+run 2 "ANSI-C quoted subcommand"        'gh pr $'"'"'merge'"'"' 4242'              'canonical merge form'
+# shellcheck disable=SC2016
+run 2 "binary via command substitution" '$(which gh) pr merge 4242 --merge'        'canonical merge form'
+run 2 "backslash inside main (push)"    'git push origin ma\in'
+run 2 "aliasing the subcommand"         'gh alias set m pr\ merge'                 'canonical merge form'
+
 echo "== merge gate: API merge vectors refused outright =="
 run 2 "gh api PUT pulls/N/merge"        'gh api -X PUT repos/o/r/pulls/5/merge'    'GitHub API'
 run 2 "gh api --method PUT"             'gh api --method PUT repos/o/r/pulls/5/merge' 'GitHub API'
 run 2 "graphql mergePullRequest"        'gh api graphql -f query=mergePullRequest' 'GitHub API'
 
 echo "== merge gate: live API (canonical shape, real PR) =="
-run 2 "[net] merged PR rejected"        'gh pr merge 289 --merge'
-run 2 "[net] nonexistent PR"            'gh pr merge 999999 --merge'
+run 2 "[net] merged PR rejected"        "gh pr merge 289$R --merge"                 'is MERGED, not OPEN'
+run 2 "[net] nonexistent PR"            "gh pr merge 999999$R --merge"
 
 # --- stubbed-gh cases ---------------------------------------------------------
 # The live cases above can only ever assert a REJECT — there is rarely an open,
@@ -161,7 +180,7 @@ if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
     [[ "$*" == *"author,baseRefName,state,isDraft,mergeStateStatus,headRefName,commits"* ]] \
         || { echo "stub: unexpected --json field list" >&2; exit 9; }
     printf '%s\n' "$STUB_AUTHOR" "$STUB_BASE" "$STUB_STATE" "$STUB_DRAFT" \
-                  "$STUB_MERGESTATE" "$STUB_HEAD" "$STUB_COMMIT_AUTHORS"
+                  "$STUB_MERGESTATE" "$STUB_HEAD" "$STUB_FOREIGN" "$STUB_NCOMMITS"
     exit 0
 fi
 if [[ "${1:-}" == "pr" && "${2:-}" == "checks" ]]; then
@@ -175,13 +194,13 @@ chmod +x "$STUB_DIR/gh"
 
 export STUB_EXPECT_PR=4242 STUB_EXPECT_REPO="DocGerd/pantry-tracker"
 
-# stub <expected> <label> <author> <base> <state> <draft> <mergestate> <head> <commitauthors> <rc> [reason]
+# stub <expected> <label> <author> <base> <state> <draft> <mergestate> <head> <foreigncommits> <ncommits> <rc> [reason]
 stub() {
-    local expected="$1" label="$2" reason="${11:-}" actual p
+    local expected="$1" label="$2" reason="${12:-}" actual p
     local err="$STUB_DIR/err"
     export STUB_AUTHOR="$3" STUB_BASE="$4" STUB_STATE="$5" STUB_DRAFT="$6" \
-           STUB_MERGESTATE="$7" STUB_HEAD="$8" STUB_COMMIT_AUTHORS="$9" STUB_CHECKS_RC="${10}"
-    if ! p=$(payload 'gh pr merge 4242 --merge'); then
+           STUB_MERGESTATE="$7" STUB_HEAD="$8" STUB_FOREIGN="$9" STUB_NCOMMITS="${10}" STUB_CHECKS_RC="${11}"
+    if ! p=$(payload "${STUB_CMD:-gh pr merge 4242$R --merge}"); then
         fail=$((fail + 1)); printf '  FAIL %-54s (payload build failed)\n' "$label"; return
     fi
     printf '%s' "$p" | bash "$STUB_HOOK" >/dev/null 2>"$err"
@@ -191,34 +210,46 @@ stub() {
 
 D=app/dependabot
 echo "== carve-out conditions, stubbed gh =="
-stub 0 "ALLOW: dependabot->develop, clean"  "$D" develop OPEN false CLEAN dependabot/x "$D" 0
-stub 0 "ALLOW: REST login spelling" 'dependabot[bot]' develop OPEN false CLEAN dependabot/x 'dependabot[bot]' 0
-stub 2 "author is a human"          DocGerd develop OPEN false CLEAN dependabot/x "$D" 0 "not Dependabot"
-stub 2 "author is another bot"      app/renovate develop OPEN false CLEAN dependabot/x "$D" 0 "not Dependabot"
-stub 2 "base is main"               "$D" main    OPEN false CLEAN dependabot/x "$D" 0 "not 'develop'"
-stub 2 "base is a release branch"   "$D" release/1.5.0 OPEN false CLEAN dependabot/x "$D" 0 "not 'develop'"
-stub 2 "PR already merged"          "$D" develop MERGED false CLEAN dependabot/x "$D" 0 "not OPEN"
-stub 2 "PR closed"                  "$D" develop CLOSED false CLEAN dependabot/x "$D" 0 "not OPEN"
-stub 2 "PR is a draft"              "$D" develop OPEN true  CLEAN dependabot/x "$D" 0 "is a draft"
-stub 2 "head branch not dependabot" "$D" develop OPEN false CLEAN feature/evil "$D" 0 "is not a 'dependabot/' branch"
-stub 2 "a commit by someone else"   "$D" develop OPEN false CLEAN dependabot/x "$D mallory" 0 "commit authored by 'mallory'"
-# An empty commit-author list collapses the response to 6 fields, because
-# command substitution strips trailing newlines — so the field-count guard fires
-# before the emptiness check ever runs. Still fails closed, just one guard
-# earlier; asserting the real reason keeps that documented rather than surprising.
-stub 2 "no commit authors -> field-count guard" "$D" develop OPEN false CLEAN dependabot/x "" 0 "expected 7"
-stub 2 "mergeState BLOCKED"         "$D" develop OPEN false BLOCKED dependabot/x "$D" 0 "not CLEAN"
-stub 2 "mergeState BEHIND"          "$D" develop OPEN false BEHIND  dependabot/x "$D" 0 "not CLEAN"
-stub 2 "mergeState UNSTABLE"        "$D" develop OPEN false UNSTABLE dependabot/x "$D" 0 "not CLEAN"
-stub 2 "checks pending (rc=8)"      "$D" develop OPEN false CLEAN dependabot/x "$D" 8 "pending checks"
-stub 2 "checks failing (rc=1)"      "$D" develop OPEN false CLEAN dependabot/x "$D" 1 "failing checks"
-stub 2 "checks timed out (rc=124)"  "$D" develop OPEN false CLEAN dependabot/x "$D" 124 "timed out"
-stub 2 "pipe in branch name"        "$D" 'develop|OPEN|false' OPEN false CLEAN dependabot/x "$D" 0 "not 'develop'"
+stub 0 "ALLOW: dependabot->develop, clean"  "$D" develop OPEN false CLEAN dependabot/x 0 1 0
+stub 0 "ALLOW: REST login spelling" 'dependabot[bot]' develop OPEN false CLEAN dependabot/x 0 1 0
+# The gate accepts four canonical shapes; three were previously untested, so
+# a regex that silently stopped accepting them would not have failed the suite.
+STUB_CMD="gh pr merge 4242$R"                          stub 0 "ALLOW: bare form"           "$D" develop OPEN false CLEAN dependabot/x 0 1 0
+STUB_CMD="gh pr merge 4242$R --squash --delete-branch" stub 0 "ALLOW: squash+delete"        "$D" develop OPEN false CLEAN dependabot/x 0 1 0
+STUB_CMD="gh pr merge 4242$R --rebase"                 stub 0 "ALLOW: rebase"               "$D" develop OPEN false CLEAN dependabot/x 0 1 0
+STUB_CMD="gh pr merge 4242$R --delete-branch --merge"  stub 2 "REJECT: reversed flag order" "$D" develop OPEN false CLEAN dependabot/x 0 1 0 "canonical merge form"
+STUB_CMD="gh pr merge  4242$R --merge"                 stub 2 "REJECT: double space"        "$D" develop OPEN false CLEAN dependabot/x 0 1 0 "canonical merge form"
+STUB_CMD="gh pr merge 4242 --merge"                    stub 2 "REJECT: repo not named"      "$D" develop OPEN false CLEAN dependabot/x 0 1 0 "canonical merge form"
+unset STUB_CMD
+stub 2 "author is a human"          DocGerd develop OPEN false CLEAN dependabot/x 0 1 0 "not Dependabot"
+stub 2 "author is another bot"      app/renovate develop OPEN false CLEAN dependabot/x 0 1 0 "not Dependabot"
+stub 2 "base is main"               "$D" main    OPEN false CLEAN dependabot/x 0 1 0 "not 'develop'"
+stub 2 "base is a release branch"   "$D" release/1.5.0 OPEN false CLEAN dependabot/x 0 1 0 "not 'develop'"
+stub 2 "PR already merged"          "$D" develop MERGED false CLEAN dependabot/x 0 1 0 "not OPEN"
+stub 2 "PR closed"                  "$D" develop CLOSED false CLEAN dependabot/x 0 1 0 "not OPEN"
+stub 2 "PR is a draft"              "$D" develop OPEN true  CLEAN dependabot/x 0 1 0 "is a draft"
+stub 2 "head branch not dependabot" "$D" develop OPEN false CLEAN feature/evil 0 1 0 "is not a 'dependabot/' branch"
+stub 2 "a commit by someone else"   "$D" develop OPEN false CLEAN dependabot/x 1 2 0 "not Dependabot"
+stub 2 "mergeState BLOCKED"         "$D" develop OPEN false BLOCKED dependabot/x 0 1 0 "not CLEAN"
+stub 2 "mergeState BEHIND"          "$D" develop OPEN false BEHIND  dependabot/x 0 1 0 "not CLEAN"
+stub 2 "mergeState UNSTABLE"        "$D" develop OPEN false UNSTABLE dependabot/x 0 1 0 "not CLEAN"
+stub 2 "checks pending (rc=8)"      "$D" develop OPEN false CLEAN dependabot/x 0 1 8 "pending checks"
+stub 2 "checks failing (rc=1)"      "$D" develop OPEN false CLEAN dependabot/x 0 1 1 "failing checks"
+stub 2 "checks timed out (rc=124)"  "$D" develop OPEN false CLEAN dependabot/x 0 1 124 "timed out"
+stub 2 "pipe in branch name"        "$D" 'develop|OPEN|false' OPEN false CLEAN dependabot/x 0 1 0 "not 'develop'"
+# Round-2 findings: the foreign-author count is computed by jq (a null login —
+# an author email with no linked GitHub account — counts as foreign), and the
+# commit list truncates at 100, where the NEWEST commits are the unchecked ones.
+stub 2 "two foreign commit authors"  "$D" develop OPEN false CLEAN dependabot/x 2 5 0 "2 commit author(s) that are not Dependabot"
+stub 2 "commit list truncated at 100" "$D" develop OPEN false CLEAN dependabot/x 0 100 0 "truncates at 100"
+stub 2 "zero commits reported"       "$D" develop OPEN false CLEAN dependabot/x 0 0 0 "reported no commits"
+stub 2 "non-numeric foreign count"   "$D" develop OPEN false CLEAN dependabot/x '' 1 0 "non-numeric"
+stub 2 "non-numeric commit count"    "$D" develop OPEN false CLEAN dependabot/x 0 'null' 0 "non-numeric"
 
 echo "== allow path emits an audit line =="
 export STUB_AUTHOR="$D" STUB_BASE=develop STUB_STATE=OPEN STUB_DRAFT=false \
-       STUB_MERGESTATE=CLEAN STUB_HEAD=dependabot/x STUB_COMMIT_AUTHORS="$D" STUB_CHECKS_RC=0
-if payload 'gh pr merge 4242 --merge' | bash "$STUB_HOOK" 2>"$STUB_DIR/err" >/dev/null &&
+       STUB_MERGESTATE=CLEAN STUB_HEAD=dependabot/x STUB_FOREIGN=0 STUB_NCOMMITS=1 STUB_CHECKS_RC=0
+if payload "gh pr merge 4242$R --merge" | bash "$STUB_HOOK" 2>"$STUB_DIR/err" >/dev/null &&
    grep -q "allowing merge of PR #4242" "$STUB_DIR/err"; then
     pass=$((pass + 1)); printf '  ok   %-54s\n' "audit line on stderr"
 else

@@ -262,8 +262,9 @@ GH_BIN="/usr/bin/gh"
 
 verify_carve_out_or_reject() {
     local cmd="$1"
-    local decision pr_number checks_rc author_ok a b ok raw
-    local pr_author pr_base pr_state pr_draft pr_mergestate pr_head pr_commit_authors
+    local decision pr_number checks_rc author_ok a raw
+    local pr_author pr_base pr_state pr_draft pr_mergestate pr_head
+    local pr_foreign_commits pr_commit_count
     local -a meta
 
     [[ -x "$GH_BIN" ]] || reject_governance "$GH_BIN is not executable (failing closed)"
@@ -274,24 +275,35 @@ verify_carve_out_or_reject() {
     # copy: stripping quotes changes what bash would actually execute, so a
     # decision made on the stripped text is a decision about a command that
     # never runs.
-    if ! decision=$(printf '%s' "$cmd" | python3 -c '
-import re, sys
+    # shellcheck disable=SC2016  # the python body must reach python unexpanded
+    if ! decision=$(printf '%s' "$cmd" | CARVE_OUT_REPO="$CARVE_OUT_REPO" python3 -c '
+import os, re, sys
 cmd = sys.stdin.read().strip()
-# One test kills every operator at once -- newline, CR, ";", "&", "|", "$",
-# backtick, quotes, backslash, "/", "=", "(" -- with no list to keep in sync.
-# Anything outside [A-Za-z0-9 -] simply is not part of a canonical merge.
-if re.search(r"[^A-Za-z0-9 \-]", cmd):
+repo = os.environ["CARVE_OUT_REPO"]
+# The repo must be named IN THE COMMAND, not just in the gate. Without it, `gh`
+# resolves the target from the cwd git remote -- so the gate could verify this
+# repo while the command merged a PR in whatever repository the shell happened
+# to be sitting in. Naming it makes the validated repo and the merged repo the
+# same string.
+repo_flag = " --repo " + repo
+# Char-class test with that one literal removed, so `/` stays illegal everywhere
+# else. This single test kills every shell operator at once -- newline, CR, ";",
+# "&", "|", "$", backtick, quotes, backslash, "=", "(" -- with no list to keep
+# in sync as new metacharacters occur to someone.
+if re.search(r"[^A-Za-z0-9 \-]", cmd.replace(repo_flag, "", 1)):
     print("REJECT:not the canonical merge form (disallowed characters)")
     raise SystemExit
 CANON = re.compile(
     r"gh pr merge (?P<n>[0-9]{1,7})"
+    + re.escape(repo_flag) +
     r"(?: --(?:merge|squash|rebase))?"
     r"(?: --delete-branch)?"
 )
 m = CANON.fullmatch(cmd)
 if not m:
     print("REJECT:not the canonical merge form -- expected "
-          "gh pr merge <N> [--merge|--squash|--rebase] [--delete-branch]")
+          "gh pr merge <N>" + repo_flag +
+          " [--merge|--squash|--rebase] [--delete-branch]")
     raise SystemExit
 print("PR:%s" % m.group("n"))
 '); then
@@ -317,13 +329,13 @@ print("PR:%s" % m.group("n"))
                    timeout -k 5 "$GH_TIMEOUT" "$GH_BIN" pr view "$pr_number" \
                    --repo "$CARVE_OUT_REPO" \
                    --json author,baseRefName,state,isDraft,mergeStateStatus,headRefName,commits \
-                   --jq '.author.login, .baseRefName, .state, (.isDraft|tostring), .mergeStateStatus, .headRefName, ([.commits[].authors[].login]|unique|join(" "))' \
+                   --jq '.author.login, .baseRefName, .state, (.isDraft|tostring), .mergeStateStatus, .headRefName, ([.commits[].authors[] | select(((.login // "") == "app/dependabot" or (.login // "") == "dependabot[bot]") | not)] | length), (.commits | length)' \
                    </dev/null 2>/dev/null); then
         reject_governance "could not reach the GitHub API for PR #$pr_number (failing closed)"
     fi
     mapfile -t meta <<<"$raw"
-    if [[ "${#meta[@]}" -ne 7 ]]; then
-        reject_governance "unexpected API response for PR #$pr_number (${#meta[@]} fields, expected 7) — failing closed"
+    if [[ "${#meta[@]}" -ne 8 ]]; then
+        reject_governance "unexpected API response for PR #$pr_number (${#meta[@]} fields, expected 8) — failing closed"
     fi
     pr_author="${meta[0]}"
     pr_base="${meta[1]}"
@@ -331,7 +343,8 @@ print("PR:%s" % m.group("n"))
     pr_draft="${meta[3]}"
     pr_mergestate="${meta[4]}"
     pr_head="${meta[5]}"
-    pr_commit_authors="${meta[6]}"
+    pr_foreign_commits="${meta[6]}"
+    pr_commit_count="${meta[7]}"
 
     # `gh pr view --json author` returns the GraphQL login `app/dependabot`; the
     # REST API returns `dependabot[bot]`. Accept both so this does not silently
@@ -361,16 +374,28 @@ print("PR:%s" % m.group("n"))
     # authored by Dependabot.
     [[ "$pr_head" == "$CARVE_OUT_HEAD_PREFIX"* ]] ||
         reject_governance "PR #$pr_number head '$pr_head' is not a '$CARVE_OUT_HEAD_PREFIX' branch"
-    [[ -n "$pr_commit_authors" ]] ||
-        reject_governance "PR #$pr_number reported no commit authors (failing closed)"
-    for a in $pr_commit_authors; do
-        ok=0
-        for b in "${CARVE_OUT_AUTHORS[@]}"; do
-            if [[ "$a" == "$b" ]]; then ok=1; fi
-        done
-        [[ "$ok" -eq 1 ]] ||
-            reject_governance "PR #$pr_number has a commit authored by '$a', not Dependabot"
-    done
+    #
+    # The count of NON-Dependabot commit authors is computed by jq, not by
+    # splitting a login list in the shell. Round 2 found three separate defects
+    # in the string-splitting version, all of which this deletes rather than
+    # patches: a commit whose author email is not linked to a GitHub account has
+    # a NULL login and vanished from the list entirely; leading/trailing spaces
+    # from such a null passed the "every author is Dependabot" loop; and
+    # `dependabot[bot]` is itself a GLOB pattern, so unquoted word-splitting made
+    # the verdict depend on which files happened to be in the process cwd.
+    # `.login // ""` inside jq means an unlinked author counts as foreign.
+    [[ "$pr_foreign_commits" =~ ^[0-9]+$ ]] ||
+        reject_governance "PR #$pr_number returned a non-numeric commit-author count (failing closed)"
+    [[ "$pr_foreign_commits" -eq 0 ]] ||
+        reject_governance "PR #$pr_number has $pr_foreign_commits commit author(s) that are not Dependabot"
+    # `gh pr view --json commits` truncates at 100, so on a longer PR the NEWEST
+    # commits are the ones never author-checked. Refuse to guess.
+    [[ "$pr_commit_count" =~ ^[0-9]+$ ]] ||
+        reject_governance "PR #$pr_number returned a non-numeric commit count (failing closed)"
+    [[ "$pr_commit_count" -gt 0 ]] ||
+        reject_governance "PR #$pr_number reported no commits (failing closed)"
+    [[ "$pr_commit_count" -lt 100 ]] ||
+        reject_governance "PR #$pr_number has $pr_commit_count commits; the API list truncates at 100 (failing closed)"
     # THE authoritative check gate. `gh pr checks` rc=0 means only "nothing that
     # has posted is failing" — it is silent about a REQUIRED check that has not
     # posted at all, so a PR missing two of three required contexts still returns
@@ -397,7 +422,7 @@ print("PR:%s" % m.group("n"))
 
     printf '%s\n' \
         "block-dangerous-bash: allowing merge of PR #$pr_number under the Dependabot carve-out (#297)." \
-        "  author=$pr_author  head=$pr_head  base=$pr_base  state=$pr_state  mergeState=$pr_mergestate" >&2
+        "  author=$pr_author  head=$pr_head  base=$pr_base  state=$pr_state  mergeState=$pr_mergestate  commits=$pr_commit_count/all-dependabot" >&2
     exit 0
 }
 
@@ -434,6 +459,17 @@ fi
 # reject message so the user sees what they actually typed.
 command_match="${command//\"/}"
 command_match="${command_match//\'/}"
+# Backslashes and `$` are stripped for the same reason as the quotes: bash removes
+# them before exec, so `gh pr merg\e 5`, `g\h pr merge 5`, `git push origin ma\in`
+# and the ANSI-C form `gh pr $'merge' 5` all reach a real merge (or a real push to
+# main) while the literal text matches nothing. Verified: `printf '[%s]' origin
+# ma\in` prints `[origin][main]`.
+#
+# This only ever WIDENS the matcher, and widening is free: a match merely routes
+# into the gate, which re-validates the RAW command and rejects anything
+# non-canonical. Under-matching is the direction that costs an unverified merge.
+command_match="${command_match//\\/}"
+command_match="${command_match//$/}"
 
 # Single combined regex (not two independent matches): require `main` to appear
 # as the *destination* of the same `git push` invocation. Walking through it:
@@ -481,7 +517,14 @@ fi
 # with no verification whatsoever. Hence the leading class admits any
 # non-identifier character, an optional leading path (`/usr/bin/gh`), and
 # arbitrary root-level flags between `gh` and `pr` (`gh -R o/r pr merge`).
-gh_pr_merge_regex='(^|[^A-Za-z0-9_.-])([^[:space:]]*/)?gh([[:space:]]+[^[:space:]]+)*[[:space:]]+pr[[:space:]]+merge([^[:alnum:]_-]|$)'
+#
+# Note the token loop appears TWICE — between `gh` and `pr`, and again between
+# `pr` and `merge`. Only the first was present initially, and `gh pr -R o/r
+# merge 5` slipped straight through: cobra resolves the subcommand past a
+# parent flag, so that is a real merge invocation. The trailing `[^A-Za-z0-9_.-]*`
+# on the `gh` token lets `$(which gh) pr merge 5` and its backtick form match
+# once `$` has been stripped above.
+gh_pr_merge_regex='(^|[^A-Za-z0-9_.-])([^[:space:]]*/)?gh[^A-Za-z0-9_.-]*([[:space:]]+[^[:space:]]+)*[[:space:]]+pr([[:space:]]+[^[:space:]]+)*[[:space:]]+merge([^[:alnum:]_-]|$)'
 if [[ "$command_match" =~ $gh_pr_merge_regex ]]; then
     verify_carve_out_or_reject "$command"
 fi
