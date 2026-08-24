@@ -144,6 +144,36 @@ run 2 "binary via command substitution" '$(which gh) pr merge 4242 --merge'     
 run 2 "backslash inside main (push)"    'git push origin ma\in'
 run 2 "aliasing the subcommand"         'gh alias set m pr\ merge'                 'canonical merge form'
 
+echo "== expansion-evasion families (round 3) =="
+# Every case here is a command bash EXECUTES as a merge (or a push to main) while
+# the literal text spells something else. A single lossy rewrite cannot catch
+# these -- stripping `$` turns `merge$x` into `mergex` and DESTROYS the match --
+# which is why the hook matches a union of normalizations.
+# shellcheck disable=SC2016
+run 2 "sigil-adjacent expansion"        'gh pr merge$x 4242 --admin'               'canonical merge form'
+# shellcheck disable=SC2016
+run 2 "braced expansion adjacent"       'gh pr merge${Z} 4242 --admin'             'canonical merge form'
+# shellcheck disable=SC2016
+run 2 "IFS as separator"                'gh${IFS}pr${IFS}merge${IFS}4242'          'canonical merge form'
+# shellcheck disable=SC2016
+run 2 "expansion inside keyword"        'gh pr me${x}rge 4242 --admin'             'canonical merge form'
+# shellcheck disable=SC2016
+run 2 "default-value expansion"         'gh pr ${x-merge} 4242 --admin'            'canonical merge form'
+run 2 "ANSI-C octal keyword"            'gh pr $'"'"'\155erge'"'"' 4242 --admin'   'canonical merge form'
+run 2 "ANSI-C hex keyword"              'gh pr $'"'"'\x6derge'"'"' 4242'           'canonical merge form'
+run 2 "brace list splits the words"     'gh pr {merge,4242}'                       'canonical merge form'
+run 2 "line continuation splits merge"  'gh pr mer\
+ge 4242 --admin'                                                                   'canonical merge form'
+# The push-to-main branch is the CORE rule, not the carve-out -- same families.
+# shellcheck disable=SC2016
+run 2 "push to main via expansion"      'git push origin main$x'
+run 2 "push to main via ANSI-C"         'git push origin $'"'"'\x6dain'"'"''
+run 2 "push to main via continuation"   'git push origin ma\
+in'
+# Escape-hatch flags were previously tested only against the raw text.
+run 2 "quoted --force"                  'git push "--force" origin x'
+run 2 "backslashed --force"             'git push --fo\rce origin x'
+
 echo "== merge gate: API merge vectors refused outright =="
 run 2 "gh api PUT pulls/N/merge"        'gh api -X PUT repos/o/r/pulls/5/merge'    'GitHub API'
 run 2 "gh api --method PUT"             'gh api --method PUT repos/o/r/pulls/5/merge' 'GitHub API'

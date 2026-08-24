@@ -28,12 +28,20 @@ audit-trail gate is the human's explicit click on "Merge pull request".
 authored PR based on `develop` with every check green**, without asking —
 after the normal review verdict is posted. Nothing else: not `main` in any
 form, not a human-authored PR, not a pending or failing check.
-`.claude/hooks/block-dangerous-bash.sh` gates it: the command must be the
-**canonical** form `gh pr merge <N> [--merge|--squash|--rebase]
-[--delete-branch]` — the gate allow-lists one shape rather than enumerating
-dangerous ones — and author, base, state, head branch, commit authors and
-`mergeStateStatus == CLEAN` are then fetched from the API, since none of them
-is in argv. Fails closed. Regression suite (70 cases):
+`.claude/hooks/block-dangerous-bash.sh` gates it. The command must be the
+**canonical** form — note the repo is part of it, so the validated string and
+the executed string name the same repository:
+
+```
+gh pr merge <N> --repo DocGerd/pantry-tracker [--merge|--squash|--rebase] [--delete-branch]
+```
+
+The gate allow-lists that one shape rather than enumerating dangerous ones;
+author, base, state, head branch, commit authors and `mergeStateStatus == CLEAN`
+are then fetched from the API, since none of them is in argv. **Once a command
+reaches the gate it fails closed** — but see the honest limits in #299: deciding
+*whether* to gate is still a pattern match over shell text, so treat the hook as
+a speed bump and this rule as the binding control. Regression suite:
 `bash .claude/hooks/test-block-dangerous-bash.sh`.
 
 ## Commands
@@ -127,7 +135,11 @@ force-pushing — those rules are not restated here. Repo-specific:
   flag. To *author* text containing a blocked literal (test fixtures, docs),
   use the **Write/Edit tools** — the hook intercepts Bash only. The PR-merge
   branch is a **gate**, not a flat reject, since 2026-08-24 (see the governance
-  carve-out above).
+  carve-out above), and its matcher is deliberately **wide** (under-matching
+  would let an unverified merge run, over-matching only costs a false block).
+  Consequence, hit immediately: a `git commit -m "…"` whose message merely
+  *mentions* the merge command is blocked. Write the message to a file with the
+  **Write tool** and use `git commit -F <file>` — that command text is clean.
 
 ### detekt config: list keys REPLACE, not merge
 

@@ -148,13 +148,53 @@ input="$(cat)"
 
 # Fail-closed JSON parsing: python3 must exist, JSON must parse, tool_input.command
 # must be present (Bash tool always populates it). Any failure → exit 2.
-if ! command=$(printf '%s' "$input" | python3 -c '
-import json, sys
+# It also builds the MATCH PROBE — see the long note above `command_match` below.
+# Both come from this one python invocation because the hook runs on every single
+# Bash call and a second interpreter start is pure overhead.
+# shellcheck disable=SC2016  # the python body must reach python unexpanded
+if ! parsed=$(printf '%s' "$input" | python3 -c '
+import codecs, json, re, sys
+SQ = chr(39)   # written this way: the program itself is inside a single-quoted shell string
 d = json.load(sys.stdin)
 ti = d.get("tool_input", {})
 if "command" not in ti:
     sys.exit(3)
-print(ti["command"])
+cmd = ti["command"]
+if not isinstance(cmd, str):
+    sys.exit(3)
+
+EXPANSION = r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*"
+
+def ansi_decode(s):
+    # $-quoted strings: bash decodes \155, \x6d, m before exec, so the
+    # literal text can spell a keyword no regex would recognise.
+    def sub(m):
+        try:
+            return codecs.decode(m.group(1), "unicode_escape")
+        except Exception:
+            return m.group(1)
+    return re.sub(r"\$" + SQ + r"([^" + SQ + r"]*)" + SQ, sub, s)
+
+q = cmd.replace(chr(34), "").replace(SQ, "")
+lc = q.replace("\\\n", "")                      # line continuations joined
+cands = [
+    cmd,                                        # exactly as typed
+    q,                                          # quotes removed
+    lc,                                         # + continuations joined
+    lc.replace("\\", ""),                       # + backslashes removed
+    re.sub(EXPANSION, "", lc),                  # expansions vanish (unset var)
+    re.sub(EXPANSION, " ", lc),                 # expansions become a separator
+    # ${x-merge} / ${x:-merge} / ${x=w} / ${x+w}: an unset variable expands to
+    # the WORD, so the keyword is spelled inside the braces and neither
+    # deleting nor blanking the expansion reveals it.
+    re.sub(r"\$\{[A-Za-z_][A-Za-z0-9_]*:?[-=+?]([^}]*)\}", r"\1", lc),
+    re.sub(r"[{},]", " ", lc),                  # brace lists flattened
+    ansi_decode(cmd),
+    ansi_decode(q).replace("\\", ""),
+]
+print(cmd)
+print("__HOOK_SPLIT_a7f3__")
+print("\n".join(cands))
 '); then
     cat >&2 <<MSG
 block-dangerous-bash hook: failed to parse Bash tool input.
@@ -170,14 +210,35 @@ MSG
     exit 2
 fi
 
+# Split the two payloads back apart. If the marker is missing the parse was not
+# what we expect, so fail closed rather than guessing.
+# No trailing newline in the marker: for an empty command every candidate is
+# empty too, so the whole probe is newlines and `$( )` strips them — leaving the
+# marker at the very end of $parsed with nothing after it.
+_marker=$'\n__HOOK_SPLIT_a7f3__'
+case "$parsed" in
+    *"$_marker"*) : ;;
+    *) cat >&2 <<MSG
+block-dangerous-bash hook: could not split the parsed command from the match
+probe. Failing closed — exiting 2.
+MSG
+       exit 2 ;;
+esac
+command="${parsed%%"$_marker"*}"
+command_match="${parsed#*"$_marker"}"
+command_match="${command_match#$'\n'}"
+
 # Empty command string from Claude Code is benign (no command to inspect → no
 # dangerous flag possible). Distinct from "field missing" above which is fail-closed.
 if [[ -z "$command" ]]; then
     exit 0
 fi
 
+# The message write is wrapped in `{ … } || true` so that a failed write to
+# stderr (closed or full fd) cannot make `set -e` abort the function BEFORE
+# `exit 2` — which would exit 1, and a would-be block would read as an allow.
 reject() {
-    cat >&2 <<MSG
+    { cat >&2 <<MSG
 Refusing to run this command: it uses a Git escape-hatch flag.
 
 Detected: $1
@@ -193,11 +254,12 @@ This repository's policy (CLAUDE.md + automation toolkit) forbids:
 If you genuinely need to bypass (e.g., the hook is broken and being fixed in
 this same PR), ask the user for explicit permission first.
 MSG
+    } || true
     exit 2
 }
 
 reject_governance() {
-    cat >&2 <<MSG
+    { cat >&2 <<MSG
 Refusing to run this command: it would land code on a protected branch without
 a human merge.
 
@@ -218,6 +280,7 @@ authored PR based on \`develop\` with every check green. This command did not
 qualify — the reason is named above. Merging anything else still requires the
 maintainer. Do not attempt to route around this hook via another tool.
 MSG
+    } || true
     exit 2
 }
 
@@ -268,6 +331,11 @@ verify_carve_out_or_reject() {
     local -a meta
 
     [[ -x "$GH_BIN" ]] || reject_governance "$GH_BIN is not executable (failing closed)"
+    # `env -u` below sanitises the GATE's own queries, but the merge that runs
+    # afterwards inherits this environment. If GH_HOST is set, the gate would
+    # verify github.com while the merge went somewhere else, so refuse instead.
+    [[ -z "${GH_HOST:-}" ]] || reject_governance "GH_HOST is set; the gate cannot bind the host the merge will use"
+    [[ -z "${GH_CONFIG_DIR:-}" ]] || reject_governance "GH_CONFIG_DIR is set; the gate cannot bind the credentials the merge will use"
 
     # Step 1 — the command must be EXACTLY the canonical form, or nothing.
     #
@@ -426,12 +494,14 @@ print("PR:%s" % m.group("n"))
     exit 0
 }
 
-# Word-boundaried matches via bash regex with [[:space:]] (catches spaces, tabs,
+# These run against the UNION PROBE, not the raw text: `git push "--force" x`
+# and `--fo\rce` both reach a real force-push while the literal text matches
+# nothing. Word-boundaried via [[:space:]] (catches spaces, tabs,
 # newlines, etc.). The trailing class also accepts `=` so `--force=value` and
 # `--force-with-lease=ref:expected_sha` (documented git syntax) can't slip past.
-if [[ " $command " =~ (^|[[:space:]])--no-verify([[:space:]=]|$) ]]; then reject "--no-verify"; fi
-if [[ " $command " =~ (^|[[:space:]])--force([[:space:]=]|$) ]]; then reject "--force"; fi
-if [[ " $command " =~ (^|[[:space:]])--force-with-lease([[:space:]=]|$) ]]; then reject "--force-with-lease"; fi
+if [[ " $command_match " =~ (^|[[:space:]])--no-verify([[:space:]=]|$) ]]; then reject "--no-verify"; fi
+if [[ " $command_match " =~ (^|[[:space:]])--force([[:space:]=]|$) ]]; then reject "--force"; fi
+if [[ " $command_match " =~ (^|[[:space:]])--force-with-lease([[:space:]=]|$) ]]; then reject "--force-with-lease"; fi
 
 # git commit -n / git push -f need git-aware matching to avoid false positives
 # (e.g. `tar -f` or `grep -n`). The lead-in is intentionally permissive — it
@@ -441,35 +511,40 @@ if [[ " $command " =~ (^|[[:space:]])--force-with-lease([[:space:]=]|$) ]]; then
 # quoted strings containing the literal text `git push`, which is acceptable
 # (see "Known limitation" in the header).
 git_lead='(^|[[:space:]\;\|\&\(`])git([[:space:]]+[^[:space:]]+)*[[:space:]]+'
-if [[ "$command" =~ ${git_lead}commit[[:space:]] ]] && \
-   [[ " $command " =~ (^|[[:space:]])-n([[:space:]=]|$) ]]; then
+if [[ "$command_match" =~ ${git_lead}commit[[:space:]] ]] && \
+   [[ " $command_match " =~ (^|[[:space:]])-n([[:space:]=]|$) ]]; then
     reject "git commit -n"
 fi
-if [[ "$command" =~ ${git_lead}push[[:space:]] ]] && \
-   [[ " $command " =~ (^|[[:space:]])-f([[:space:]=]|$) ]]; then
+if [[ "$command_match" =~ ${git_lead}push[[:space:]] ]] && \
+   [[ " $command_match " =~ (^|[[:space:]])-f([[:space:]=]|$) ]]; then
     reject "git push -f"
 fi
 
 # Governance: only humans merge to main (CLAUDE.md hard rule).
 #
-# Quote-stripping pre-pass: normalize the command by removing ASCII single and
-# double quotes before the governance regexes run. This lets `git push origin
-# "main"`, `eval "git push origin main"`, and `bash -c "gh pr merge 47"` match
-# despite the wrapping quotes. The original $command is preserved for the
-# reject message so the user sees what they actually typed.
-command_match="${command//\"/}"
-command_match="${command_match//\'/}"
-# Backslashes and `$` are stripped for the same reason as the quotes: bash removes
-# them before exec, so `gh pr merg\e 5`, `g\h pr merge 5`, `git push origin ma\in`
-# and the ANSI-C form `gh pr $'merge' 5` all reach a real merge (or a real push to
-# main) while the literal text matches nothing. Verified: `printf '[%s]' origin
-# ma\in` prints `[origin][main]`.
+# $command_match is the UNION MATCH PROBE built during parsing: the raw command
+# plus several normalizations, concatenated with newlines. A governance regex
+# matches if the pattern appears in ANY of them.
 #
-# This only ever WIDENS the matcher, and widening is free: a match merely routes
-# into the gate, which re-validates the RAW command and rejects anything
-# non-canonical. Under-matching is the direction that costs an unverified merge.
-command_match="${command_match//\\/}"
-command_match="${command_match//$/}"
+# Why a union and not one rewritten string. The obvious approach — rewrite the
+# command once and match that — is what the first version did, and it was WRONG
+# in the dangerous direction. Stripping `$` turned `gh pr merge$x 4242 --admin`
+# into `...mergex...`, which no longer matches the `merge` word boundary, so it
+# exited 0 — while bash, with $x unset, executes a real --admin merge. The RAW
+# text would have matched, because `$` is not alphanumeric. A single lossy
+# rewrite can DESTROY a match; only a union can be relied on to add them.
+#
+# The candidates model what bash actually does before exec: quote removal,
+# line-continuation joining, backslash removal, parameter expansion (both to
+# nothing and to a separator, since an unset variable does one and a set one
+# usually the other), brace-list flattening, and $-quote decoding — the last
+# because `$'\155erge'` spells a keyword that no regex over the literal text
+# can see.
+#
+# Over-matching is free: a match only routes into a gate that re-validates the
+# RAW command and rejects anything non-canonical, or into a flat reject. The
+# original $command is what reject messages print, so the user sees what they
+# actually typed.
 
 # Single combined regex (not two independent matches): require `main` to appear
 # as the *destination* of the same `git push` invocation. Walking through it:
