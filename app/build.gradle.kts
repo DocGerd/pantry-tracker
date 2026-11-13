@@ -478,6 +478,15 @@ dependencies {
 
     implementation(libs.mlkit.barcode.scanning)
 
+    // GHSA-xxph-c9ww-hj94: guava 33.3.1-android arrives transitively (CameraX /
+    // ML Kit). A constraint lifts it to the fixed release without adding a direct
+    // dependency. Drop once the upstream artifacts resolve guava >= 33.7.2.
+    constraints {
+        implementation(libs.guava) {
+            because("GHSA-xxph-c9ww-hj94: transitive guava 33.3.1-android is vulnerable")
+        }
+    }
+
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
 
