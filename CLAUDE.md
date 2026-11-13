@@ -285,7 +285,7 @@ restructured to make the lesson load-bearing on its own.*
   shared sinks `showSnackbar(message = ...)` / `Toast.makeText(...)` fail only
   when they open with a recognised wrong-tone phrase, so success copy stays
   clean. Not caught, still a human check: messages passed as a `val` reference,
-  concatenation, `getString(R.string.…)`, and interpolation-first templates.
+  concatenation, `getString(R.string.…)`, interpolation-first templates, and a wrong-tone message in a shared sink whose opener is not a recognised phrase.
   Two detekt gotchas: a rule that throws is swallowed silently (BUILD
   SUCCESSFUL, zero findings; set `debug = true` on the `Detekt` task to see it),
   and a stale Gradle daemon can pin an old `detektPlugins(project(...))` jar
@@ -396,7 +396,7 @@ restructured to make the lesson load-bearing on its own.*
   can stale all themed goldens, while a change to roles no golden renders stales
   none. `grep` the screenshot-test sources (`app/src/test/.../screenshot/`) for the
   changed `colorScheme.<role>` names plus `Surface(`/`Card(`/`tonalElevation`
-  first; no match means no golden stales. The `icon_*` goldens stale only on an
+  first; no match means no golden stales (the decorView background comes from the Android XML theme, not the Compose scheme). The `icon_*` goldens stale only on an
   icon-asset change (`AppIconScreenshotTest` paints on a fixed background).
   Eviction criterion: the `upload-artifact` golden-emit step leaves `ci.yml`, or
   the screenshot suite is removed.
