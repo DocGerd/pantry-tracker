@@ -23,6 +23,8 @@ detekt = "1.23.8"
 ktor = "3.5.0"
 kotlinxSerialization = "1.11.0"
 coil = "3.4.0"
+# Transitive via CameraX / ML Kit; pinned by a constraint in app/build.gradle.kts.
+guava = "33.7.2-android"
 # Jazzer JVM fuzzing — JUnit 5 driver. Pulls in jazzer-api, the native
 # jazzer agent jar, and the JUnit Jupiter *API* (junit-jupiter-api 5.9.0)
 # + the platform launcher transitively — but NOT junit-jupiter-engine, the
@@ -61,6 +63,7 @@ androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycl
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcodeScanning" }
 
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 
