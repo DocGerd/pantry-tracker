@@ -5,7 +5,7 @@ description: Wrap up a session with a standardized handover — summarize comple
 
 # Wrap
 
-1. Summarize work this session — PRs opened (the human merges every PR into `develop` or `main`; Claude's only exception is a green Dependabot PR into `develop`, merged via the GitHub MCP `merge_pull_request` tool, never from the shell), issues closed, commits landed.
+1. Summarize work this session — PRs opened (the human merges every PR into `develop` or `main`; Claude's only exception is a green Dependabot PR into `develop`, merged after its review verdict is posted, via the GitHub MCP `merge_pull_request` tool, never from the shell), issues closed, commits landed.
 2. Propose any durable lessons for the **project** `CLAUDE.md` at the repo root (not `~/.claude/CLAUDE.md`). Use `/revise-claude-md` in the main session; propose the changes, don't edit `CLAUDE.md` directly.
 3. Write/update `HANDOVER.md` at the repo root with: current branch, open PRs, next steps, blockers. Cross-reference the CLAUDE.md entries from step 2 rather than restating them.
 4. Confirm clean working tree via `git status`. If dirty, list the uncommitted/untracked files, halt, and tell the user; re-invoke wrap after they've resolved it.
