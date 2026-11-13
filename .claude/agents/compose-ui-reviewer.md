@@ -1,6 +1,6 @@
 ---
 name: compose-ui-reviewer
-description: Use this agent proactively after writing or modifying Jetpack Compose UI code under app/src/main/.../ui/**/*.kt — especially @Composable functions containing LaunchedEffect, DisposableEffect, a Flow .collect block, or any LocalContext.current read. Catches the Compose composition/recomposition footguns that built-in AGP Lint only surfaces at CI lintDebug time: the LocalContextGetResourceValueCall string-resource trap that broke #217, stale-capturing effect keys, and bare .format() (ImplicitDefaultLocale).
+description: "Use this agent proactively after writing or modifying Jetpack Compose UI code under app/src/main/.../ui/**/*.kt — especially @Composable functions containing LaunchedEffect, DisposableEffect, a Flow .collect block, or any LocalContext.current read. Catches the Compose composition/recomposition footguns that built-in AGP Lint only surfaces at CI lintDebug time: the LocalContextGetResourceValueCall string-resource trap that broke #217, stale-capturing effect keys, and bare .format() (ImplicitDefaultLocale)."
 tools: Read, Grep, Glob, Bash
 ---
 

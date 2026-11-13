@@ -3,7 +3,7 @@
 This directory holds **team-shared** [Claude Code](https://docs.claude.com/en/docs/claude-code)
 configuration that every contributor inherits automatically by checking out the
 repo. It is committed deliberately: the guardrails and tooling here encode the
-project's hard rules (only humans merge to `main`; never skip hooks or
+project's hard rules (only humans merge to `develop` or `main`; never skip hooks or
 force-push; never hand-edit the machine-generated lockfile) so a freshly-cloned
 checkout gets the same behaviour by default. The operational guide that ties it
 all together is [`CLAUDE.md`](../CLAUDE.md) in the repo root.
@@ -21,7 +21,7 @@ all together is [`CLAUDE.md`](../CLAUDE.md) in the repo root.
 
 ## The hooks
 
-`settings.json` registers two **`PreToolUse`** guards, both shared with every
+`settings.json` registers **`PreToolUse`** guards, shared with every
 contributor on clone. They are **blocking** safety rails — they exit non-zero to
 stop a tool call before it lands, rather than reporting after the fact.
 
@@ -38,12 +38,22 @@ is the regeneration command.
 
 This hook **pattern-matches the full command-line text** of a Bash call and
 blocks the project's forbidden git operations: force-push, `--no-verify`
-(skipping hooks), and anything that would land code on `main` directly
-(`gh pr merge`, `git push origin main`). These mirror the hard governance rules
+(skipping hooks), pushes to `main`, and every shell merge (`gh pr merge`),
+unconditionally. The only Claude-side merge, a green Dependabot PR into
+`develop`, goes through the GitHub MCP `merge_pull_request` tool and is checked
+by Claude, not by this hook (CLAUDE.md §Hard governance rule). These mirror the hard governance rules
 in [`CLAUDE.md`](../CLAUDE.md) and [`GOVERNANCE.md`](../GOVERNANCE.md). Because it
 matches the whole command line, a forbidden flag name appearing inside a commit
 message body is also caught — rephrase ("skip hooks", "force-push") if you need
 to mention one in commit copy.
+
+### `hooks/block-gradle-wrapper-pin.sh` (Bash)
+
+Blocks `./gradlew wrapper` unless the same command carries
+`--gradle-distribution-sha256-sum`. A bare regeneration rewrites
+`gradle-wrapper.properties` and silently drops the `distributionSha256Sum` pin;
+the atomic two-flag form is in
+[`docs/release/SHIPPING.md`](../docs/release/SHIPPING.md).
 
 ## The agents
 
@@ -56,6 +66,9 @@ review cycle (see [`CONTRIBUTING.md`](../CONTRIBUTING.md) → Code review):
 - `android-test-environment-reviewer` — reviews Android test code (Robolectric,
   Compose UI tests, instrumented tests) for environment-specific footguns such
   as bare `assert()` being a no-op on ART.
+- `compose-ui-reviewer` — reviews Jetpack Compose UI code under `ui/` for
+  composition/recomposition footguns: the `LocalContext` string-resource lint
+  trap, stale-capturing effect keys, bare `.format()`.
 
 ## The skills
 

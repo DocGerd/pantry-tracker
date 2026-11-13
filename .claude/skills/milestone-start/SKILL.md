@@ -23,13 +23,13 @@ If invoked without arguments, ask the user for both.
    ```
    If non-empty, refuse and tell the user to commit or stash first.
 
-2. **Sync main + create branch:**
+2. **Sync develop + create branch:**
    ```bash
-   git switch main
-   git pull --ff-only origin main
-   git switch -c "m<number>-<slug>"
+   git switch develop
+   git pull --ff-only origin develop
+   git switch -c "feat/m<number>-<slug>"
    ```
-   Branch naming follows M3 (`m3-off-lookup`). Two exceptions in history that pre-date this skill: M2.5 (`ci-hardening`) and M2.85 (`claude-automation-toolkit`). Going forward use `m<number>-<slug>` consistently — this skill enforces it.
+   Branches are cut off `develop` and named `<type>/<tracker-id>-<slug>` (CLAUDE.md §PR review); a milestone uses type `feat` and `m<number>` as the id. The PR goes into `develop` (`--base develop`).
 
 3. **Resolve today's date:**
    ```bash
@@ -87,7 +87,7 @@ If invoked without arguments, ask the user for both.
    ```
 
 6. **Tell the user what to do next:**
-   > "Branch `m<number>-<slug>` created, spec + plan stubs at `<paths>`. Next step: invoke `superpowers:brainstorming` to refine the design before filling in the spec."
+   > "Branch `feat/m<number>-<slug>` created, spec + plan stubs at `<paths>`. Next step: invoke `superpowers:brainstorming` to refine the design before filling in the spec."
 
 ## Why this exists
 
