@@ -71,7 +71,7 @@ gh api graphql -f query='
      -F pr=<PR#>
 ```
 
-The `owner` / `repo` are resolved dynamically from `gh repo view` so the skill keeps working after a fork, rename, or org transfer.
+The single-quoted queries pass `!` (as in `String!`) through unchanged; if a shell layer ever rewrites it, use `-F query=@file`. The `owner` / `repo` are resolved dynamically from `gh repo view` so the skill keeps working after a fork, rename, or org transfer.
 
 Match by the comment body prefix; that node `id` is what `resolveReviewThread` wants.
 

@@ -64,7 +64,7 @@ Flag `withContext(Dispatchers.IO) { roomDao.suspendQuery() }` — Room's suspend
 
 ## How you work
 
-1. Read the diff (`git diff main...HEAD` or scoped to provided files).
+1. Read the diff (`git diff develop...HEAD` — the PR's base is `develop`; or scoped to provided files).
 2. Grep for the trigger patterns above across changed files only — don't review the whole repo.
 3. Report findings in the format the always-pr-review workflow expects: one per finding, with `file:line` and a 1-line "why this is wrong" + 1-line "how to fix it".
 4. If there are no findings, say so explicitly — silence is not the same as approval.

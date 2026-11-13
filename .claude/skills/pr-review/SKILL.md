@@ -92,8 +92,9 @@ d. Capture thread node IDs for the resolve step.
 
    The MCP's `get_review_comments` returns thread metadata + comments but
    **not** the thread node ID that `resolve_thread` needs. Fall back to
-   GraphQL — call `gh` from Python (bash mangles `!` in GraphQL queries
-   even inside quoted heredocs). Key threads by `threadId` (`path:line`
+   GraphQL — `gh api graphql -f query='…'` with the query single-quoted: the `!`
+   in `String!` passes through unchanged, as in the `post-finding` skill (if a
+   shell layer ever rewrites it, use `-F query=@file`). Key threads by `threadId` (`path:line`
    collides when findings share a line). Paginate via `after=<endCursor>`
    while `pageInfo.hasNextPage` is true.
 
@@ -157,15 +158,17 @@ a. Post a one-line APPROVE summary:
 
 b. STOP. The human clicks "Merge pull request".
 
-⚠ **Claude MUST NOT cause `main` to advance via any vector.** Per CLAUDE.md's
-hard governance rule, this is non-negotiable. The bash hook at
-`.claude/hooks/block-dangerous-bash.sh` blocks the shell-based paths it
-knows about but cannot reach the MCP. **When in doubt about any
-merge-adjacent action, ASK.** Known vectors:
+⚠ **Claude MUST NOT merge into `develop` or `main` by any vector** (CLAUDE.md
+§Hard governance rule). The bash hook `.claude/hooks/block-dangerous-bash.sh`
+refuses every shell merge unconditionally but cannot reach the MCP. **When in
+doubt about any merge-adjacent action, ASK.** Vectors:
 
-- `mcp__plugin_github_github__merge_pull_request`  (MCP — only Claude observing this list gates it)
-- `gh pr merge`                                     (gh CLI — bash hook gates)
-- `git push origin main`                            (direct push — bash hook gates)
+- `gh pr merge`                                     (shell — hook refuses always)
+- `git push origin main`                            (direct push — hook refuses)
+- `mcp__plugin_github_github__merge_pull_request`   (MCP — allowed only for a
+  green, `CLEAN` Dependabot PR based on `develop`, after the review verdict is
+  posted; the five-condition check in CLAUDE.md is verified by Claude, not by
+  the hook. Never for `main` or a human-authored PR.)
 
 ### 7. After merge, capture lessons
 

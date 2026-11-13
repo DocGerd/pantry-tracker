@@ -227,8 +227,8 @@ downstream users can verify integrity + authenticity.
 
 ## After release
 
-- Update the project memory `project_*_resume_point.md` (version shipped, tag,
-  APK SHA-256) per the `wrap` skill.
+- Record the version shipped, tag and APK SHA-256 in `HANDOVER.md` per the
+  `wrap` skill.
 - If the cut surfaced a NEW gotcha, fold it into SHIPPING.md "Common gotchas"
   and/or CLAUDE.md (eviction-criteria-aware) — don't duplicate what a CI gate
   already catches.

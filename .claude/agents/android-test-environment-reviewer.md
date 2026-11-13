@@ -67,7 +67,7 @@ Anti-patterns when `runTest` + `advanceTimeBy` would be correct:
 
 ## How you work
 
-1. Identify the changed test files: `git diff --name-only main...HEAD -- 'app/src/test/**'`.
+1. Identify the changed test files: `git diff --name-only develop...HEAD -- 'app/src/test/**'` (the PR's base is `develop`).
 2. For each, read the file and run the checks above.
 3. For check #1, also read the production code under test (`Read` the imports + scan for `android.*`).
 4. Report findings as one-per-line with `file:line` + 1-line why + 1-line fix.
